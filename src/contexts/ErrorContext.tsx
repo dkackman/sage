@@ -18,7 +18,7 @@ import {
 import { ErrorKind } from '../bindings';
 
 export interface CustomError {
-  kind: ErrorKind | 'walletconnect' | 'upload';
+  kind: ErrorKind | 'walletconnect' | 'upload' | 'validation';
   reason: string;
 }
 

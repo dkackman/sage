@@ -35,6 +35,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trans } from '@lingui/react/macro';
 import { t } from '@lingui/core/macro';
+import { BigNumber } from 'bignumber.js';
 
 export function MakeOffer() {
   const state = useOfferState();
@@ -64,53 +65,89 @@ export function MakeOffer() {
   const handleMake = async () => {
     setPending(true);
 
-    const mintgardenSupported =
-      (state.offered.xch === '0' || !state.offered.xch) &&
-      state.offered.cats.length === 0 &&
-      state.offered.nfts.length === 1;
+    // Validate amounts before proceeding
+    try {
+      // Validate offered XCH
+      if (state.offered.xch && !BigNumber(state.offered.xch).isNaN()) {
+        const offeredXch = BigNumber(state.offered.xch);
+        if (!offeredXch.isFinite() || offeredXch.lt(0)) {
+          throw new Error('Invalid offered XCH amount');
+        }
+      }
 
-    const data = await commands.makeOffer({
-      offered_assets: {
-        xch: toMojos(
-          (state.offered.xch || '0').toString(),
+      // Validate requested XCH
+      if (state.requested.xch && !BigNumber(state.requested.xch).isNaN()) {
+        const requestedXch = BigNumber(state.requested.xch);
+        if (!requestedXch.isFinite() || requestedXch.lt(0)) {
+          throw new Error('Invalid requested XCH amount');
+        }
+      }
+
+      // Validate CAT amounts
+      for (const cat of [...state.offered.cats, ...state.requested.cats]) {
+        if (cat.amount && !BigNumber(cat.amount).isNaN()) {
+          const amount = BigNumber(cat.amount);
+          if (!amount.isFinite() || amount.lt(0)) {
+            throw new Error('Invalid token amount');
+          }
+        }
+      }
+
+      const mintgardenSupported =
+        (state.offered.xch === '0' || !state.offered.xch) &&
+        state.offered.cats.length === 0 &&
+        state.offered.nfts.length === 1;
+
+      const data = await commands.makeOffer({
+        offered_assets: {
+          xch: toMojos(
+            (state.offered.xch || '0').toString(),
+            walletState.sync.unit.decimals,
+          ),
+          cats: state.offered.cats.map((cat) => ({
+            asset_id: cat.asset_id,
+            amount: toMojos((cat.amount || '0').toString(), 3),
+          })),
+          nfts: state.offered.nfts,
+        },
+        requested_assets: {
+          xch: toMojos(
+            (state.requested.xch || '0').toString(),
+            walletState.sync.unit.decimals,
+          ),
+          cats: state.requested.cats.map((cat) => ({
+            asset_id: cat.asset_id,
+            amount: toMojos((cat.amount || '0').toString(), 3),
+          })),
+          nfts: state.requested.nfts,
+        },
+        fee: toMojos(
+          (state.fee || '0').toString(),
           walletState.sync.unit.decimals,
         ),
-        cats: state.offered.cats.map((cat) => ({
-          asset_id: cat.asset_id,
-          amount: toMojos((cat.amount || '0').toString(), 3),
-        })),
-        nfts: state.offered.nfts,
-      },
-      requested_assets: {
-        xch: toMojos(
-          (state.requested.xch || '0').toString(),
-          walletState.sync.unit.decimals,
-        ),
-        cats: state.requested.cats.map((cat) => ({
-          asset_id: cat.asset_id,
-          amount: toMojos((cat.amount || '0').toString(), 3),
-        })),
-        nfts: state.requested.nfts,
-      },
-      fee: toMojos(
-        (state.fee || '0').toString(),
-        walletState.sync.unit.decimals,
-      ),
-      expires_at_second:
-        state.expiration === null
-          ? null
-          : Math.ceil(Date.now() / 1000) +
-            Number(state.expiration.days || '0') * 24 * 60 * 60 +
-            Number(state.expiration.hours || '0') * 60 * 60 +
-            Number(state.expiration.minutes || '0') * 60,
-    });
+        expires_at_second:
+          state.expiration === null
+            ? null
+            : Math.ceil(Date.now() / 1000) +
+              Number(state.expiration.days || '0') * 24 * 60 * 60 +
+              Number(state.expiration.hours || '0') * 60 * 60 +
+              Number(state.expiration.minutes || '0') * 60,
+      });
 
-    await commands.importOffer({ offer: data.offer });
+      await commands.importOffer({ offer: data.offer });
 
-    clearOffer();
-    setOffer(data.offer);
-    setPending(false);
-    setCanUploadToMintGarden(mintgardenSupported);
+      clearOffer();
+      setOffer(data.offer);
+      setPending(false);
+      setCanUploadToMintGarden(mintgardenSupported);
+    } catch (error) {
+      setPending(false);
+      addError({
+        kind: 'validation',
+        reason: error instanceof Error ? error.message : 'Invalid amount',
+      });
+      return;
+    }
   };
 
   const make = () => handleMake().catch(addError);
