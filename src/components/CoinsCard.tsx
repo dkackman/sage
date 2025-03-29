@@ -24,6 +24,7 @@ import { toMojos } from '@/lib/utils';
 import { useWalletState } from '@/state';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Trans } from '@lingui/react/macro';
+import { t } from '@lingui/core/macro';
 import { RowSelectionState } from '@tanstack/react-table';
 import BigNumber from 'bignumber.js';
 import { MergeIcon, SplitIcon } from 'lucide-react';
@@ -286,6 +287,7 @@ export function CoinsCard({
                   variant='outline'
                   disabled={!canSplit}
                   onClick={() => setSplitOpen(true)}
+                  aria-label={t`Split ${ticker || 'coins'}`}
                 >
                   <SplitIcon className='mr-2 h-4 w-4' /> <Trans>Split</Trans>
                 </Button>
@@ -306,6 +308,11 @@ export function CoinsCard({
                       setAutoCombineOpen(true);
                     }
                   }}
+                  aria-label={
+                    !canCombine && canAutoCombine
+                      ? t`Sweep ${ticker || 'coins'}`
+                      : t`Combine ${ticker || 'coins'}`
+                  }
                 >
                   <MergeIcon className='mr-2 h-4 w-4' />
                   {!canCombine && canAutoCombine ? (
@@ -346,7 +353,10 @@ export function CoinsCard({
                       <Trans>Network Fee</Trans>
                     </FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input
+                        {...field}
+                        aria-label={t`Network fee amount for combine`}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -356,11 +366,17 @@ export function CoinsCard({
                 <Button
                   type='button'
                   variant='outline'
+                  tabIndex={0}
                   onClick={() => setCombineOpen(false)}
+                  aria-label={t`Cancel combine operation`}
                 >
                   <Trans>Cancel</Trans>
                 </Button>
-                <Button type='submit'>
+                <Button
+                  type='submit'
+                  tabIndex={0}
+                  aria-label={t`Confirm combine operation`}
+                >
                   <Trans>Combine</Trans>
                 </Button>
               </DialogFooter>
@@ -399,6 +415,7 @@ export function CoinsCard({
                         onChange={(e) =>
                           field.onChange(parseInt(e.target.value))
                         }
+                        aria-label={t`Number of outputs for split`}
                       />
                     </FormControl>
                     <FormMessage />
@@ -414,7 +431,10 @@ export function CoinsCard({
                       <Trans>Network Fee</Trans>
                     </FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input
+                        {...field}
+                        aria-label={t`Network fee amount for split`}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -424,11 +444,17 @@ export function CoinsCard({
                 <Button
                   type='button'
                   variant='outline'
+                  tabIndex={0}
                   onClick={() => setSplitOpen(false)}
+                  aria-label={t`Cancel split operation`}
                 >
                   <Trans>Cancel</Trans>
                 </Button>
-                <Button type='submit'>
+                <Button
+                  type='submit'
+                  tabIndex={0}
+                  aria-label={t`Confirm split operation`}
+                >
                   <Trans>Split</Trans>
                 </Button>
               </DialogFooter>
@@ -464,7 +490,10 @@ export function CoinsCard({
                       <Trans>Network Fee</Trans>
                     </FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input
+                        {...field}
+                        aria-label={t`Network fee amount for auto combine`}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -479,7 +508,10 @@ export function CoinsCard({
                       <Trans>Maximum Number of Coins</Trans>
                     </FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input
+                        {...field}
+                        aria-label={t`Maximum number of coins to combine`}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -497,6 +529,7 @@ export function CoinsCard({
                       <Input
                         {...field}
                         placeholder='Leave blank for no limit'
+                        aria-label={t`Maximum coin amount to combine`}
                       />
                     </FormControl>
                     <FormMessage />
@@ -507,11 +540,17 @@ export function CoinsCard({
                 <Button
                   type='button'
                   variant='outline'
+                  tabIndex={0}
                   onClick={() => setAutoCombineOpen(false)}
+                  aria-label={t`Cancel auto combine operation`}
                 >
                   <Trans>Cancel</Trans>
                 </Button>
-                <Button type='submit'>
+                <Button
+                  type='submit'
+                  tabIndex={0}
+                  aria-label={t`Confirm auto combine operation`}
+                >
                   <Trans>Combine</Trans>
                 </Button>
               </DialogFooter>
