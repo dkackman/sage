@@ -130,10 +130,10 @@ export const Pagination = ({
             aria-labelledby='items-per-page-label'
           >
             <SelectTrigger
-              className='w-min'
+              className='w-min text-sm'
               aria-label={t`${pageSize} items per page`}
             >
-              {pageSize}
+              <SelectValue>{pageSize}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
