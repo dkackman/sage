@@ -27,13 +27,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { t } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
 import { LoaderCircleIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import * as z from 'zod';
 import { commands, TransactionResponse } from '../bindings';
 import Container from '../components/Container';
 import { useWalletState } from '../state';
+import { open } from '@tauri-apps/plugin-dialog';
+import { platform } from '@tauri-apps/plugin-os';
 
 export default function MintNft() {
   const navigate = useNavigate();
@@ -42,24 +44,76 @@ export default function MintNft() {
   const { addError } = useErrors();
   const [pending, setPending] = useState(false);
   const [response, setResponse] = useState<TransactionResponse | null>(null);
+  const isMobile = platform() === 'ios' || platform() === 'android';
+
+  const handleFileSelect = async (
+    field: 'dataUris' | 'metadataUris' | 'licenseUris',
+  ) => {
+    if (isMobile) return;
+
+    try {
+      const selected = await open({
+        multiple: true,
+        directory: false,
+      });
+
+      if (selected && Array.isArray(selected)) {
+        const paths = selected.join(',');
+        form.setValue(field, paths);
+      }
+    } catch (error) {
+      console.error('Error selecting files:', error);
+    }
+  };
 
   const formSchema = z.object({
     profile: z.string().min(1, t`Profile is required`),
     fee: amount(walletState.sync.unit.decimals).optional(),
     royaltyAddress: z.string().optional(),
     royaltyPercent: amount(2),
-    dataUris: z.string(),
-    metadataUris: z.string(),
-    licenseUris: z.string().optional(),
+    dataUris: z.string().min(1, t`Data URLs or files are required`),
+    metadataUris: z.string().min(1, t`Metadata URLs or files are required`),
+    licenseUris: z.string().min(1, t`License URLs or files are required`),
   });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
+    defaultValues: {
+      dataUris: '',
+      metadataUris: '',
+      licenseUris: '',
+    },
   });
+
+  // Watch the form values that affect the button text
+  const dataUris = form.watch('dataUris');
+  const metadataUris = form.watch('metadataUris');
+  const licenseUris = form.watch('licenseUris');
 
   const { handleScanOrPaste } = useScannerOrClipboard((scanResValue) => {
     form.setValue('royaltyAddress', scanResValue);
   });
+
+  const hasLocalFiles = (value: string) => {
+    if (!value.trim()) return false;
+    return value.split(',').some((path) => !path.trim().startsWith('http'));
+  };
+
+  const hasLocalFilesInForm = () => {
+    return (
+      hasLocalFiles(dataUris) ||
+      hasLocalFiles(metadataUris) ||
+      hasLocalFiles(licenseUris)
+    );
+  };
+
+  const areAllFieldsPopulated = () => {
+    return (
+      dataUris.trim() !== '' &&
+      metadataUris.trim() !== '' &&
+      licenseUris.trim() !== ''
+    );
+  };
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     setPending(true);
@@ -158,12 +212,25 @@ export default function MintNft() {
                     <Trans>Data URLs</Trans>
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      type='text'
-                      placeholder={t`Enter comma separated URLs`}
-                      {...field}
-                      className='pr-12'
-                    />
+                    <div className='relative'>
+                      <Input
+                        type='text'
+                        placeholder={t`Enter comma separated URLs or select files`}
+                        {...field}
+                        className='pr-12'
+                      />
+                      {!isMobile && (
+                        <Button
+                          type='button'
+                          variant='outline'
+                          size='sm'
+                          className='absolute right-0 top-0 h-full px-3'
+                          onClick={() => handleFileSelect('dataUris')}
+                        >
+                          <Trans>Select Files</Trans>
+                        </Button>
+                      )}
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -179,12 +246,25 @@ export default function MintNft() {
                     <Trans>Metadata URLs</Trans>
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      type='text'
-                      placeholder={t`Enter comma separated URLs`}
-                      {...field}
-                      className='pr-12'
-                    />
+                    <div className='relative'>
+                      <Input
+                        type='text'
+                        placeholder={t`Enter comma separated URLs or select files`}
+                        {...field}
+                        className='pr-12'
+                      />
+                      {!isMobile && (
+                        <Button
+                          type='button'
+                          variant='outline'
+                          size='sm'
+                          className='absolute right-0 top-0 h-full px-3'
+                          onClick={() => handleFileSelect('metadataUris')}
+                        >
+                          <Trans>Select Files</Trans>
+                        </Button>
+                      )}
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -200,12 +280,25 @@ export default function MintNft() {
                     <Trans>License URLs</Trans>
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      type='text'
-                      placeholder={t`Enter comma separated URLs`}
-                      {...field}
-                      className='pr-12'
-                    />
+                    <div className='relative'>
+                      <Input
+                        type='text'
+                        placeholder={t`Enter comma separated URLs or select files`}
+                        {...field}
+                        className='pr-12'
+                      />
+                      {!isMobile && (
+                        <Button
+                          type='button'
+                          variant='outline'
+                          size='sm'
+                          className='absolute right-0 top-0 h-full px-3'
+                          onClick={() => handleFileSelect('licenseUris')}
+                        >
+                          <Trans>Select Files</Trans>
+                        </Button>
+                      )}
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -291,11 +384,24 @@ export default function MintNft() {
               />
             </div>
 
-            <Button type='submit' disabled={pending}>
+            <Button
+              type='submit'
+              disabled={pending || !areAllFieldsPopulated()}
+            >
               {pending && (
                 <LoaderCircleIcon className='mr-2 h-4 w-4 animate-spin' />
               )}
-              {pending ? <Trans>Minting</Trans> : <Trans>Mint</Trans>} NFT
+              {pending ? (
+                hasLocalFilesInForm() ? (
+                  <Trans>Uploading</Trans>
+                ) : (
+                  <Trans>Minting</Trans>
+                )
+              ) : hasLocalFilesInForm() ? (
+                <Trans>Upload</Trans>
+              ) : (
+                <Trans>Mint NFT</Trans>
+              )}
             </Button>
           </form>
         </Form>
