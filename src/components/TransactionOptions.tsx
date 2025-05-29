@@ -25,8 +25,6 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useState, useEffect } from 'react';
-import { TransactionRecord } from '@/bindings';
-import { commands } from '@/bindings';
 import { platform } from '@tauri-apps/plugin-os';
 
 const optionsPaginationVariants = {

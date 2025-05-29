@@ -4,7 +4,6 @@ import { TransactionRecord } from '@/bindings';
 import { t } from '@lingui/core/macro';
 import { toast } from 'react-toastify';
 import { commands } from '@/bindings';
-import { isValidAddress, isValidAssetId } from '@/lib/utils';
 
 interface TransactionQueryParams {
   search: string | null;

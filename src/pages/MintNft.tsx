@@ -35,7 +35,6 @@ import { commands, TransactionResponse } from '../bindings';
 import Container from '../components/Container';
 import { useWalletState } from '../state';
 import { FeeAmountInput } from '@/components/ui/masked-input';
-import { Switch } from '@/components/ui/switch';
 import { IntegerInput } from '@/components/ui/masked-input';
 
 export default function MintNft() {
