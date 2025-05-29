@@ -37,7 +37,7 @@ import { z } from 'zod';
 import { AssignNftDialog } from '@/components/dialogs/AssignNftDialog';
 import ConfirmationDialog from '@/components/dialogs/ConfirmationDialog';
 import { FeeOnlyDialog } from '@/components/dialogs/FeeOnlyDialog';
-import { TransferDialog } from '@/components/TransferDialog';
+import { TransferDialog } from '@/components/dialogs/TransferDialog';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import {

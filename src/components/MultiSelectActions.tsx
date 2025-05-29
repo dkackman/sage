@@ -17,7 +17,7 @@ import { toast } from 'react-toastify';
 import { AssignNftDialog } from '@/components/dialogs/AssignNftDialog';
 import ConfirmationDialog from '@/components/dialogs/ConfirmationDialog';
 import { FeeOnlyDialog } from '@/components/dialogs/FeeOnlyDialog';
-import { TransferDialog } from '@/components/TransferDialog';
+import { TransferDialog } from '@/components/dialogs/TransferDialog';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,

@@ -3,7 +3,7 @@ import Container from '@/components/Container';
 import { FeeOnlyDialog } from '@/components/dialogs/FeeOnlyDialog';
 import Header from '@/components/Header';
 import { ReceiveAddress } from '@/components/ReceiveAddress';
-import { TransferDialog } from '@/components/TransferDialog';
+import { TransferDialog } from '@/components/dialogs/TransferDialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

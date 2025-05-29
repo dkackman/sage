@@ -5,7 +5,7 @@ import BigNumber from 'bignumber.js';
 import { PropsWithChildren } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Button } from './ui/button';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from './ui/dialog';
+} from '@/components/ui/dialog';
 import {
   Form,
   FormControl,
@@ -21,9 +21,9 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from './ui/form';
-import { Input } from './ui/input';
-import { FeeAmountInput } from './ui/masked-input';
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { FeeAmountInput } from '@/components/ui/masked-input';
 import { Trans } from '@lingui/react/macro';
 import { t } from '@lingui/core/macro';
 
