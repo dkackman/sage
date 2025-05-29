@@ -1,6 +1,6 @@
 import { commands, events, OfferRecord, TransactionResponse } from '@/bindings';
 import Container from '@/components/Container';
-import ConfirmationDialog from '@/components/ConfirmationDialog';
+import ConfirmationDialog from '@/components/dialogs/ConfirmationDialog';
 import { CancelOfferConfirmation } from '@/components/confirmations/CancelOfferConfirmation';
 import { CancelOfferDialog } from '@/components/dialogs/CancelOfferDialog';
 import { DeleteOfferDialog } from '@/components/dialogs/DeleteOfferDialog';

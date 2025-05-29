@@ -1,4 +1,4 @@
-import ConfirmationDialog from '@/components/ConfirmationDialog';
+import ConfirmationDialog from '@/components/dialogs/ConfirmationDialog';
 import Container from '@/components/Container';
 import Header from '@/components/Header';
 import { PasteInput } from '@/components/PasteInput';

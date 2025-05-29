@@ -1,5 +1,5 @@
 import { commands, OfferRecord, TransactionResponse } from '@/bindings';
-import ConfirmationDialog from '@/components/ConfirmationDialog';
+import ConfirmationDialog from '@/components/dialogs/ConfirmationDialog';
 import { CancelOfferDialog } from '@/components/dialogs/CancelOfferDialog';
 import { DeleteOfferDialog } from '@/components/dialogs/DeleteOfferDialog';
 import { OfferSummaryCard } from '@/components/OfferSummaryCard';

@@ -1,5 +1,5 @@
 import { commands, OfferSummary, TakeOfferResponse } from '@/bindings';
-import ConfirmationDialog from '@/components/ConfirmationDialog';
+import ConfirmationDialog from '@/components/dialogs/ConfirmationDialog';
 import { TakeOfferConfirmation } from '@/components/confirmations/TakeOfferConfirmation';
 import Container from '@/components/Container';
 import Header from '@/components/Header';

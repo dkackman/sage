@@ -14,11 +14,11 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-import { AssignNftDialog } from './AssignNftDialog';
-import ConfirmationDialog from './ConfirmationDialog';
-import { FeeOnlyDialog } from './FeeOnlyDialog';
-import { TransferDialog } from './TransferDialog';
-import { Button } from './ui/button';
+import { AssignNftDialog } from '@/components/dialogs/AssignNftDialog';
+import ConfirmationDialog from '@/components/dialogs/ConfirmationDialog';
+import { FeeOnlyDialog } from '@/components/FeeOnlyDialog';
+import { TransferDialog } from '@/components/TransferDialog';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,8 +26,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from './ui/dropdown-menu';
-import { NftConfirmation } from './confirmations/NftConfirmation';
+} from '@/components/ui/dropdown-menu';
+import { NftConfirmation } from '@/components/confirmations/NftConfirmation';
 import { useNavigate } from 'react-router-dom';
 
 export interface MultiSelectActionsProps {

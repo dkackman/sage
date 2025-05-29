@@ -8,7 +8,7 @@ import BigNumber from 'bignumber.js';
 import { PropsWithChildren } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Button } from './ui/button';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from './ui/dialog';
+} from '@/components/ui/dialog';
 import {
   Form,
   FormControl,
@@ -24,15 +24,15 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from './ui/form';
-import { FeeAmountInput } from './ui/masked-input';
+} from '@/components/ui/form';
+import { FeeAmountInput } from '@/components/ui/masked-input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './ui/select';
+} from '@/components/ui/select';
 
 export interface AssignNftDialogProps {
   title: string;

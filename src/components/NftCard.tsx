@@ -29,15 +29,15 @@ import {
   SendIcon,
   UserRoundPlus,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { z } from 'zod';
-import { AssignNftDialog } from './AssignNftDialog';
-import ConfirmationDialog from './ConfirmationDialog';
-import { FeeOnlyDialog } from './FeeOnlyDialog';
-import { TransferDialog } from './TransferDialog';
+import { AssignNftDialog } from '@/components/dialogs/AssignNftDialog';
+import ConfirmationDialog from '@/components/dialogs/ConfirmationDialog';
+import { FeeOnlyDialog } from '@/components/FeeOnlyDialog';
+import { TransferDialog } from '@/components/TransferDialog';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import {

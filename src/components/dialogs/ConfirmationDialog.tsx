@@ -33,14 +33,14 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-import { commands, TakeOfferResponse, TransactionResponse } from '../bindings';
-import { formatNumber } from '../i18n';
-import { calculateTransaction } from './AdvancedTransactionSummary';
-import { CopyButton } from './CopyButton';
-import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { Badge } from './ui/badge';
-import { Separator } from './ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { commands, TakeOfferResponse, TransactionResponse } from '@/bindings';
+import { formatNumber } from '@/i18n';
+import { calculateTransaction } from '@/components/AdvancedTransactionSummary';
+import { CopyButton } from '@/components/CopyButton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export interface ConfirmationDialogProps {
   response: TransactionResponse | TakeOfferResponse | null;
