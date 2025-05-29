@@ -6,7 +6,7 @@ import { fromMojos } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { Trans } from '@lingui/react/macro';
 import { t } from '@lingui/core/macro';
-import { QRCodeDialog } from '@/components/QRCodeDialog';
+import { QRCodeDialog } from '@/components/dialogs/QRCodeDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,

@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Trans } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
-import { CatRecord } from '../bindings';
+import { CatRecord } from '@/bindings';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { isValidUrl } from '@/lib/utils';
 
