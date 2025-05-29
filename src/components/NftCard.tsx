@@ -36,7 +36,7 @@ import { toast } from 'react-toastify';
 import { z } from 'zod';
 import { AssignNftDialog } from '@/components/dialogs/AssignNftDialog';
 import ConfirmationDialog from '@/components/dialogs/ConfirmationDialog';
-import { FeeOnlyDialog } from '@/components/FeeOnlyDialog';
+import { FeeOnlyDialog } from '@/components/dialogs/FeeOnlyDialog';
 import { TransferDialog } from '@/components/TransferDialog';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';

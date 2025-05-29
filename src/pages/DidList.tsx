@@ -1,6 +1,6 @@
 import ConfirmationDialog from '@/components/dialogs/ConfirmationDialog';
 import Container from '@/components/Container';
-import { FeeOnlyDialog } from '@/components/FeeOnlyDialog';
+import { FeeOnlyDialog } from '@/components/dialogs/FeeOnlyDialog';
 import Header from '@/components/Header';
 import { ReceiveAddress } from '@/components/ReceiveAddress';
 import { TransferDialog } from '@/components/TransferDialog';

@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import { AssignNftDialog } from '@/components/dialogs/AssignNftDialog';
 import ConfirmationDialog from '@/components/dialogs/ConfirmationDialog';
-import { FeeOnlyDialog } from '@/components/FeeOnlyDialog';
+import { FeeOnlyDialog } from '@/components/dialogs/FeeOnlyDialog';
 import { TransferDialog } from '@/components/TransferDialog';
 import { Button } from '@/components/ui/button';
 import {
