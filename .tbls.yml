@@ -1,0 +1,8 @@
+# .tbls.yml
+
+# DSN (Database Source Name) to connect database
+dsn: sqlite://./test.sqlite
+
+# Path to generate document
+# Default is `dbdoc`
+docPath: doc/schema
