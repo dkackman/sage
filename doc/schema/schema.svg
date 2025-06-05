@@ -143,7 +143,6 @@
 <title>coin_states:transaction_id&#45;&gt;transactions:transaction_id</title>
 <path fill="none" stroke="black" d="M862.69,-431.36C810.64,-422.18 849.29,-339.46 874.06,-281.2 883.03,-260.12 901.94,-266.26 910.95,-245.2 927.41,-206.7 953.82,-151 911.95,-151"/>
 <polygon fill="black" stroke="black" points="862.76,-431.37 872.37,-436.66 868.08,-431.8 872.4,-432.15 872.4,-432.15 872.4,-432.15 868.08,-431.8 873.09,-427.69 862.76,-431.37"/>
-<text text-anchor="start" x="880.06" y="-442.2" font-family="Arial" font-size="10.00">FOREIGN KEY (transaction_id) REFERENCES transactions (transaction_id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE</text>
 </g>
 <!-- transaction_spends -->
 <g id="node6" class="node">
@@ -183,7 +182,6 @@
 <title>transaction_spends:transaction_id&#45;&gt;transactions:transaction_id</title>
 <path fill="none" stroke="black" d="M780.77,-554.85C859.5,-545.95 793.61,-430.32 769.44,-342.8 756.02,-294.22 725.27,-293.74 711.71,-245.2 700.44,-204.87 668.84,-151 710.71,-151"/>
 <polygon fill="black" stroke="black" points="780.76,-554.85 770.53,-550.89 775.43,-555.14 771.11,-555.36 771.11,-555.36 771.11,-555.36 775.43,-555.14 771.01,-559.88 780.76,-554.85"/>
-<text text-anchor="start" x="123.84" y="-565.4" font-family="Arial" font-size="10.00">FOREIGN KEY (transaction_id) REFERENCES transactions (transaction_id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE</text>
 </g>
 <!-- cats -->
 <g id="node7" class="node">
@@ -247,7 +245,6 @@
 <title>cat_coins:coin_id&#45;&gt;coin_states:coin_id</title>
 <path fill="none" stroke="black" d="M755.51,-1142.75C815.89,-1119.12 769.78,-875.5 796.33,-808.8 803.53,-790.7 811.07,-789.36 821.33,-772.8 846.48,-732.19 825.3,-678.6 873.06,-678.6"/>
 <polygon fill="black" stroke="black" points="755.51,-1142.75 744.87,-1140.11 750.26,-1143.71 746,-1144.48 746,-1144.48 746,-1144.48 750.26,-1143.71 746.48,-1148.97 755.51,-1142.75"/>
-<text text-anchor="start" x="163.22" y="-1154.6" font-family="Arial" font-size="10.00">FOREIGN KEY (coin_id) REFERENCES coin_states (coin_id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE</text>
 </g>
 <!-- dids -->
 <g id="node9" class="node">
@@ -317,7 +314,6 @@
 <title>dids:coin_id&#45;&gt;did_coins:coin_id</title>
 <path fill="none" stroke="black" d="M1064.68,-1683C1113.47,-1632.92 1133.02,-1190.8 1080.88,-1190.8"/>
 <polygon fill="black" stroke="black" points="1064.81,-1682.93 1053.86,-1683.43 1060.05,-1685.34 1056.19,-1687.3 1056.19,-1687.3 1056.19,-1687.3 1060.05,-1685.34 1057.92,-1691.46 1064.81,-1682.93"/>
-<text text-anchor="start" x="1062.59" y="-1697.6" font-family="Arial" font-size="10.00">FOREIGN KEY (coin_id) REFERENCES did_coins (coin_id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE</text>
 </g>
 <!-- future_did_names -->
 <g id="node10" class="node">
@@ -339,7 +335,6 @@
 <title>did_coins:coin_id&#45;&gt;coin_states:coin_id</title>
 <path fill="none" stroke="black" d="M1089.78,-1186.06C1134.89,-1134.42 1109.34,-678.6 1055.59,-678.6"/>
 <polygon fill="black" stroke="black" points="1090,-1185.94 1079.06,-1186.67 1085.29,-1188.45 1081.47,-1190.49 1081.47,-1190.49 1081.47,-1190.49 1085.29,-1188.45 1083.29,-1194.61 1090,-1185.94"/>
-<text text-anchor="start" x="498.76" y="-1200.8" font-family="Arial" font-size="10.00">FOREIGN KEY (coin_id) REFERENCES coin_states (coin_id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE</text>
 </g>
 <!-- collections -->
 <g id="node12" class="node">
@@ -472,14 +467,12 @@
 <title>nfts:coin_id&#45;&gt;nft_coins:coin_id</title>
 <path fill="none" stroke="black" d="M1423.46,-1787.53C1450.59,-1721.9 1475.1,-1267.8 1447.86,-1267.8"/>
 <polygon fill="black" stroke="black" points="1423.59,-1787.37 1413.81,-1792.31 1420.24,-1791.51 1417.52,-1794.88 1417.52,-1794.88 1417.52,-1794.88 1420.24,-1791.51 1420.8,-1797.97 1423.59,-1787.37"/>
-<text text-anchor="start" x="1424.1" y="-1805.4" font-family="Arial" font-size="10.00">FOREIGN KEY (coin_id) REFERENCES nft_coins (coin_id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE</text>
 </g>
 <!-- nft_coins&#45;&gt;coin_states -->
 <g id="edge7" class="edge">
 <title>nft_coins:coin_id&#45;&gt;coin_states:coin_id</title>
 <path fill="none" stroke="black" d="M1173.7,-1262.89C1133.55,-1216.41 1147.47,-854.35 1132.33,-808.8 1111.13,-745.06 1122.76,-678.6 1055.59,-678.6"/>
 <polygon fill="black" stroke="black" points="1173.7,-1262.89 1180.37,-1271.6 1178.4,-1265.43 1182.21,-1267.48 1182.21,-1267.48 1182.21,-1267.48 1178.4,-1265.43 1184.64,-1263.68 1173.7,-1262.89"/>
-<text text-anchor="start" x="600.67" y="-1277.8" font-family="Arial" font-size="10.00">FOREIGN KEY (coin_id) REFERENCES coin_states (coin_id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE</text>
 </g>
 <!-- nft_data -->
 <g id="node15" class="node">
@@ -573,7 +566,6 @@
 <title>offered_coins:offer_id&#45;&gt;offers:offer_id</title>
 <path fill="none" stroke="black" d="M3162.4,-1654.48C3207.29,-1631.72 3180.75,-1448.1 3203.33,-1398 3258.04,-1276.61 3252.14,-1160 3385.29,-1160"/>
 <polygon fill="black" stroke="black" points="3162.5,-1654.46 3151.74,-1652.34 3157.3,-1655.67 3153.08,-1656.65 3153.08,-1656.65 3153.08,-1656.65 3157.3,-1655.67 3153.78,-1661.11 3162.5,-1654.46"/>
-<text text-anchor="start" x="2875.99" y="-1640.8" font-family="Arial" font-size="10.00">FOREIGN KEY (offer_id) REFERENCES offers (offer_id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE</text>
 </g>
 <!-- offer_xch -->
 <g id="node19" class="node">
@@ -601,7 +593,6 @@
 <title>offer_xch:offer_id&#45;&gt;offers:offer_id</title>
 <path fill="none" stroke="black" d="M3422.33,-1685.99C3513.07,-1654.14 3271.67,-1160 3385.29,-1160"/>
 <polygon fill="black" stroke="black" points="3422.35,-1685.99 3411.77,-1683.1 3417.08,-1686.82 3412.8,-1687.5 3412.8,-1687.5 3412.8,-1687.5 3417.08,-1686.82 3413.17,-1691.99 3422.35,-1685.99"/>
-<text text-anchor="start" x="2852.26" y="-1697.6" font-family="Arial" font-size="10.00">FOREIGN KEY (offer_id) REFERENCES offers (offer_id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE</text>
 </g>
 <!-- offer_nfts -->
 <g id="node20" class="node">
@@ -641,7 +632,6 @@
 <title>offer_nfts:offer_id&#45;&gt;offers:offer_id</title>
 <path fill="none" stroke="black" d="M3503.97,-1746.78C3459.6,-1723.06 3506.58,-1531.49 3515.1,-1475 3530.4,-1373.56 3566.72,-1355.59 3582.37,-1254.2 3588.76,-1212.82 3625.24,-1160 3583.37,-1160"/>
 <polygon fill="black" stroke="black" points="3504.05,-1746.8 3512.73,-1753.5 3509.24,-1748.04 3513.45,-1749.04 3513.45,-1749.04 3513.45,-1749.04 3509.24,-1748.04 3514.82,-1744.75 3504.05,-1746.8"/>
-<text text-anchor="start" x="3521.1" y="-1759.2" font-family="Arial" font-size="10.00">FOREIGN KEY (offer_id) REFERENCES offers (offer_id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE</text>
 </g>
 <!-- offer_cats -->
 <g id="node21" class="node">
@@ -681,7 +671,6 @@
 <title>offer_cats:offer_id&#45;&gt;offers:offer_id</title>
 <path fill="none" stroke="black" d="M3848.33,-1747.4C3785.24,-1723.39 3840.01,-1465.69 3807.33,-1398 3744.17,-1267.2 3728.61,-1160 3583.37,-1160"/>
 <polygon fill="black" stroke="black" points="3848.34,-1747.41 3857.4,-1753.57 3853.59,-1748.33 3857.85,-1749.08 3857.85,-1749.08 3857.85,-1749.08 3853.59,-1748.33 3858.97,-1744.71 3848.34,-1747.41"/>
-<text text-anchor="start" x="3865.51" y="-1733.2" font-family="Arial" font-size="10.00">FOREIGN KEY (offer_id) REFERENCES offers (offer_id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE</text>
 </g>
 <!-- rust_migrations -->
 <g id="node22" class="node">

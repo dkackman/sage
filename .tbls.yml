@@ -12,3 +12,6 @@ lint:
     enabled: true
   requireForeignKeyIndex:
     enabled: true
+
+er:
+  hideDef: true
