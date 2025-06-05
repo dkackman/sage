@@ -6,3 +6,9 @@ dsn: sqlite://./test.sqlite
 # Path to generate document
 # Default is `dbdoc`
 docPath: doc/schema
+
+lint:
+  duplicateRelations:
+    enabled: true
+  requireForeignKeyIndex:
+    enabled: true
