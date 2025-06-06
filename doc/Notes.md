@@ -25,7 +25,7 @@ However, natural keys also come with some drawbacks:
 - They may impact performance since in our case they are BLOB types (larger indexes, less efficient comparison in joins)
 - Limit the ability to reflect the data in a way that differs from the onchain data; ie representing multiple states of a coin at different points in time.
   
-Surrogate keys are an alternative because they can be always unique and indexed. They also separate business logic form the database, allowing for more flexibility in relationship design. Integer based keys are a good choice because they are more efficient and sqlite has in-built optimizations for them, reducing index size and improving performance with direct row lookups.
+Surrogate keys are an alternative because they can be always unique and efficiently indexed. They also separate business logic from the database, allowing for more flexibility in relationship design. Integer based keys are a good choice because they are the most efficient and sqlite has in-built optimizations for them, reducing index size and improving performance in join comparisons and direct row lookups.
 
 ## Data Domains
 
