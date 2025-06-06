@@ -7,7 +7,7 @@
 - Consistent naming for primary and foreign keys
   - Primary keys are always named `id`
   - Foreign keys are named `{table_name}_id`
-  - Foreign keys are always nullable
+  - Foreign keys are always non nullable
   - Foreign keys are always indexed
   - Foreign keys are always a reference to the primary key of the referenced table
 
@@ -49,7 +49,7 @@ Surrogate keys are an alternative because they can be always unique and efficien
 
 ### CATs
 
-- Treat a CAT and XCH the same. From a modeling standpoint XCH seems to fit just fine into the `cats`.
-- Maybe rename as `token`. XCH gets a special row but otherwise is the same. Should simplify some special case ahandling in the code for xch vs cat.
+- Treat a CAT and XCH the same. From a modeling standpoint XCH seems to fit just fine into the `cats` table.
+- Maybe rename as `token`. XCH gets a special row but otherwise is the same. Should simplify some special case handling in the code for xch vs cat.
 - This eliminates `offer_xch`
 - (side note - maybe just download and keep the contents of what is currently the cats table in sync with dexie)
