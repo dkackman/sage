@@ -46,3 +46,10 @@ Surrogate keys are an alternative because they can be always unique and efficien
 
 - Similar to coins, collapse `offer_nfts`, `offer_cats`, `offer_xch` into a single `offer_assets` table
 - Any advantage to storing offers in a separate database and using linked tables?
+
+### CATs
+
+- Treat a CAT and XCH the same. From a modeling standpoint XCH seems to fit just fine into the `cats`.
+- Maybe rename as `token`. XCH gets a special row but otherwise is the same. Should simplify some special case ahandling in the code for xch vs cat.
+- This eliminates `offer_xch`
+- (side note - maybe just download and keep the contents of what is currently the cats table in sync with dexie)
