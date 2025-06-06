@@ -34,8 +34,7 @@ Surrogate keys are an alternative because they can be always unique and efficien
 - Collapse `nft_coins`, `cat_coins`, `did_coins`, and `nft_coins` into a single `coins` table.
   - Add a `type` column to the table to differentiate between the different types of coins.
   - Add a `state` column to the table to represent the different states of a coin.
-  - Add a `state_id` column to the table to represent the different states of a coin.
-  - Either
+  - Add a `state_id` column to the table to represent the different states of a coin. (created? spent? are there other states)
   - Add as many columns as needed to represent the different attributes of the different types of coins (allowing them to be null when not applicable) - Basically the union of the all of the columns in the current set of `*_coins` tables
   - Add a `item_id` column to the table to join to the different attributes of the different types of coins
 
