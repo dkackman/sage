@@ -17,7 +17,7 @@
 
 ### Surrogate vs Natural Keys
 
-The schema currently uses natural keys for relationships. Meaning that onchain values are used as primary and foreign keys. This is a good idea because it is more efficient and easier to understand.
+The schema currently uses natural keys for relationships. Meaning that onchain values are used as primary and foreign keys. This is a good idea because it is easier to understand.
 
 However, natural keys also come with some drawbacks:
 
