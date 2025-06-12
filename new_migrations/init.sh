@@ -6,8 +6,8 @@
 set -e  # Exit on any error
 
 # Default values
-DEFAULT_DB="sage.db"
-DEFAULT_SCRIPTS=("0001_tables.sql" "0002_indicies.sql" "0003_triggers.sql" "0004_seed_data.sql")
+DEFAULT_DB="sage.sqlite"
+DEFAULT_SCRIPTS=("0001_tables.sql" "0002_indices.sql" "0003_triggers.sql" "0004_seed_data.sql")
 
 # Get database file argument or use default
 DB_FILE="${1:-$DEFAULT_DB}"

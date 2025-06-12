@@ -110,8 +110,6 @@ impl BlockTimeQueue {
     }
 
     async fn update_coinstates(&self, height: u32, timestamp: i64) -> Result<(), WalletError> {
-        self.db.update_created_timestamp(height, timestamp).await?;
-        self.db.update_spent_timestamp(height, timestamp).await?;
         self.db.insert_timestamp_height(height, timestamp).await?;
 
         Ok(())

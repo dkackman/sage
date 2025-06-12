@@ -1,3 +1,17 @@
+CREATE TABLE derivations (
+  id INTEGER,
+  p2_puzzle_hash BLOB NOT NULL UNIQUE,
+  `index` INTEGER NOT NULL,
+  hardened BOOLEAN NOT NULL,
+  synthetic_key BLOB NOT NULL,
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE rust_migrations (
+  `version` INTEGER,
+  PRIMARY KEY (`version`)
+);
+
 CREATE TABLE offers (
   id INTEGER,
   hash BLOB NOT NULL UNIQUE,

@@ -225,12 +225,12 @@ async fn created_unspent_p2_coin_states(
     let rows = sqlx::query_as!(
         CoinStateSql,
         "
-        SELECT `parent_coin_id`, `puzzle_hash`, `amount`, `spent_height`, `created_height`, `transaction_id`, `kind`, `created_unixtime`, `spent_unixtime`
-        FROM `coin_states`
-        WHERE `spent_height` IS NULL
-        AND `created_height` IS NOT NULL
-        AND `kind` = 1
-        ORDER BY `created_height`, `coin_states`.`coin_id` LIMIT ? OFFSET ?
+        SELECT parent_coin_id, puzzle_hash, amount, spent_height, created_height, transaction_id, kind, created_unixtime, spent_unixtime
+        FROM coin_states
+        WHERE spent_height IS NULL
+        AND created_height IS NOT NULL
+        AND kind = 1
+        ORDER BY created_height, coin_states.coin_id` LIMIT ? OFFSET ?
         ",
         limit,
         offset

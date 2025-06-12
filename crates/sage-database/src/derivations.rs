@@ -131,14 +131,14 @@ async fn max_used_derivation_index(
 ) -> Result<Option<u32>> {
     let row = sqlx::query!(
         "
-        SELECT MAX(`index`) AS `max_index`
-        FROM `derivations`
+        SELECT MAX(`index`) AS max_index
+        FROM derivations
         WHERE EXISTS (
-            SELECT 1 FROM `coin_states`
-            WHERE `puzzle_hash` = `p2_puzzle_hash`
-            OR `hint` = `p2_puzzle_hash`
+            SELECT 1 FROM coins
+            WHERE puzzle_hash = p2_puzzle_hash
+            OR hint = p2_puzzle_hash
         )
-        AND `hardened` = ?
+        AND hardened = ?
         ",
         hardened
     )
