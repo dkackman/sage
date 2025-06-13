@@ -58,7 +58,7 @@ async fn insert_p2_coin(conn: impl SqliteExecutor<'_>, coin_id: Bytes32) -> Resu
 
     sqlx::query!(
         "
-        UPDATE `coin_states` SET `kind` = 1 WHERE `coin_id` = ?
+        UPDATE coins SET kind = 1 WHERE hash = ?
         ",
         coin_id
     )
@@ -138,14 +138,14 @@ async fn p2_coin_states(
 ) -> Result<(Vec<EnhancedCoinStateRow>, u32)> {
     let mut query = sqlx::QueryBuilder::new(
         "
-        SELECT `coin_states`.`parent_coin_id`, `coin_states`.`puzzle_hash`, `coin_states`.`amount`, `spent_height`, `created_height`, 
-               `coin_states`.`transaction_id`, `kind`, `created_unixtime`, `spent_unixtime`,
-               `offered_coins`.offer_id, `transaction_spends`.transaction_id as spend_transaction_id,
+        SELECT coin_states.parent_coin_id, coin_states.puzzle_hash, coin_states.amount, spent_height, created_height, 
+               coin_states.transaction_id, kind, created_unixtime, spent_unixtime,
+               offered_coins.offer_id, transaction_spends.transaction_id as spend_transaction_id,
                 COUNT(*) OVER() as total_count
-        FROM `coin_states` 
-        LEFT JOIN `offered_coins` ON `coin_states`.coin_id = `offered_coins`.coin_id
-        LEFT JOIN `transaction_spends` ON `coin_states`.coin_id = `transaction_spends`.coin_id
-        WHERE `kind` = 1
+        FROM coin_states 
+        LEFT JOIN offered_coins ON coin_states.coin_id = offered_coins.coin_id
+        LEFT JOIN transaction_spends ON coin_states.coin_id = transaction_spends.coin_id
+        WHERE kind = 1
         ",
     );
 
@@ -222,6 +222,7 @@ async fn created_unspent_p2_coin_states(
     limit: u32,
     offset: u32,
 ) -> Result<Vec<CoinStateRow>> {
+
     let rows = sqlx::query_as!(
         CoinStateSql,
         "
@@ -230,7 +231,8 @@ async fn created_unspent_p2_coin_states(
         WHERE spent_height IS NULL
         AND created_height IS NOT NULL
         AND kind = 1
-        ORDER BY created_height, coin_states.coin_id` LIMIT ? OFFSET ?
+        ORDER BY created_height, coin_states.coin_id
+        LIMIT ? OFFSET ?
         ",
         limit,
         offset

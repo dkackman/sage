@@ -101,9 +101,9 @@ async fn insert_timestamp_height(
 ) -> Result<()> {
     sqlx::query!(
         "
-        INSERT OR IGNORE INTO `blocks` (
-            `height`,
-            `timestamp`
+        INSERT OR IGNORE INTO blocks (
+            height,
+            timestamp
         )
         VALUES (?, ?)
         ",

@@ -60,6 +60,7 @@ CREATE TABLE coins (
   id INTEGER,
   asset_id INTEGER NOT NULL,
   hash BLOB NOT NULL UNIQUE,
+  kind INTEGER NOT NULL DEFAULT 0,
   parent_coin_id BLOB NOT NULL,
   puzzle_hash BLOB NOT NULL,
   amount BLOB NOT NULL,
