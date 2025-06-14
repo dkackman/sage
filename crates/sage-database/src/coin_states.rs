@@ -156,7 +156,7 @@ async fn insert_coin_state(
             created_height,
             spent_height,
             is_synced,
-            transaction_hash
+            transaction_id
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ",

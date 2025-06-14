@@ -61,9 +61,6 @@ CREATE TABLE coins (
   id INTEGER,
   asset_id INTEGER NOT NULL,
   hash BLOB NOT NULL UNIQUE,
-  kind INTEGER NOT NULL DEFAULT 0, -- temporary for transition
-  transaction_hash BLOB, -- temporary for transition
-  spent_height INTEGER, -- temporary for transition
   parent_coin_id BLOB NOT NULL,
   puzzle_hash BLOB NOT NULL,
   amount BLOB NOT NULL,
