@@ -85,9 +85,9 @@ async fn insert_offer(conn: impl SqliteExecutor<'_>, row: OfferRow) -> Result<()
 
     sqlx::query!(
         "
-        INSERT OR IGNORE INTO `offers` (
-            `offer_id`, `encoded_offer`, `expiration_height`,
-            `expiration_timestamp`, `fee`, `status`, `inserted_timestamp`
+        INSERT OR IGNORE INTO offers (
+            hash, encoded_offer, expiration_height,
+            expiration_timestamp, fee, status, inserted_timestamp
         )
         VALUES (?, ?, ?, ?, ?, ?, ?)
         ",
@@ -113,7 +113,7 @@ async fn insert_offered_coin(
     let coin_id = coin_id.as_ref();
 
     sqlx::query!(
-        "INSERT OR IGNORE INTO `offered_coins` (`offer_id`, `coin_id`) VALUES (?, ?)",
+        "INSERT OR IGNORE INTO offered_coins (offer_id, coin_id) VALUES (?, ?)",
         offer_id,
         coin_id
     )
@@ -132,8 +132,8 @@ async fn insert_offer_xch(conn: impl SqliteExecutor<'_>, row: OfferXchRow) -> Re
 
     sqlx::query!(
         "
-        INSERT INTO `offer_xch` (
-            `offer_id`, `requested`, `amount`, `royalty`
+        INSERT INTO offer_xch (
+            offer_id, requested, amount, royalty
         )
         VALUES (?, ?, ?, ?)
         ",
@@ -155,10 +155,10 @@ async fn insert_offer_nft(conn: impl SqliteExecutor<'_>, row: OfferNftRow) -> Re
 
     sqlx::query!(
         "
-        INSERT INTO `offer_nfts` (
-            `offer_id`, `requested`, `launcher_id`,
-            `royalty_puzzle_hash`, `royalty_ten_thousandths`,
-            `name`, `thumbnail`, `thumbnail_mime_type`
+        INSERT INTO offer_nfts (
+            offer_id, requested, launcher_id,
+            royalty_puzzle_hash, royalty_ten_thousandths,
+            name, thumbnail, thumbnail_mime_type
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ",
@@ -187,9 +187,9 @@ async fn insert_offer_cat(conn: impl SqliteExecutor<'_>, row: OfferCatRow) -> Re
 
     sqlx::query!(
         "
-        INSERT INTO `offer_cats` (
-            `offer_id`, `requested`, `asset_id`,
-            `amount`, `royalty`, `name`, `ticker`, `icon`
+        INSERT INTO offer_cats (
+            offer_id, requested, asset_id,
+            amount, royalty, name, ticker, icon
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ",
@@ -209,21 +209,26 @@ async fn insert_offer_cat(conn: impl SqliteExecutor<'_>, row: OfferCatRow) -> Re
 }
 
 async fn active_offers(conn: impl SqliteExecutor<'_>) -> Result<Vec<OfferRow>> {
-    sqlx::query_as!(
-        OfferSql,
-        "SELECT * FROM `offers` INDEXED BY `offer_status` WHERE `status` = 0"
-    )
-    .fetch_all(conn)
-    .await?
-    .into_iter()
-    .map(into_row)
-    .collect()
+    sqlx::query_as!(OfferSql, "SELECT * FROM offers WHERE status = 0")
+        .fetch_all(conn)
+        .await?
+        .into_iter()
+        .map(into_row)
+        .collect()
 }
 
 async fn get_offers(conn: impl SqliteExecutor<'_>) -> Result<Vec<OfferRow>> {
     sqlx::query_as!(
         OfferSql,
-        "SELECT * FROM `offers` INDEXED BY `offer_timestamp` ORDER BY `inserted_timestamp` DESC"
+        "SELECT hash as offer_id,
+            encoded_offer,
+            expiration_height,
+            expiration_timestamp,
+            fee,
+            status,
+            inserted_timestamp
+        FROM offers 
+        ORDER BY inserted_timestamp DESC"
     )
     .fetch_all(conn)
     .await?
@@ -237,7 +242,7 @@ async fn get_offer(conn: impl SqliteExecutor<'_>, offer_id: Bytes32) -> Result<O
 
     sqlx::query_as!(
         OfferSql,
-        "SELECT * FROM `offers` WHERE `offer_id` = ?",
+        "SELECT * FROM offers WHERE offer_id = ?",
         offer_id
     )
     .fetch_optional(conn)
@@ -249,7 +254,7 @@ async fn get_offer(conn: impl SqliteExecutor<'_>, offer_id: Bytes32) -> Result<O
 async fn delete_offer(conn: impl SqliteExecutor<'_>, offer_id: Bytes32) -> Result<()> {
     let offer_id = offer_id.as_ref();
 
-    sqlx::query!("DELETE FROM `offers` WHERE `offer_id` = ?", offer_id)
+    sqlx::query!("DELETE FROM offers WHERE offer_id = ?", offer_id)
         .execute(conn)
         .await?;
 
@@ -261,7 +266,7 @@ async fn offer_xch(conn: impl SqliteExecutor<'_>, offer_id: Bytes32) -> Result<V
 
     sqlx::query_as!(
         OfferXchSql,
-        "SELECT * FROM `offer_xch` WHERE `offer_id` = ?",
+        "SELECT * FROM offer_xch WHERE offer_id = ?",
         offer_id
     )
     .fetch_all(conn)
@@ -276,7 +281,7 @@ async fn offer_nfts(conn: impl SqliteExecutor<'_>, offer_id: Bytes32) -> Result<
 
     sqlx::query_as!(
         OfferNftSql,
-        "SELECT * FROM `offer_nfts` WHERE `offer_id` = ?",
+        "SELECT * FROM offer_nfts WHERE offer_id = ?",
         offer_id
     )
     .fetch_all(conn)
@@ -291,7 +296,7 @@ async fn offer_cats(conn: impl SqliteExecutor<'_>, offer_id: Bytes32) -> Result<
 
     sqlx::query_as!(
         OfferCatSql,
-        "SELECT * FROM `offer_cats` WHERE `offer_id` = ?",
+        "SELECT * FROM offer_cats WHERE offer_id = ?",
         offer_id
     )
     .fetch_all(conn)
@@ -310,7 +315,7 @@ async fn update_offer_status(
     let status = status as u8;
 
     sqlx::query!(
-        "UPDATE `offers` SET `status` = ? WHERE `offer_id` = ?",
+        "UPDATE offers SET status = ? WHERE offer_id = ?",
         status,
         offer_id
     )
@@ -325,9 +330,9 @@ async fn coin_offer_id(conn: impl SqliteExecutor<'_>, coin_id: Bytes32) -> Resul
 
     sqlx::query!(
         "
-        SELECT `offered_coins`.`offer_id` FROM `offered_coins`
-        INNER JOIN `offers` ON `offered_coins`.`offer_id` = `offers`.`offer_id`
-        WHERE `coin_id` = ? AND `offers`.`status` = 0
+        SELECT offered_coins.offer_id FROM offered_coins
+        INNER JOIN offers ON offered_coins.offer_id = offers.offer_id
+        WHERE coin_id = ? AND offers.status = 0
         ",
         coin_id
     )

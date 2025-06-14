@@ -45,41 +45,38 @@ impl Sage {
         }
 
         let pool = self.connect_to_database(req.fingerprint).await?;
-
         sqlx::query!(
             "
-            DELETE FROM `coin_states`;
-            DELETE FROM `transactions`;
-            DELETE FROM `peaks`;
-            DELETE FROM `cats`;
-            DELETE FROM `future_did_names`;
-            DELETE FROM `collections`;
-            DELETE FROM `nft_data`;
-            DELETE FROM `nft_uris`;
+            DELETE FROM coins;
+            DELETE FROM assets WHERE id > 0;
+            DELETE FROM tokens WHERE id > 0;
+            DELETE FROM transactions;
+            DELETE FROM future_did_names;
+            DELETE FROM collections;
+            DELETE FROM nft_data;
+            UPDATE blocks SET is_peak = FALSE;
             "
         )
         .execute(&pool)
         .await?;
 
         if req.delete_offer_files {
-            sqlx::query!("DELETE FROM `offers`").execute(&pool).await?;
+            sqlx::query!("DELETE FROM offers").execute(&pool).await?;
         }
 
         if req.delete_unhardened_derivations {
-            sqlx::query!("DELETE FROM `derivations` WHERE `hardened` = 0")
+            sqlx::query!("DELETE FROM derivations WHERE hardened = 0")
                 .execute(&pool)
                 .await?;
         }
 
         if req.delete_hardened_derivations {
-            sqlx::query!("DELETE FROM `derivations` WHERE `hardened` = 1")
+            sqlx::query!("DELETE FROM derivations WHERE hardened = 1")
                 .execute(&pool)
                 .await?;
         }
         if req.delete_blockinfo {
-            sqlx::query!("DELETE FROM `blockinfo`")
-                .execute(&pool)
-                .await?;
+            sqlx::query!("DELETE FROM blocks").execute(&pool).await?;
         }
 
         if login {

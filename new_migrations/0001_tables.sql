@@ -8,18 +8,19 @@ CREATE TABLE derivations (
 );
 
 CREATE TABLE rust_migrations (
-  `version` INTEGER,
-  PRIMARY KEY (`version`)
+  version INTEGER,
+  PRIMARY KEY (version)
 );
 
 CREATE TABLE offers (
   id INTEGER,
   hash BLOB NOT NULL UNIQUE,
-  offer TEXT NOT NULL,
+  encoded_offer TEXT NOT NULL,
   fee BLOB NOT NULL,
   status INTEGER NOT NULL,
-  expiry_height INTEGER,
-  expiry_timestamp INTEGER,
+  expiration_height INTEGER,
+  expiration_timestamp INTEGER,
+  inserted_timestamp INTEGER NOT NULL,
   PRIMARY KEY (id)
 );
 
@@ -60,7 +61,9 @@ CREATE TABLE coins (
   id INTEGER,
   asset_id INTEGER NOT NULL,
   hash BLOB NOT NULL UNIQUE,
-  kind INTEGER NOT NULL DEFAULT 0,
+  kind INTEGER NOT NULL DEFAULT 0, -- temporary for transition
+  transaction_hash BLOB, -- temporary for transition
+  spent_height INTEGER, -- temporary for transition
   parent_coin_id BLOB NOT NULL,
   puzzle_hash BLOB NOT NULL,
   amount BLOB NOT NULL,
@@ -173,3 +176,17 @@ CREATE TABLE dids (
   FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
 );
 
+CREATE TABLE offer_coins (
+  id INTEGER,
+  offer_id INTEGER,
+  coin_id INTEGER UNIQUE,
+  PRIMARY KEY (id)
+  FOREIGN KEY (offer_id) REFERENCES offers(id) ON DELETE CASCADE
+  FOREIGN KEY (coin_id) REFERENCES coins(id) ON DELETE CASCADE
+  UNIQUE(offer_id, coin_id)
+);
+
+CREATE TABLE future_did_names (
+    launcher_id BLOB NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL
+)

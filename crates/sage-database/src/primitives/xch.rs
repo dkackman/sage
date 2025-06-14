@@ -71,11 +71,11 @@ async fn insert_p2_coin(conn: impl SqliteExecutor<'_>, coin_id: Bytes32) -> Resu
 async fn balance(conn: impl SqliteExecutor<'_>) -> Result<u128> {
     let row = sqlx::query!(
         "
-        SELECT `coin_states`.`amount` FROM `coin_states` INDEXED BY `coin_kind_spent`
-        LEFT JOIN `transaction_spends` ON `coin_states`.`coin_id` = `transaction_spends`.`coin_id`
-        WHERE `coin_states`.`spent_height` IS NULL
-        AND `transaction_spends`.`coin_id` IS NULL
-        AND `kind` = 1
+        SELECT coin_states.amount FROM coin_states
+        LEFT JOIN transaction_spends ON coin_states.coin_id = transaction_spends.coin_id
+        WHERE coin_states.spent_height IS NULL
+        AND transaction_spends.coin_id IS NULL
+        AND kind = 1
         "
     )
     .fetch_all(conn)
@@ -90,15 +90,16 @@ async fn spendable_coins(conn: impl SqliteExecutor<'_>) -> Result<Vec<Coin>> {
     sqlx::query_as!(
         CoinSql,
         "
-        SELECT `coin_states`.`parent_coin_id`, `coin_states`.`puzzle_hash`, `coin_states`.`amount` FROM `coin_states`
-        LEFT JOIN `transaction_spends` ON `coin_states`.`coin_id` = `transaction_spends`.`coin_id`
-        LEFT JOIN `offered_coins` ON `coin_states`.`coin_id` = `offered_coins`.`coin_id`
-        LEFT JOIN `offers` ON `offered_coins`.`offer_id` = `offers`.`offer_id`
-        WHERE `coin_states`.`spent_height` IS NULL
-        AND `transaction_spends`.`coin_id` IS NULL
-        AND (`offered_coins`.`coin_id` IS NULL OR `offers`.`status` > 0)
-        AND `coin_states`.`transaction_id` IS NULL
-        AND `kind` = 1
+        SELECT coin_states.parent_coin_id, coin_states.puzzle_hash, coin_states.amount 
+        FROM coin_states
+            LEFT JOIN transaction_spends ON coin_states.coin_id = transaction_spends.coin_id
+            LEFT JOIN offered_coins ON coin_states.coin_id = offered_coins.coin_id
+            LEFT JOIN offers ON offered_coins.offer_id = offers.hash
+        WHERE coin_states.spent_height IS NULL
+            AND transaction_spends.coin_id IS NULL
+            AND (offered_coins.coin_id IS NULL OR offers.status > 0)
+            AND coin_states.transaction_id IS NULL
+            AND kind = 1
         "
     )
     .fetch_all(conn)
@@ -119,7 +120,7 @@ async fn spendable_p2_coin_count(conn: impl SqliteExecutor<'_>) -> Result<u32> {
         AND spent_height IS NULL
         AND coin_states.transaction_id IS NULL
         AND transaction_spends.coin_id IS NULL
-        AND `kind` = 1
+        AND kind = 1
         "
     )
     .fetch_one(conn)
@@ -150,23 +151,23 @@ async fn p2_coin_states(
     );
 
     if !include_spent_coins {
-        query.push(" AND `spent_height` IS NULL");
+        query.push(" AND spent_height IS NULL");
     }
 
     query.push(" ORDER BY ");
 
     match sort_mode {
         CoinSortMode::CoinId => {
-            query.push("`coin_states`.`coin_id`");
+            query.push("coin_states.coin_id");
         }
         CoinSortMode::Amount => {
-            query.push("`coin_states`.`amount`");
+            query.push("coin_states.amount");
         }
         CoinSortMode::CreatedHeight => {
-            query.push("`created_height`");
+            query.push("created_height");
         }
         CoinSortMode::SpentHeight => {
-            query.push("`spent_height`");
+            query.push("spent_height");
         }
     }
 
@@ -222,7 +223,6 @@ async fn created_unspent_p2_coin_states(
     limit: u32,
     offset: u32,
 ) -> Result<Vec<CoinStateRow>> {
-
     let rows = sqlx::query_as!(
         CoinStateSql,
         "
