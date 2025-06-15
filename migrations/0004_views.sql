@@ -1,3 +1,9 @@
+/*
+	These views are for transition purposes. They overlay the old schema on 
+	top of the new schema. They need to be replaced once the new schema is fully
+	vetted and Rust code rewritten.
+*/
+
 CREATE VIEW coin_states AS
 SELECT coins.hash AS coin_id,
 	parent_coin_id,
@@ -149,3 +155,35 @@ FROM assets
 	LEFT JOIN collections ON collections.id = nfts.collection_id
 WHERE 1=1
 	AND assets.kind = 1;
+
+CREATE VIEW nft_data_ AS
+SELECT
+	nft_data.is_hash_matched AS hash_matches,
+	nft_data.mime_type,
+	nft_data.data,
+	nfts.data_hash AS hash
+FROM nft_data
+	INNER JOIN nfts ON nfts.id = nft_data.nft_id
+WHERE 1=1
+	AND kind = 0;
+
+CREATE VIEW nft_thumbnails AS
+SELECT
+	CASE WHEN kind = 1 THEN nft_data.data ELSE NULL END AS icon,
+	CASE WHEN kind = 2 THEN nft_data.data ELSE NULL END AS thumbnail,
+	nfts.data_hash AS hash
+FROM nft_data
+	INNER JOIN nfts ON nfts.id = nft_data.nft_id
+WHERE 1=1
+	AND kind in (1, 2);
+
+CREATE VIEW nft_uris AS
+SELECT
+	nft_data.is_hash_matched AS hash_matches,
+	CAST(nft_data.data  AS TEXT) AS uri,
+	nfts.data_hash AS hash,
+	TRUE AS checked
+FROM nft_data
+	INNER JOIN nfts ON nfts.id = nft_data.nft_id
+WHERE 1=1
+	AND kind = 0;
