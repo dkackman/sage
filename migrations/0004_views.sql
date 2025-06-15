@@ -51,7 +51,7 @@ FROM assets
 	INNER JOIN lineage_proofs ON lineage_proofs.coin_id = coins.id
 WHERE 1=1
 	AND assets.kind = 0
-	AND tokens.id > 0;
+	AND tokens.id > 0; -- xch is not a cat coins
 
 CREATE VIEW nft_coins AS
 SELECT
@@ -93,3 +93,59 @@ FROM assets
 	INNER JOIN lineage_proofs ON lineage_proofs.coin_id = coins.id
 WHERE 1=1
 	AND assets.kind = 2;
+
+CREATE VIEW cats AS
+SELECT
+	assets.hash AS asset_id,
+	assets.name,
+	tokens.ticker,
+	assets.is_visible AS visible,
+	assets.icon_url AS icon,
+	assets.description,
+	assets.is_pending AS fetched,
+	TRUE AS is_named	
+FROM assets
+	INNER JOIN tokens ON tokens.asset_id = assets.id
+WHERE 1=1
+	AND assets.kind = 0
+	AND tokens.id > 0; -- xch is not a cat coins
+
+CREATE VIEW dids_ AS
+SELECT
+	assets.hash AS launcher_id,
+	coins.hash AS coin_id,	
+	assets.name,
+	assets.is_visible AS visible,
+	dids.is_owned,
+	TRUE as is_named,
+	assets.created_height,
+	assets.is_pending
+FROM assets
+	INNER JOIN dids ON dids.asset_id = assets.id
+	INNER JOIN coins ON coins.asset_id = assets.id
+WHERE 1=1
+	AND assets.kind = 2;
+
+CREATE VIEW nfts_ AS
+SELECT
+	assets.hash AS launcher_id,
+	coins.hash AS coin_id,	
+	collections.hash AS collection_id,
+	nfts.minter_did,
+	nfts.owner_did,
+	assets.is_visible AS visible,
+	nfts.is_sensitive_content AS sensitive_content,
+	assets.name,
+	nfts.is_owned,
+	TRUE as is_named,
+	assets.created_height,
+	assets.is_pending,
+	nfts.metadata_hash,
+	nfts.edition_number,
+	nfts.edition_total
+FROM assets
+	INNER JOIN nfts ON nfts.asset_id = assets.id
+	INNER JOIN coins ON coins.asset_id = assets.id
+	LEFT JOIN collections ON collections.id = nfts.collection_id
+WHERE 1=1
+	AND assets.kind = 1;

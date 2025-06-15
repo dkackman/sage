@@ -110,6 +110,7 @@ CREATE TABLE transaction_coins (
 CREATE TABLE collections (
   id INTEGER,
   name TEXT,
+  hash BLOB NOT NULL UNIQUE,
   description TEXT,
   metadata_id TEXT NOT NULL,
   is_visible BOOLEAN NOT NULL,
