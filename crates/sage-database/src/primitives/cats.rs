@@ -128,14 +128,14 @@ async fn insert_cat(conn: impl SqliteExecutor<'_>, row: CatRow) -> Result<()> {
 
     sqlx::query!(
         "
-        INSERT OR IGNORE INTO `cats` (
-            `asset_id`,
-            `name`,
-            `ticker`,
-            `description`,
-            `icon`,
-            `visible`,
-            `fetched`
+        INSERT OR IGNORE INTO cats (
+            asset_id,
+            name,
+            ticker,
+            description,
+            icon,
+            visible,
+            fetched
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
         ",
         asset_id,
@@ -156,14 +156,14 @@ async fn update_cat(conn: impl SqliteExecutor<'_>, row: CatRow) -> Result<()> {
 
     sqlx::query!(
         "
-        REPLACE INTO `cats` (
-            `asset_id`,
-            `name`,
-            `ticker`,
-            `description`,
-            `icon`,
-            `visible`,
-            `fetched`
+        REPLACE INTO cats (
+            asset_id,
+            name,
+            ticker,
+            description,
+            icon,
+            visible,
+            fetched
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
         ",
         asset_id,
@@ -183,9 +183,9 @@ async fn cats_by_name(conn: impl SqliteExecutor<'_>) -> Result<Vec<CatRow>> {
     let rows = sqlx::query_as!(
         CatSql,
         "
-        SELECT `asset_id`, `name`, `ticker`, `description`, `icon`, `visible`, `fetched`
-        FROM `cats` INDEXED BY `cat_name`
-        ORDER BY `visible` DESC, `is_named` DESC, `name` ASC, `asset_id` ASC
+        SELECT asset_id, name, ticker, description, icon, visible, fetched
+        FROM cats
+        ORDER BY visible DESC, is_named DESC, name ASC, asset_id ASC
         "
     )
     .fetch_all(conn)
@@ -200,9 +200,9 @@ async fn cat(conn: impl SqliteExecutor<'_>, asset_id: Bytes32) -> Result<Option<
     let row = sqlx::query_as!(
         CatSql,
         "
-        SELECT `asset_id`, `name`, `ticker`, `description`, `icon`, `visible`, `fetched`
-        FROM `cats`
-        WHERE `asset_id` = ?
+        SELECT asset_id, name, ticker, description, icon, visible, fetched
+        FROM cats
+        WHERE asset_id = ?
         ",
         asset_id
     )
@@ -215,7 +215,7 @@ async fn cat(conn: impl SqliteExecutor<'_>, asset_id: Bytes32) -> Result<Option<
 async fn unfetched_cat(conn: impl SqliteExecutor<'_>) -> Result<Option<Bytes32>> {
     let rows = sqlx::query!(
         "
-        SELECT `asset_id` FROM `cats` WHERE `fetched` = 0
+        SELECT asset_id FROM cats WHERE fetched = 0
         LIMIT 1
         "
     )
@@ -241,13 +241,13 @@ async fn insert_cat_coin(
 
     sqlx::query!(
         "
-        INSERT OR IGNORE INTO `cat_coins` (
-            `coin_id`,
-            `parent_parent_coin_id`,
-            `parent_inner_puzzle_hash`,
-            `parent_amount`,
-            `p2_puzzle_hash`,
-            `asset_id`
+        INSERT OR IGNORE INTO cat_coins (
+            coin_id,
+            parent_parent_coin_id,
+            parent_inner_puzzle_hash,
+            parent_amount,
+            p2_puzzle_hash,
+            asset_id
         )
         VALUES (?, ?, ?, ?, ?, ?)
         ",
@@ -274,18 +274,18 @@ async fn spendable_cat_coins(
         CatCoinSql,
         "
         SELECT
-            cs.`parent_coin_id`, cs.`puzzle_hash`, cs.`amount`, `p2_puzzle_hash`,
-            `parent_parent_coin_id`, `parent_inner_puzzle_hash`, `parent_amount`
-        FROM `cat_coins` INDEXED BY `cat_asset_id`
-        INNER JOIN `coin_states` AS cs ON `cat_coins`.`coin_id` = cs.`coin_id`
-        LEFT JOIN `transaction_spends` ON cs.`coin_id` = `transaction_spends`.`coin_id`
-        LEFT JOIN `offered_coins` ON cs.`coin_id` = `offered_coins`.`coin_id`
-        LEFT JOIN `offers` ON `offered_coins`.`offer_id` = `offers`.`offer_id`
-        WHERE `cat_coins`.`asset_id` = ?
-        AND cs.`spent_height` IS NULL
-        AND `transaction_spends`.`coin_id` IS NULL
-        AND (`offered_coins`.`coin_id` IS NULL OR `offers`.`status` > 0)
-        AND cs.`transaction_id` IS NULL
+            cs.parent_coin_id, cs.puzzle_hash, cs.amount, p2_puzzle_hash,
+            parent_parent_coin_id, parent_inner_puzzle_hash, parent_amount
+        FROM cat_coins
+        INNER JOIN coin_states AS cs ON cat_coins.coin_id = cs.coin_id
+        LEFT JOIN transaction_spends ON cs.coin_id = transaction_spends.coin_id
+        LEFT JOIN offered_coins ON cs.coin_id = offered_coins.coin_id
+        LEFT JOIN offers ON offered_coins.offer_id = offers.offer_id
+        WHERE cat_coins.asset_id = ?
+        AND cs.spent_height IS NULL
+        AND transaction_spends.coin_id IS NULL
+        AND (offered_coins.coin_id IS NULL OR offers.status > 0)
+        AND cs.transaction_id IS NULL
         ",
         asset_id
     )
@@ -300,12 +300,12 @@ async fn cat_balance(conn: impl SqliteExecutor<'_>, asset_id: Bytes32) -> Result
 
     let row = sqlx::query!(
         "
-        SELECT `coin_states`.`amount` FROM `coin_states` INDEXED BY `coin_spent`
-        INNER JOIN `cat_coins` ON `coin_states`.`coin_id` = `cat_coins`.`coin_id`
-        LEFT JOIN `transaction_spends` ON `coin_states`.`coin_id` = `transaction_spends`.`coin_id`
-        WHERE `coin_states`.`spent_height` IS NULL
-        AND `cat_coins`.`asset_id` = ?
-        AND `transaction_spends`.`coin_id` IS NULL
+        SELECT coin_states.amount FROM coin_states
+        INNER JOIN cat_coins ON coin_states.coin_id = cat_coins.coin_id
+        LEFT JOIN transaction_spends ON coin_states.coin_id = transaction_spends.coin_id
+        WHERE coin_states.spent_height IS NULL
+        AND cat_coins.asset_id = ?
+        AND transaction_spends.coin_id IS NULL
         ",
         asset_id
     )
@@ -324,10 +324,10 @@ async fn spendable_cat_coin_count(conn: impl SqliteExecutor<'_>, asset_id: Bytes
         "
         SELECT COUNT(*) as count
         FROM coin_states
-        INNER JOIN `cat_coins` ON `coin_states`.`coin_id` = `cat_coins`.`coin_id`
+        INNER JOIN cat_coins ON coin_states.coin_id = cat_coins.coin_id
         LEFT JOIN transaction_spends ON transaction_spends.coin_id = coin_states.coin_id
         WHERE 1=1 
-        AND `cat_coins`.`asset_id` = ?
+        AND cat_coins.asset_id = ?
         AND created_height IS NOT NULL
         AND spent_height IS NULL
         AND coin_states.transaction_id IS NULL
@@ -347,12 +347,12 @@ async fn coin_states_by_ids(
 ) -> Result<Vec<EnhancedCoinStateRow>> {
     let mut query = sqlx::QueryBuilder::new(
         "
-        SELECT `coin_states`.`parent_coin_id`, `coin_states`.`puzzle_hash`, `coin_states`.`amount`, `spent_height`, `created_height`, 
-               `coin_states`.`transaction_id`, `kind`, `created_unixtime`, `spent_unixtime`,
-               `offered_coins`.offer_id, `transaction_spends`.transaction_id as spend_transaction_id
-        FROM `coin_states` 
-        LEFT JOIN `offered_coins` ON `coin_states`.coin_id = `offered_coins`.coin_id
-        LEFT JOIN `transaction_spends` ON `coin_states`.coin_id = `transaction_spends`.coin_id
+        SELECT coin_states.parent_coin_id, coin_states.puzzle_hash, coin_states.amount, spent_height, created_height, 
+               coin_states.transaction_id, kind, created_unixtime, spent_unixtime,
+               offered_coins.offer_id, transaction_spends.transaction_id as spend_transaction_id
+        FROM coin_states 
+        LEFT JOIN offered_coins ON coin_states.coin_id = offered_coins.coin_id
+        LEFT JOIN transaction_spends ON coin_states.coin_id = transaction_spends.coin_id
         WHERE 1=1 
         AND coin_states.coin_id IN (",
     );
@@ -408,36 +408,36 @@ async fn cat_coin_states(
 
     let mut query = sqlx::QueryBuilder::new(
         "
-        SELECT `coin_states`.`parent_coin_id`, `coin_states`.`puzzle_hash`, `coin_states`.`amount`, `spent_height`, `created_height`, 
-               `coin_states`.`transaction_id`, `kind`, `created_unixtime`, `spent_unixtime`,
-               `offered_coins`.offer_id, `transaction_spends`.transaction_id as spend_transaction_id,
+        SELECT coin_states.parent_coin_id, coin_states.puzzle_hash, coin_states.amount, spent_height, created_height, 
+               coin_states.transaction_id, kind, created_unixtime, spent_unixtime,
+               offered_coins.offer_id, transaction_spends.transaction_id as spend_transaction_id,
                 COUNT(*) OVER() as total_count
-        FROM `cat_coins` INDEXED BY `cat_asset_id`
-        INNER JOIN `coin_states` ON `coin_states`.coin_id = `cat_coins`.coin_id
-        LEFT JOIN `offered_coins` ON `coin_states`.coin_id = `offered_coins`.coin_id
-        LEFT JOIN `transaction_spends` ON `coin_states`.coin_id = `transaction_spends`.coin_id
-        WHERE `asset_id` = ",
+        FROM cat_coins INDEXED BY cat_asset_id
+        INNER JOIN coin_states ON coin_states.coin_id = cat_coins.coin_id
+        LEFT JOIN offered_coins ON coin_states.coin_id = offered_coins.coin_id
+        LEFT JOIN transaction_spends ON coin_states.coin_id = transaction_spends.coin_id
+        WHERE asset_id = ",
     );
     query.push_bind(asset_id);
 
     if !include_spent_coins {
-        query.push(" AND `spent_height` IS NULL");
+        query.push(" AND spent_height IS NULL");
     }
 
     query.push(" ORDER BY ");
 
     match sort_mode {
         CoinSortMode::CoinId => {
-            query.push("`coin_states`.`coin_id`");
+            query.push("coin_states.coin_id");
         }
         CoinSortMode::Amount => {
-            query.push("`coin_states`.`amount`");
+            query.push("coin_states.amount");
         }
         CoinSortMode::CreatedHeight => {
-            query.push("`coin_states`.`created_height`");
+            query.push("coin_states.created_height");
         }
         CoinSortMode::SpentHeight => {
-            query.push("`coin_states`.`spent_height`");
+            query.push("coin_states.spent_height");
         }
     }
 
@@ -499,13 +499,13 @@ async fn created_unspent_cat_coin_states(
     let rows = sqlx::query_as!(
         CoinStateSql,
         "
-        SELECT `parent_coin_id`, `puzzle_hash`, `amount`, `spent_height`, `created_height`, `transaction_id`, `kind`, `created_unixtime`, `spent_unixtime`
-        FROM `coin_states`
-        INNER JOIN `cat_coins` ON `coin_states`.coin_id = `cat_coins`.coin_id
-        WHERE `asset_id` = ?
-        AND `spent_height` IS NULL
-        AND `created_height` IS NOT NULL
-        ORDER BY `created_height`, `coin_states`.`coin_id` LIMIT ? OFFSET ?
+        SELECT parent_coin_id, puzzle_hash, amount, spent_height, created_height, transaction_id, coin_states.kind, created_unixtime, spent_unixtime
+        FROM coin_states
+        INNER JOIN cat_coins ON coin_states.coin_id = cat_coins.coin_id
+        WHERE asset_id = ?
+        AND spent_height IS NULL
+        AND created_height IS NOT NULL
+        ORDER BY created_height, coin_states.coin_id LIMIT ? OFFSET ?
         ",
         asset_id,
         limit,
@@ -524,12 +524,12 @@ async fn cat_coin(conn: impl SqliteExecutor<'_>, coin_id: Bytes32) -> Result<Opt
         FullCatCoinSql,
         "
         SELECT
-            `parent_coin_id`, `puzzle_hash`, `amount`,
-            `parent_parent_coin_id`, `parent_inner_puzzle_hash`, `parent_amount`,
-            `asset_id`, `p2_puzzle_hash`
-        FROM `coin_states`
-        INNER JOIN `cat_coins` ON `coin_states`.`coin_id` = `cat_coins`.`coin_id`
-        WHERE `coin_states`.`coin_id` = ?
+            parent_coin_id, puzzle_hash, amount,
+            parent_parent_coin_id, parent_inner_puzzle_hash, parent_amount,
+            asset_id, p2_puzzle_hash
+        FROM coin_states
+        INNER JOIN cat_coins ON coin_states.coin_id = cat_coins.coin_id
+        WHERE coin_states.coin_id = ?
         ",
         coin_id
     )
@@ -544,7 +544,7 @@ async fn refetch_cat(conn: impl SqliteExecutor<'_>, asset_id: Bytes32) -> Result
 
     sqlx::query!(
         "
-        UPDATE `cats` SET `fetched` = 0 WHERE `asset_id` = ?
+        UPDATE cats SET fetched = 0 WHERE asset_id = ?
         ",
         asset_id
     )

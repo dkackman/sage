@@ -95,10 +95,10 @@ async fn insert_pending_transaction(
 
     sqlx::query!(
         "
-        INSERT INTO `transactions` (
-            `transaction_id`,
-            `aggregated_signature`,
-            `fee`
+        INSERT INTO transactions (
+            transaction_id,
+            aggregated_signature,
+            fee
         )
         VALUES (?, ?, ?)
         ",
@@ -131,15 +131,15 @@ async fn insert_transaction_spend(
 
     sqlx::query!(
         "
-        INSERT INTO `transaction_spends` (
-            `coin_id`,
-            `index`,
-            `transaction_id`,
-            `parent_coin_id`,
-            `puzzle_hash`,
-            `amount`,
-            `puzzle_reveal`,
-            `solution`
+        INSERT INTO transaction_spends (
+            coin_id,
+            index,
+            transaction_id,
+            parent_coin_id,
+            puzzle_hash,
+            amount,
+            puzzle_reveal,
+            solution
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ",
@@ -167,9 +167,9 @@ async fn update_transaction_mempool_time(
 
     sqlx::query!(
         "
-        UPDATE `transactions`
-        SET `submitted_at` = ?
-        WHERE `transaction_id` = ?
+        UPDATE transactions
+        SET submitted_at_timestamp = ?
+        WHERE hash = ?
         ",
         timestamp,
         transaction_id
@@ -184,11 +184,11 @@ async fn transactions(conn: impl SqliteExecutor<'_>) -> Result<Vec<TransactionRo
     let rows = sqlx::query!(
         "
         SELECT
-            `transaction_id`,
-            `fee`,
-            `submitted_at`
-        FROM `transactions`
-        ORDER BY `submitted_at` DESC, `transaction_id` ASC
+            hash AS transaction_id,
+            fee,
+            submitted_at_timestamp as submitted_at
+        FROM transactions
+        ORDER BY submitted_at DESC, transaction_id ASC
         "
     )
     .fetch_all(conn)
@@ -213,9 +213,9 @@ async fn coin_transaction_id(
 
     sqlx::query!(
         "
-        SELECT `transaction_id`
-        FROM `transaction_spends`
-        WHERE `coin_id` = ?
+        SELECT transaction_id
+        FROM transaction_spends
+        WHERE coin_id = ?
         ",
         coin_id
     )
@@ -232,10 +232,10 @@ async fn resubmittable_transactions(
     let rows = sqlx::query!(
         "
         SELECT
-            `transaction_id`,
-            `aggregated_signature`
-        FROM `transactions`
-        WHERE `submitted_at` IS NULL OR `submitted_at` <= ?
+            hash AS transaction_id,
+            aggregated_signature
+        FROM transactions
+        WHERE submitted_at_timestamp IS NULL OR submitted_at_timestamp <= ?
         ",
         threshold
     )
@@ -246,7 +246,9 @@ async fn resubmittable_transactions(
         .map(|row| {
             Ok((
                 to_bytes32(&row.transaction_id)?,
-                Signature::from_bytes(&to_bytes(&row.aggregated_signature)?)?,
+                Signature::from_bytes(&to_bytes(
+                    &row.aggregated_signature.ok_or(sqlx::Error::RowNotFound)?,
+                )?)?,
             ))
         })
         .collect()
@@ -261,13 +263,14 @@ async fn coin_spends(
     let rows = sqlx::query!(
         "
         SELECT
-            `parent_coin_id`,
-            `puzzle_hash`,
-            `amount`,
-            `puzzle_reveal`,
-            `solution`
-        FROM `transaction_spends` INDEXED BY `indexed_spend`
-        WHERE `transaction_id` = ?
+            parent_coin_id,
+            puzzle_hash,
+            amount,
+            puzzle_reveal,
+            solution
+        FROM transaction_spends
+        INNER JOIN transactions ON transactions.id = transaction_spends.transaction_id
+        WHERE hash = ?
         ORDER BY `index` ASC
         ",
         transaction_id
@@ -292,11 +295,10 @@ async fn coin_spends(
 
 async fn remove_transaction(conn: impl SqliteExecutor<'_>, transaction_id: Bytes32) -> Result<()> {
     let transaction_id = transaction_id.as_ref();
-
     sqlx::query!(
         "
-        DELETE FROM `transactions`
-        WHERE `transaction_id` = ?
+        DELETE FROM transactions
+        WHERE hash = ?
         ",
         transaction_id
     )
@@ -311,9 +313,9 @@ async fn confirm_coins(conn: impl SqliteExecutor<'_>, transaction_id: Bytes32) -
 
     sqlx::query!(
         "
-        UPDATE `coin_states`
-        SET `transaction_id` = NULL
-        WHERE `transaction_id` = ?
+        UPDATE coin_states
+        SET transaction_id = NULL
+        WHERE transaction_id = ?
         ",
         transaction_id
     )
@@ -331,9 +333,9 @@ async fn transaction_for_spent_coin(
 
     let Some(row) = sqlx::query!(
         "
-        SELECT `transaction_id`
-        FROM `transaction_spends`
-        WHERE `coin_id` = ?
+        SELECT transaction_id
+        FROM transaction_spends
+        WHERE coin_id = ?
         ",
         coin_id
     )
@@ -354,7 +356,7 @@ async fn transaction_coin_ids(
 
     let rows = sqlx::query!(
         "
-        SELECT `coin_id` FROM `transaction_spends` WHERE `transaction_id` = ?
+        SELECT coin_id FROM transaction_spends WHERE transaction_id = ?
         ",
         transaction_id
     )

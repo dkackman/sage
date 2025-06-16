@@ -1,3 +1,12 @@
+/* 
+  stand alone tables from the current schema 
+  these are largely unchanged 
+*/
+CREATE TABLE future_did_names (
+    launcher_id BLOB NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL
+);
+
 CREATE TABLE derivations (
   id INTEGER PRIMARY KEY,
   p2_puzzle_hash BLOB NOT NULL UNIQUE,
@@ -10,6 +19,13 @@ CREATE TABLE rust_migrations (
   version INTEGER PRIMARY KEY
 );
 
+/* 
+  new tables that redefine the current schema and introduce some conventions
+  - all BOOLEAN columns are named is_<name>
+  - all foreign keys are specified with FOREIGN KEY (and indexed)
+  - all UNIX timestamps are INTEGER and named <name>_timestamp
+  - all natural keys are specified as UNIQUE (which also creates an auto-index)
+*/
 CREATE TABLE offers (
   id INTEGER PRIMARY KEY,
   hash BLOB NOT NULL UNIQUE,
@@ -131,14 +147,19 @@ CREATE TABLE nfts (
   FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
 );
 
+/* 
+  This table collapses nft_data, nft_uris, and nft_thumbnails into a single table
+  with kind to differentiate between the three types of data.
+  Also, data_index, is a pointer to an external data source. It could
+  be a file path, a cache index, or a url etc so need to flesh that out more.
+*/
 CREATE TABLE nft_data (
   id INTEGER PRIMARY KEY,
   nft_id INTEGER NOT NULL,
   kind INTEGER NOT NULL,
   mime_type TEXT,
   is_hash_matched BOOLEAN NOT NULL,
-  data_index TEXT, -- NOT NULL, -- make this NOT NULL when we move nft data out of the db (post-migration)
-  data BLOB,   -- leaving this here until we move nft data out of the db (post-migration)
+  data_index TEXT NOT NULL, 
   FOREIGN KEY (nft_id) REFERENCES nfts(id) ON DELETE CASCADE
 );
 
@@ -168,8 +189,3 @@ CREATE TABLE offer_coins (
   FOREIGN KEY (coin_id) REFERENCES coins(id) ON DELETE CASCADE
   UNIQUE(offer_id, coin_id)
 );
-
-CREATE TABLE future_did_names (
-    launcher_id BLOB NOT NULL PRIMARY KEY,
-    name TEXT NOT NULL
-)

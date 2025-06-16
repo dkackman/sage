@@ -1,3 +1,4 @@
+-- columns specified with UNIQUE also create an auto-index
 CREATE INDEX idx_transactions_height ON transactions(height);
 CREATE INDEX idx_transaction_coins_transaction_id ON transaction_coins(transaction_id);
 CREATE INDEX idx_nft_data_nft_id ON nft_data(nft_id);

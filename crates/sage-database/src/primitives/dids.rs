@@ -108,13 +108,13 @@ async fn insert_did(conn: impl SqliteExecutor<'_>, row: DidRow) -> Result<()> {
 
     sqlx::query!(
         "
-        REPLACE INTO `dids` (
-            `launcher_id`,
-            `coin_id`,
-            `name`,
-            `is_owned`,
-            `visible`,
-            `created_height`
+        REPLACE INTO dids (
+            launcher_id,
+            coin_id,
+            name,
+            is_owned,
+            visible,
+            created_height
         )
         VALUES (?, ?, ?, ?, ?, ?)
         ",
@@ -151,16 +151,16 @@ async fn insert_did_coin(
 
     sqlx::query!(
         "
-        INSERT OR IGNORE INTO `did_coins` (
-            `coin_id`,
-            `parent_parent_coin_id`,
-            `parent_inner_puzzle_hash`,
-            `parent_amount`,
-            `launcher_id`,
-            `recovery_list_hash`,
-            `num_verifications_required`,
-            `metadata`,
-            `p2_puzzle_hash`
+        INSERT OR IGNORE INTO did_coins (
+            coin_id,
+            parent_parent_coin_id,
+            parent_inner_puzzle_hash,
+            parent_amount,
+            launcher_id,
+            recovery_list_hash,
+            num_verifications_required,
+            metadata,
+            p2_puzzle_hash
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ",
@@ -184,10 +184,10 @@ async fn dids_by_name(conn: impl SqliteExecutor<'_>) -> Result<Vec<DidRow>> {
     sqlx::query_as!(
         DidSql,
         "
-        SELECT `launcher_id`, `coin_id`, `name`, `is_owned`, `visible`, `created_height`
-        FROM `dids` INDEXED BY `did_name`
-        WHERE `is_owned` = 1
-        ORDER BY `visible` DESC, `is_pending` DESC, `is_named` DESC, `name` ASC, `launcher_id` ASC
+        SELECT launcher_id, coin_id, name, is_owned, visible, created_height
+        FROM dids_
+        WHERE is_owned = 1
+        ORDER BY visible DESC, is_pending DESC, is_named DESC, name ASC, launcher_id ASC
         "
     )
     .fetch_all(conn)
@@ -203,9 +203,9 @@ async fn did_row(conn: impl SqliteExecutor<'_>, launcher_id: Bytes32) -> Result<
     sqlx::query_as!(
         DidSql,
         "
-        SELECT `launcher_id`, `coin_id`, `name`, `is_owned`, `visible`, `created_height`
-        FROM `dids`
-        WHERE `launcher_id` = ?
+        SELECT launcher_id, coin_id, name, is_owned, visible, created_height
+        FROM dids_
+        WHERE launcher_id = ?
         ",
         launcher_id
     )
@@ -224,9 +224,9 @@ async fn did_row_by_coin(
     sqlx::query_as!(
         DidSql,
         "
-        SELECT `launcher_id`, `coin_id`, `name`, `is_owned`, `visible`, `created_height`
-        FROM `dids`
-        WHERE `coin_id` = ?
+        SELECT launcher_id, coin_id, name, is_owned, visible, created_height
+        FROM dids_
+        WHERE coin_id = ?
         ",
         coin_id
     )
@@ -239,12 +239,9 @@ async fn did_row_by_coin(
 async fn set_did_not_owned(conn: impl SqliteExecutor<'_>, coin_id: Bytes32) -> Result<()> {
     let coin_id = coin_id.as_ref();
 
-    sqlx::query!(
-        "UPDATE `dids` SET `is_owned` = 0 WHERE `coin_id` = ?",
-        coin_id
-    )
-    .execute(conn)
-    .await?;
+    sqlx::query!("UPDATE dids SET is_owned = 0 WHERE coin_id = ?", coin_id)
+        .execute(conn)
+        .await?;
 
     Ok(())
 }
@@ -257,7 +254,7 @@ async fn set_did_created_height(
     let coin_id = coin_id.as_ref();
 
     sqlx::query!(
-        "UPDATE `dids` SET `created_height` = ? WHERE `coin_id` = ?",
+        "UPDATE dids SET created_height = ? WHERE coin_id = ?",
         height,
         coin_id
     )
@@ -277,11 +274,11 @@ async fn did_coin_info(
         DidCoinInfoSql,
         "
         SELECT
-            `did_coins`.`coin_id`, `amount`, `p2_puzzle_hash`,
-            `recovery_list_hash`, `created_height`, `transaction_id`
-        FROM `did_coins`
-        INNER JOIN `coin_states` ON `coin_states`.coin_id = `did_coins`.coin_id
-        WHERE `did_coins`.`coin_id` = ?
+            did_coins.coin_id, amount, p2_puzzle_hash,
+            recovery_list_hash, created_height, transaction_id
+        FROM did_coins
+        INNER JOIN coin_states ON coin_states.coin_id = did_coins.coin_id
+        WHERE did_coins.coin_id = ?
         ",
         coin_id
     )
@@ -308,9 +305,9 @@ async fn spendable_did(
             did.parent_parent_coin_id, did.parent_inner_puzzle_hash, did.parent_amount,
             did.launcher_id, did.recovery_list_hash, did.num_verifications_required,
             did.metadata, did.p2_puzzle_hash
-        FROM `coin_states` AS cs
-        INNER JOIN `did_coins` AS did ON cs.coin_id = did.coin_id
-        LEFT JOIN `transaction_spends` ON cs.coin_id = transaction_spends.coin_id
+        FROM coin_states AS cs
+        INNER JOIN did_coins AS did ON cs.coin_id = did.coin_id
+        LEFT JOIN transaction_spends ON cs.coin_id = transaction_spends.coin_id
         WHERE did.launcher_id = ?
         AND cs.spent_height IS NULL
         AND cs.created_height IS NOT NULL
@@ -333,9 +330,9 @@ async fn did_name(conn: impl SqliteExecutor<'_>, launcher_id: Bytes32) -> Result
 
     let Some(row) = sqlx::query!(
         "
-        SELECT `name`
-        FROM `dids`
-        WHERE `launcher_id` = ?
+        SELECT name
+        FROM dids_
+        WHERE launcher_id = ?
         ",
         launcher_id
     )
@@ -357,7 +354,7 @@ async fn set_future_did_name(
 
     sqlx::query!(
         "
-        REPLACE INTO `future_did_names` (`launcher_id`, `name`)
+        REPLACE INTO future_did_names (launcher_id, name)
         VALUES (?, ?)
         ",
         launcher_id,
@@ -377,8 +374,8 @@ async fn get_future_did_name(
 
     Ok(sqlx::query!(
         "
-        SELECT `name` FROM `future_did_names`
-        WHERE `launcher_id` = ?
+        SELECT name FROM future_did_names
+        WHERE launcher_id = ?
         ",
         launcher_id
     )
@@ -392,7 +389,7 @@ async fn delete_future_did_name(conn: impl SqliteExecutor<'_>, launcher_id: Byte
 
     sqlx::query!(
         "
-        DELETE FROM `future_did_names` WHERE `launcher_id` = ?
+        DELETE FROM future_did_names WHERE launcher_id = ?
         ",
         launcher_id
     )
@@ -410,12 +407,12 @@ async fn created_unspent_did_coin_states(
     let rows = sqlx::query_as!(
         CoinStateSql,
         "
-        SELECT `parent_coin_id`, `puzzle_hash`, `amount`, `spent_height`, `created_height`, `transaction_id`, `kind`, `created_unixtime`, `spent_unixtime`
-        FROM `coin_states`
-        INNER JOIN `did_coins` ON `coin_states`.coin_id = `did_coins`.coin_id
-        WHERE `spent_height` IS NULL
-        AND `created_height` IS NOT NULL
-        ORDER BY `created_height`, `coin_states`.`coin_id` LIMIT ? OFFSET ?
+        SELECT parent_coin_id, puzzle_hash, amount, spent_height, created_height, transaction_id, kind, created_unixtime, spent_unixtime
+        FROM coin_states
+        INNER JOIN did_coins ON coin_states.coin_id = did_coins.coin_id
+        WHERE spent_height IS NULL
+        AND created_height IS NOT NULL
+        ORDER BY created_height, coin_states.coin_id LIMIT ? OFFSET ?
         ",
         limit,
         offset
@@ -435,12 +432,12 @@ async fn created_unspent_did_coin_state(
     let rows = sqlx::query_as!(
         CoinStateSql,
         "
-        SELECT `parent_coin_id`, `puzzle_hash`, `amount`, `spent_height`, `created_height`, `transaction_id`, `kind`, `created_unixtime`, `spent_unixtime`
-        FROM `did_coins`
-        INNER JOIN `coin_states` ON `coin_states`.coin_id = `did_coins`.coin_id
-        WHERE `launcher_id` = ?
-        AND `spent_height` IS NULL
-        AND `created_height` IS NOT NULL
+        SELECT parent_coin_id, puzzle_hash, amount, spent_height, created_height, transaction_id, kind, created_unixtime, spent_unixtime
+        FROM did_coins
+        INNER JOIN coin_states ON coin_states.coin_id = did_coins.coin_id
+        WHERE launcher_id = ?
+        AND spent_height IS NULL
+        AND created_height IS NOT NULL
         ",
         launcher_id,
     )
@@ -464,8 +461,8 @@ async fn did_by_coin_id(
             did.parent_parent_coin_id, did.parent_inner_puzzle_hash, did.parent_amount,
             did.launcher_id, did.recovery_list_hash, did.num_verifications_required,
             did.metadata, did.p2_puzzle_hash
-        FROM `coin_states` AS cs
-        INNER JOIN `did_coins` AS did ON cs.coin_id = did.coin_id
+        FROM coin_states AS cs
+        INNER JOIN did_coins AS did ON cs.coin_id = did.coin_id
         WHERE cs.coin_id = ?
         ",
         coin_id

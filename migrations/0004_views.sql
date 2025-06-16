@@ -2,6 +2,8 @@
 	These views are for transition purposes. They overlay the old schema on 
 	top of the new schema. They need to be replaced once the new schema is fully
 	vetted and Rust code rewritten.
+
+	Where old and new names collide the view name includes an underscore. (eg nfts_ for nfts)
 */
 
 CREATE VIEW coin_states AS

@@ -52,7 +52,10 @@ async fn latest_peak(conn: impl SqliteExecutor<'_>) -> Result<Option<(u32, Bytes
     .await?
     .map(|row| {
         let hash = row.header_hash.as_deref().ok_or(sqlx::Error::RowNotFound)?;
-        Ok((row.height.try_into()?, to_bytes32(hash)?))
+        Ok((
+            row.height.ok_or(sqlx::Error::RowNotFound)?.try_into()?,
+            to_bytes32(hash)?,
+        ))
     })
     .transpose()
 }

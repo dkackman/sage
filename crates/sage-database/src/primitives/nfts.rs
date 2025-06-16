@@ -336,13 +336,13 @@ async fn insert_collection(conn: impl SqliteExecutor<'_>, row: CollectionRow) ->
 
     sqlx::query!(
         "
-        INSERT OR IGNORE INTO `collections` (
-            `collection_id`,
-            `did_id`,
-            `metadata_collection_id`,
-            `visible`,
-            `name`,
-            `icon`
+        INSERT OR IGNORE INTO collections (
+            collection_id,
+            did_id,
+            metadata_collection_id,
+            visible,
+            name,
+            icon
         )
         VALUES (?, ?, ?, ?, ?, ?)
         ",
@@ -372,14 +372,14 @@ async fn update_collection(
 
     sqlx::query!(
         "
-        UPDATE `collections` SET
-            `collection_id` = ?,
-            `did_id` = ?,
-            `metadata_collection_id` = ?,
-            `visible` = ?,
-            `name` = ?,
-            `icon` = ?
-        WHERE `collection_id` = ?
+        UPDATE collections SET
+            collection_id = ?,
+            did_id = ?,
+            metadata_collection_id = ?,
+            visible = ?,
+            name = ?,
+            icon = ?
+        WHERE collection_id = ?
         ",
         new_collection_id,
         did_id,
@@ -402,7 +402,7 @@ async fn collection_name(
     let collection_id = collection_id.as_ref();
 
     let row = sqlx::query!(
-        "SELECT `name` FROM `collections` WHERE `collection_id` = ?",
+        "SELECT name FROM collections WHERE collection_id = ?",
         collection_id
     )
     .fetch_optional(conn)
@@ -420,8 +420,8 @@ async fn collection(
     sqlx::query_as!(
         CollectionSql,
         "
-        SELECT `collection_id`, `did_id`, `metadata_collection_id`, `visible`, `name`, `icon`
-        FROM `collections` WHERE `collection_id` = ?
+        SELECT collection_id, did_id, metadata_collection_id, visible, name, icon
+        FROM collections WHERE collection_id = ?
         ",
         collection_id
     )
@@ -524,7 +524,7 @@ async fn insert_nft_uri(conn: impl SqliteExecutor<'_>, uri: String, hash: Bytes3
     let hash = hash.as_ref();
 
     sqlx::query!(
-        "INSERT OR IGNORE INTO `nft_uris` (`hash`, `uri`, `checked`, `hash_matches`) VALUES (?, ?, ?, ?)",
+        "INSERT OR IGNORE INTO nft_uris (hash, uri, checked, hash_matches) VALUES (?, ?, ?, ?)",
         hash,
         uri,
         false,
@@ -538,7 +538,7 @@ async fn insert_nft_uri(conn: impl SqliteExecutor<'_>, uri: String, hash: Bytes3
 
 async fn unchecked_nft_uris(conn: impl SqliteExecutor<'_>, limit: u32) -> Result<Vec<NftUri>> {
     let rows = sqlx::query!(
-        "SELECT `hash`, `uri` FROM `nft_uris` WHERE `checked` = 0 LIMIT ?",
+        "SELECT hash, uri FROM nft_uris WHERE checked = 0 LIMIT ?",
         limit
     )
     .fetch_all(conn)
@@ -565,7 +565,7 @@ async fn set_nft_uri_checked(
     let hash = hash.as_ref();
 
     sqlx::query!(
-        "UPDATE `nft_uris` SET `checked` = 1, `hash_matches` = ? WHERE `hash` = ? AND `uri` = ?",
+        "UPDATE nft_uris SET checked = 1, hash_matches = ? WHERE hash = ? AND uri = ?",
         hash_matches,
         hash,
         uri
@@ -577,7 +577,7 @@ async fn set_nft_uri_checked(
 }
 
 async fn set_nft_uri_unchecked(conn: impl SqliteExecutor<'_>, uri: String) -> Result<()> {
-    sqlx::query!("UPDATE `nft_uris` SET `checked` = 0 WHERE `uri` = ?", uri)
+    sqlx::query!("UPDATE nft_uris SET checked = 0 WHERE uri = ?", uri)
         .execute(conn)
         .await?;
 
@@ -594,7 +594,7 @@ async fn insert_nft_data(
     let mime_type = nft_data.mime_type;
 
     sqlx::query!(
-        "REPLACE INTO `nft_data` (`hash`, `data`, `mime_type`, `hash_matches`) VALUES (?, ?, ?, ?)",
+        "REPLACE INTO nft_data (hash, data, mime_type, hash_matches) VALUES (?, ?, ?, ?)",
         hash,
         data,
         mime_type,
@@ -609,7 +609,7 @@ async fn insert_nft_data(
 async fn delete_nft_data(conn: impl SqliteExecutor<'_>, hash: Bytes32) -> Result<()> {
     let hash = hash.as_ref();
 
-    sqlx::query!("DELETE FROM `nft_data` WHERE `hash` = ?", hash)
+    sqlx::query!("DELETE FROM nft_data WHERE hash = ?", hash)
         .execute(conn)
         .await?;
 
@@ -625,7 +625,7 @@ async fn insert_nft_thumbnail(
     let hash = hash.as_ref();
 
     sqlx::query!(
-        "REPLACE INTO `nft_thumbnails` (`hash`, `icon`, `thumbnail`) VALUES (?, ?, ?)",
+        "REPLACE INTO nft_thumbnails (hash, icon, thumbnail) VALUES (?, ?, ?)",
         hash,
         icon,
         thumbnail
@@ -639,7 +639,7 @@ async fn insert_nft_thumbnail(
 async fn delete_nft_thumbnail(conn: impl SqliteExecutor<'_>, hash: Bytes32) -> Result<()> {
     let hash = hash.as_ref();
 
-    sqlx::query!("DELETE FROM `nft_thumbnails` WHERE `hash` = ?", hash)
+    sqlx::query!("DELETE FROM nft_thumbnails WHERE hash = ?", hash)
         .execute(conn)
         .await?;
 
@@ -649,7 +649,7 @@ async fn delete_nft_thumbnail(conn: impl SqliteExecutor<'_>, hash: Bytes32) -> R
 async fn nft_icon(conn: impl SqliteExecutor<'_>, hash: Bytes32) -> Result<Option<Vec<u8>>> {
     let hash = hash.as_ref();
 
-    let row = sqlx::query!("SELECT `icon` FROM `nft_thumbnails` WHERE `hash` = ?", hash)
+    let row = sqlx::query!("SELECT icon FROM nft_thumbnails WHERE hash = ?", hash)
         .fetch_optional(conn)
         .await?;
 
@@ -659,12 +659,9 @@ async fn nft_icon(conn: impl SqliteExecutor<'_>, hash: Bytes32) -> Result<Option
 async fn nft_thumbnail(conn: impl SqliteExecutor<'_>, hash: Bytes32) -> Result<Option<Vec<u8>>> {
     let hash = hash.as_ref();
 
-    let row = sqlx::query!(
-        "SELECT `thumbnail` FROM `nft_thumbnails` WHERE `hash` = ?",
-        hash
-    )
-    .fetch_optional(conn)
-    .await?;
+    let row = sqlx::query!("SELECT thumbnail FROM nft_thumbnails WHERE hash = ?", hash)
+        .fetch_optional(conn)
+        .await?;
 
     Ok(row.map(|row| row.thumbnail))
 }
@@ -708,7 +705,7 @@ async fn fetch_nft_data(conn: impl SqliteExecutor<'_>, hash: Bytes32) -> Result<
     let hash = hash.as_ref();
 
     let row = sqlx::query!(
-        "SELECT `data`, `mime_type`, `hash_matches` FROM `nft_data` WHERE `hash` = ?",
+        "SELECT data, mime_type, is_hash_matched FROM nft_data WHERE hash = ?",
         hash
     )
     .fetch_optional(conn)
@@ -731,20 +728,20 @@ async fn insert_nft(conn: impl SqliteExecutor<'_>, row: NftRow) -> Result<()> {
     let metadata_hash = row.metadata_hash.as_deref();
 
     sqlx::query!(
-        "REPLACE INTO `nfts` (
-            `launcher_id`,
-            `coin_id`,
-            `collection_id`,
-            `minter_did`,
-            `owner_did`,
-            `visible`,
-            `sensitive_content`,
-            `name`,
-            `is_owned`,
-            `created_height`,
-            `metadata_hash`,
-            `edition_number`,
-            `edition_total`
+        "REPLACE INTO nfts (
+            launcher_id,
+            coin_id,
+            collection_id,
+            minter_did,
+            owner_did,
+            visible,
+            sensitive_content,
+            name,
+            is_owned,
+            created_height,
+            metadata_hash,
+            edition_number,
+            edition_total
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         launcher_id,
         coin_id,
@@ -775,7 +772,7 @@ async fn nft_row(conn: impl SqliteExecutor<'_>, launcher_id: Bytes32) -> Result<
         SELECT launcher_id, coin_id, collection_id, minter_did, owner_did, visible, 
                sensitive_content, name, is_owned, created_height, metadata_hash,
                is_named, is_pending, edition_number, edition_total
-        FROM `nfts` WHERE `launcher_id` = ?
+        FROM nfts WHERE launcher_id = ?
         ",
         launcher_id
     )
@@ -797,7 +794,7 @@ async fn nft_row_by_coin(
         SELECT launcher_id, coin_id, collection_id, minter_did, owner_did, visible, 
                sensitive_content, name, is_owned, created_height, metadata_hash,
                is_named, is_pending, edition_number, edition_total
-        FROM `nfts` WHERE `coin_id` = ?
+        FROM nfts WHERE coin_id = ?
         ",
         coin_id
     )
@@ -815,7 +812,7 @@ async fn set_nft_visible(
     let launcher_id = launcher_id.as_ref();
 
     sqlx::query!(
-        "UPDATE `nfts` SET `visible` = ? WHERE `launcher_id` = ?",
+        "UPDATE nfts SET visible = ? WHERE launcher_id = ?",
         visible,
         launcher_id
     )
@@ -833,7 +830,7 @@ async fn set_collection_visible(
     let collection_id = collection_id.as_ref();
 
     sqlx::query!(
-        "UPDATE `collections` SET `visible` = ? WHERE `collection_id` = ?",
+        "UPDATE collections SET visible = ? WHERE collection_id = ?",
         visible,
         collection_id
     )
@@ -853,18 +850,18 @@ async fn spendable_nft(
         FullNftCoinSql,
         "
         SELECT
-            `coin_states`.`parent_coin_id`, `coin_states`.`puzzle_hash`, `coin_states`.`amount`,
-            `parent_parent_coin_id`, `parent_inner_puzzle_hash`, `parent_amount`,
-            `launcher_id`, `metadata`, `metadata_updater_puzzle_hash`, `current_owner`,
-            `royalty_puzzle_hash`, `royalty_ten_thousandths`, `p2_puzzle_hash`
-        FROM `nft_coins`
-        INNER JOIN `coin_states` INDEXED BY `coin_height` ON `nft_coins`.`coin_id` = `coin_states`.`coin_id`
-        LEFT JOIN `transaction_spends` ON `coin_states`.`coin_id` = `transaction_spends`.`coin_id`
-        WHERE `launcher_id` = ?
-        AND `spent_height` IS NULL
-        AND `created_height` IS NOT NULL
-        AND `coin_states`.`transaction_id` IS NULL
-        AND `transaction_spends`.`transaction_id` IS NULL
+            coin_states.parent_coin_id, coin_states.puzzle_hash, coin_states.amount,
+            parent_parent_coin_id, parent_inner_puzzle_hash, parent_amount,
+            launcher_id, metadata, metadata_updater_puzzle_hash, current_owner,
+            royalty_puzzle_hash, royalty_ten_thousandths, p2_puzzle_hash
+        FROM nft_coins
+        INNER JOIN coin_states INDEXED BY coin_height ON nft_coins.coin_id = coin_states.coin_id
+        LEFT JOIN transaction_spends ON coin_states.coin_id = transaction_spends.coin_id
+        WHERE launcher_id = ?
+        AND spent_height IS NULL
+        AND created_height IS NOT NULL
+        AND coin_states.transaction_id IS NULL
+        AND transaction_spends.transaction_id IS NULL
         ",
         launcher_id
     )
@@ -884,16 +881,16 @@ async fn nft(conn: impl SqliteExecutor<'_>, launcher_id: Bytes32) -> Result<Opti
         FullNftCoinSql,
         "
         SELECT
-            `coin_states`.`parent_coin_id`, `coin_states`.`puzzle_hash`, `coin_states`.`amount`,
-            `parent_parent_coin_id`, `parent_inner_puzzle_hash`, `parent_amount`,
-            `launcher_id`, `metadata`, `metadata_updater_puzzle_hash`, `current_owner`,
-            `royalty_puzzle_hash`, `royalty_ten_thousandths`, `p2_puzzle_hash`
-        FROM `nft_coins` INDEXED BY `nft_launcher_id`
-        INNER JOIN `coin_states` ON `nft_coins`.`coin_id` = `coin_states`.`coin_id`
-        LEFT JOIN `transaction_spends` ON `coin_states`.`coin_id` = `transaction_spends`.`coin_id`
-        WHERE `launcher_id` = ?
-        AND `spent_height` IS NULL
-        AND `transaction_spends`.`transaction_id` IS NULL
+            coin_states.parent_coin_id, coin_states.puzzle_hash, coin_states.amount,
+            parent_parent_coin_id, parent_inner_puzzle_hash, parent_amount,
+            launcher_id, metadata, metadata_updater_puzzle_hash, current_owner,
+            royalty_puzzle_hash, royalty_ten_thousandths, p2_puzzle_hash
+        FROM nft_coins INDEXED BY nft_launcher_id
+        INNER JOIN coin_states ON nft_coins.coin_id = coin_states.coin_id
+        LEFT JOIN transaction_spends ON coin_states.coin_id = transaction_spends.coin_id
+        WHERE launcher_id = ?
+        AND spent_height IS NULL
+        AND transaction_spends.transaction_id IS NULL
         ",
         launcher_id
     )
@@ -918,8 +915,8 @@ async fn nfts_by_metadata_hash(
         SELECT launcher_id, coin_id, collection_id, minter_did, owner_did, visible, 
                sensitive_content, name, is_owned, created_height, metadata_hash,
                is_named, is_pending, edition_number, edition_total
-        FROM `nfts` INDEXED BY `nft_metadata`
-        WHERE `metadata_hash` = ?
+        FROM nfts INDEXED BY nft_metadata
+        WHERE metadata_hash = ?
         ",
         metadata_hash
     )
@@ -1062,21 +1059,21 @@ async fn insert_nft_coin(
 
     sqlx::query!(
         "
-        INSERT OR IGNORE INTO `nft_coins` (
-            `coin_id`,
-            `parent_parent_coin_id`,
-            `parent_inner_puzzle_hash`,
-            `parent_amount`,
-            `launcher_id`,
-            `metadata`,
-            `metadata_updater_puzzle_hash`,
-            `current_owner`,
-            `royalty_puzzle_hash`,
-            `royalty_ten_thousandths`,
-            `p2_puzzle_hash`,
-            `data_hash`,
-            `metadata_hash`,
-            `license_hash`
+        INSERT OR IGNORE INTO nft_coins (
+            coin_id,
+            parent_parent_coin_id,
+            parent_inner_puzzle_hash,
+            parent_amount,
+            launcher_id,
+            metadata,
+            metadata_updater_puzzle_hash,
+            current_owner,
+            royalty_puzzle_hash,
+            royalty_ten_thousandths,
+            p2_puzzle_hash,
+            data_hash,
+            metadata_hash,
+            license_hash
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ",
@@ -1105,7 +1102,7 @@ async fn data_hash(conn: impl SqliteExecutor<'_>, launcher_id: Bytes32) -> Resul
     let launcher_id = launcher_id.as_ref();
 
     let Some(row) = sqlx::query!(
-        "SELECT `data_hash` FROM `nft_coins` WHERE `launcher_id` = ?",
+        "SELECT data_hash FROM nft_coins WHERE launcher_id = ?",
         launcher_id
     )
     .fetch_optional(conn)
@@ -1128,7 +1125,7 @@ async fn metadata_hash(
     let launcher_id = launcher_id.as_ref();
 
     let Some(row) = sqlx::query!(
-        "SELECT `metadata_hash` FROM `nft_coins` WHERE `launcher_id` = ?",
+        "SELECT metadata_hash FROM nft_coins WHERE launcher_id = ?",
         launcher_id
     )
     .fetch_optional(conn)
@@ -1151,7 +1148,7 @@ async fn license_hash(
     let launcher_id = launcher_id.as_ref();
 
     let Some(row) = sqlx::query!(
-        "SELECT `license_hash` FROM `nft_coins` WHERE `launcher_id` = ?",
+        "SELECT license_hash FROM nft_coins WHERE launcher_id = ?",
         launcher_id
     )
     .fetch_optional(conn)
@@ -1175,12 +1172,12 @@ async fn created_unspent_nft_coin_states(
     let rows = sqlx::query_as!(
         CoinStateSql,
         "
-        SELECT `parent_coin_id`, `puzzle_hash`, `amount`, `spent_height`, `created_height`, `transaction_id`, `kind`, `created_unixtime`, `spent_unixtime`
-        FROM `coin_states`
-        INNER JOIN `nft_coins` ON `coin_states`.coin_id = `nft_coins`.coin_id
-        WHERE `spent_height` IS NULL
-        AND `created_height` IS NOT NULL
-        ORDER BY `created_height`, `coin_states`.`coin_id` LIMIT ? OFFSET ?
+        SELECT parent_coin_id, puzzle_hash, amount, spent_height, created_height, transaction_id, kind, created_unixtime, spent_unixtime
+        FROM coin_states
+        INNER JOIN nft_coins ON coin_states.coin_id = nft_coins.coin_id
+        WHERE spent_height IS NULL
+        AND created_height IS NOT NULL
+        ORDER BY created_height, coin_states.coin_id LIMIT ? OFFSET ?
         ",
         limit,
         offset
@@ -1200,12 +1197,12 @@ async fn created_unspent_nft_coin_state(
     let rows = sqlx::query_as!(
         CoinStateSql,
         "
-        SELECT `parent_coin_id`, `puzzle_hash`, `amount`, `spent_height`, `created_height`, `transaction_id`, `kind`, `created_unixtime`, `spent_unixtime`
-        FROM `coin_states`
-        INNER JOIN `nft_coins` ON `coin_states`.coin_id = `nft_coins`.coin_id
-        WHERE `launcher_id` = ?
-        AND `spent_height` IS NULL
-        AND `created_height` IS NOT NULL
+        SELECT parent_coin_id, puzzle_hash, amount, spent_height, created_height, transaction_id, kind, created_unixtime, spent_unixtime
+        FROM coin_states
+        INNER JOIN nft_coins ON coin_states.coin_id = nft_coins.coin_id
+        WHERE launcher_id = ?
+        AND spent_height IS NULL
+        AND created_height IS NOT NULL
         ",
         launcher_id
     )
@@ -1225,13 +1222,13 @@ async fn nft_by_coin_id(
         FullNftCoinSql,
         "
         SELECT
-            `coin_states`.`parent_coin_id`, `coin_states`.`puzzle_hash`, `coin_states`.`amount`,
-            `parent_parent_coin_id`, `parent_inner_puzzle_hash`, `parent_amount`,
-            `launcher_id`, `metadata`, `metadata_updater_puzzle_hash`, `current_owner`,
-            `royalty_puzzle_hash`, `royalty_ten_thousandths`, `p2_puzzle_hash`
-        FROM `nft_coins`
-        INNER JOIN `coin_states` INDEXED BY `coin_height` ON `nft_coins`.`coin_id` = `coin_states`.`coin_id`
-        WHERE `coin_states`.`coin_id` = ?
+            coin_states.parent_coin_id, coin_states.puzzle_hash, coin_states.amount,
+            parent_parent_coin_id, parent_inner_puzzle_hash, parent_amount,
+            launcher_id, metadata, metadata_updater_puzzle_hash, current_owner,
+            royalty_puzzle_hash, royalty_ten_thousandths, p2_puzzle_hash
+        FROM nft_coins
+        INNER JOIN coin_states INDEXED BY coin_height ON nft_coins.coin_id = coin_states.coin_id
+        WHERE coin_states.coin_id = ?
         ",
         coin_id
     )
@@ -1247,12 +1244,9 @@ async fn nft_by_coin_id(
 async fn set_nft_not_owned(conn: impl SqliteExecutor<'_>, coin_id: Bytes32) -> Result<()> {
     let coin_id = coin_id.as_ref();
 
-    sqlx::query!(
-        "UPDATE `nfts` SET `is_owned` = 0 WHERE `coin_id` = ?",
-        coin_id
-    )
-    .execute(conn)
-    .await?;
+    sqlx::query!("UPDATE nfts SET is_owned = 0 WHERE coin_id = ?", coin_id)
+        .execute(conn)
+        .await?;
 
     Ok(())
 }
@@ -1265,7 +1259,7 @@ async fn set_nft_created_height(
     let coin_id = coin_id.as_ref();
 
     sqlx::query!(
-        "UPDATE `nfts` SET `created_height` = ? WHERE `coin_id` = ?",
+        "UPDATE nfts SET created_height = ? WHERE coin_id = ?",
         height,
         coin_id
     )
@@ -1276,7 +1270,7 @@ async fn set_nft_created_height(
 }
 
 async fn collection_ids(conn: impl SqliteExecutor<'_>) -> Result<Vec<Bytes32>> {
-    sqlx::query_scalar!("SELECT `collection_id` FROM `collections`")
+    sqlx::query_scalar!("SELECT collection_id FROM collections")
         .fetch_all(conn)
         .await?
         .into_iter()
@@ -1293,7 +1287,7 @@ async fn update_collection_id(
     let new_collection_id = new_collection_id.as_ref();
 
     sqlx::query!(
-        "UPDATE `collections` SET `collection_id` = ? WHERE `collection_id` = ?",
+        "UPDATE collections SET collection_id = ? WHERE collection_id = ?",
         new_collection_id,
         collection_id
     )
@@ -1312,7 +1306,7 @@ async fn update_nft_collection_ids(
     let new_collection_id = new_collection_id.as_ref();
 
     sqlx::query!(
-        "UPDATE `nfts` SET `collection_id` = ? WHERE `collection_id` = ?",
+        "UPDATE nfts SET collection_id = ? WHERE collection_id = ?",
         new_collection_id,
         collection_id
     )
@@ -1323,7 +1317,7 @@ async fn update_nft_collection_ids(
 }
 
 pub async fn total_uris(conn: impl SqliteExecutor<'_>) -> Result<u32> {
-    Ok(sqlx::query!("SELECT COUNT(*) AS `count` FROM `nft_uris`")
+    Ok(sqlx::query!("SELECT COUNT(*) AS count FROM nft_uris")
         .fetch_one(conn)
         .await?
         .count
@@ -1332,7 +1326,7 @@ pub async fn total_uris(conn: impl SqliteExecutor<'_>) -> Result<u32> {
 
 pub async fn checked_uris(conn: impl SqliteExecutor<'_>) -> Result<u32> {
     Ok(
-        sqlx::query!("SELECT COUNT(*) AS `count` FROM `nft_uris` WHERE `checked` = 1")
+        sqlx::query!("SELECT COUNT(*) AS count FROM nft_uris WHERE checked = 1")
             .fetch_one(conn)
             .await?
             .count
