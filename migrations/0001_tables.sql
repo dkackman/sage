@@ -45,7 +45,7 @@ CREATE TABLE offer_assets (
 );
 
 CREATE TABLE blocks (
-  height INTEGER,
+  height INTEGER PRIMARY KEY,
   is_peak BOOLEAN NOT NULL DEFAULT FALSE,
   header_hash BLOB,
   timestamp INTEGER
@@ -81,7 +81,7 @@ CREATE TABLE transactions (
   fee BLOB,
   height INTEGER,
   submitted_at_timestamp INTEGER,
-  FOREIGN KEY (height) REFERENCES blocks(height) ON DELETE SET NULL
+  FOREIGN KEY (height) REFERENCES blocks(height) ON DELETE CASCADE
 );
 
 CREATE TABLE transaction_coins (
