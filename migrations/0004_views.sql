@@ -41,7 +41,9 @@ WHERE 1=1
 	AND transaction_coins.is_spend = 1;
 
 CREATE VIEW offered_coins AS
-SELECT offers.hash AS offer_id, coins.hash AS coin_id
+SELECT 
+	offers.hash AS offer_id, 
+	coins.hash AS coin_id
 FROM offer_coins
 	INNER JOIN coins ON coins.id = offer_coins.coin_id
 	INNER JOIN offers ON offers.id = offer_coins.offer_id;
@@ -59,7 +61,7 @@ FROM assets
 	INNER JOIN lineage_proofs ON lineage_proofs.coin_id = coins.id
 WHERE 1=1
 	AND assets.kind = 0
-	AND tokens.id > 0; -- xch is not a cat coins
+	AND tokens.is_xch != 1;
 
 CREATE VIEW nft_coins AS
 SELECT
@@ -116,7 +118,7 @@ FROM assets
 	INNER JOIN tokens ON tokens.asset_id = assets.id
 WHERE 1=1
 	AND assets.kind = 0
-	AND tokens.id > 0; -- xch is not a cat coins
+	AND tokens.is_xch != 1;
 
 CREATE VIEW dids_ AS
 SELECT
@@ -191,3 +193,52 @@ FROM nft_data
 	INNER JOIN nfts ON nfts.id = nft_data.nft_id
 WHERE 1=1
 	AND kind = 3;
+
+CREATE VIEW offered_cats AS
+SELECT
+	offers.hash AS offer_id,
+	offer_assets.is_requested AS requested,
+	assets.hash AS asset_id,
+	offer_assets.amount,
+	offer_assets.royalty,
+	assets.name,
+	tokens.ticker,
+	assets.icon_url AS icon
+FROM offers
+	INNER JOIN offer_assets ON offers.id = offer_assets.offer_id
+	INNER JOIN assets ON offer_assets.asset_id = assets.id
+	INNER JOIN tokens on tokens.asset_id = assets.id
+WHERE 1=1
+	AND assets.kind = 0
+	AND tokens.is_xch != 1;
+
+CREATE VIEW offered_xch AS
+SELECT
+	offers.hash AS offer_id,
+	offer_assets.is_requested AS requested,
+	offer_assets.amount,
+	offer_assets.royalty
+FROM offers
+	INNER JOIN offer_assets ON offers.id = offer_assets.offer_id
+	INNER JOIN assets ON offer_assets.asset_id = assets.id
+	INNER JOIN tokens on tokens.asset_id = assets.id
+WHERE 1=1
+	AND assets.kind = 0
+	AND tokens.IsXch = 1
+
+CREATE VIEW offered_nfts AS
+SELECT
+	offers.hash AS offer_id,
+	offer_assets.is_requested AS requested,
+	assets.hash AS launcher_id,
+	nfts.royalty_puzzle_hash,
+	nfts.royalty_ten_thousandths,
+	assets.name,
+	NULL AS thumbnail, -- these are null because the new schema no longer stores them directly
+	NULL AS thumbnail_mime_type
+FROM offers
+	INNER JOIN offer_assets ON offers.id = offer_assets.offer_id
+	INNER JOIN assets ON offer_assets.asset_id = assets.id
+	INNER JOIN nfts on nfts.asset_id = assets.id;
+WHERE 1=1
+	AND assets.kind = 1;

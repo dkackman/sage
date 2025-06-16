@@ -54,6 +54,7 @@ CREATE TABLE offer_assets (
   offer_id INTEGER NOT NULL,
   asset_id INTEGER NOT NULL,
   amount BLOB NOT NULL,
+  royalty BLOB,
   is_requested BOOLEAN NOT NULL,
   FOREIGN KEY (offer_id) REFERENCES offers(id) ON DELETE CASCADE,
   FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
@@ -167,7 +168,7 @@ CREATE TABLE tokens (
   id INTEGER PRIMARY KEY,
   asset_id INTEGER NOT NULL UNIQUE,
   ticker TEXT,
-  IsXch BOOLEAN GENERATED ALWAYS AS (asset_id = 0) STORED,
+  is_xch BOOLEAN GENERATED ALWAYS AS (asset_id = 0) STORED,
   FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
 );
 
