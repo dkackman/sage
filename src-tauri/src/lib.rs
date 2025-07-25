@@ -3,6 +3,7 @@ use rustls::crypto::aws_lc_rs::default_provider;
 use sage::Sage;
 use sage_api::SyncEvent;
 use tauri::Manager;
+use tauri_plugin_sentry::sentry;
 use tauri_specta::{collect_commands, collect_events, Builder, ErrorHandlingMode};
 use tokio::sync::Mutex;
 
@@ -135,7 +136,17 @@ pub fn run() {
         )
         .expect("Failed to export TypeScript bindings");
 
+    let sentry_client = sentry::init((
+        std::env::var("VITE_SENTRY_IO_DSN").unwrap_or_default(),
+        sentry::ClientOptions {
+            release: sentry::release_name!(),
+            auto_session_tracking: true,
+            debug: true,
+            ..Default::default()
+        },
+    ));
     let mut tauri_builder = tauri::Builder::default()
+        .plugin(tauri_plugin_sentry::init(&sentry_client))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_os::init());
