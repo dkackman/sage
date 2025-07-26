@@ -7,7 +7,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { createContext, ReactNode, useCallback, useState } from 'react';
+import {
+  createContext,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useState,
+} from 'react';
 import { ErrorKind } from '../bindings';
 
 export interface CustomError {
@@ -28,7 +34,73 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
   const [errors, setErrors] = useState<CustomError[]>([]);
 
   const addError = useCallback((error: CustomError) => {
+    console.log('addError called with:', error);
+
+    // Log current timestamp to help with timing
+    console.log('addError timestamp:', new Date().toISOString());
+
+    // Special handling for unauthorized errors to track their source
+    if (error.kind === 'unauthorized') {
+      console.log('🔍 UNAUTHORIZED ERROR DETECTED - ANALYZING SOURCE');
+      console.log('Error details:', {
+        kind: error.kind,
+        reason: error.reason,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Try to get even more stack trace info
+      const err = new Error('UNAUTHORIZED addError trace');
+      if (Error.captureStackTrace) {
+        Error.captureStackTrace(err, addError);
+      }
+      console.log('Enhanced stack trace:', err.stack);
+
+      // Temporarily block this error from being added to see what happens
+      console.log(
+        '🚫 BLOCKING unauthorized error from being added to prevent dialog',
+      );
+      return; // Don't add the error
+    }
+
+    // Capture full stack trace with more details
+    const stack = new Error('addError call trace').stack;
+    console.log('Full stack trace:', stack);
+
+    // Also capture console.trace for comparison
+    console.trace('Console trace for addError call');
+
     setErrors((prevErrors) => [...prevErrors, error]);
+  }, []);
+
+  // Add global unhandled promise rejection handler
+  useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.log('Unhandled promise rejection detected:', event.reason);
+      console.log('Promise:', event.promise);
+
+      // Check if this looks like our error
+      if (event.reason && typeof event.reason === 'object') {
+        const error = event.reason as CustomError;
+        if (
+          error.kind === 'unauthorized' ||
+          error.kind === 'database_migration'
+        ) {
+          console.log('FOUND IT: Unhandled promise rejection is our error!');
+          if (error.kind === 'unauthorized') {
+            console.log('This is likely the source of our unauthorized error');
+          }
+        }
+      }
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener(
+        'unhandledrejection',
+        handleUnhandledRejection,
+      );
+    };
   }, []);
 
   return (

@@ -15,6 +15,9 @@
 CREATE TABLE rust_migrations (
   version INTEGER NOT NULL PRIMARY KEY
 );
+CREATE TABLE rust_migrations19 (
+  version INTEGER NOT NULL PRIMARY KEY
+);
 
 CREATE TABLE collections (
   id INTEGER NOT NULL PRIMARY KEY,

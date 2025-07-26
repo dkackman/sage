@@ -57,8 +57,10 @@ export const useNavigationStore = create<NavigationStore>((set) => ({
 }));
 
 export function clearState() {
+  console.log('clearState: called');
   useWalletState.setState(defaultState());
   useOfferState.setState(null);
+  console.log('clearState: completed');
 }
 
 export async function fetchState() {
@@ -68,26 +70,57 @@ export async function fetchState() {
 let updateSyncStatusPromise: Promise<void> | null = null;
 
 export function updateSyncStatus() {
+  const callId = Math.random().toString(36).substr(2, 9);
+  console.log(`updateSyncStatus: called [${callId}]`);
   // Prevent multiple concurrent calls
   if (updateSyncStatusPromise) {
+    console.log(`updateSyncStatus: already running, returning [${callId}]`);
     return;
   }
 
+  console.log(`updateSyncStatus: starting new call [${callId}]`);
   updateSyncStatusPromise = commands
-    .getSyncStatus({})
-    .then((sync) => useWalletState.setState({ sync }))
-    .catch((error) => console.error(error))
+    .getKey({})
+    .then(async (keyData) => {
+      console.log(`updateSyncStatus: getKey result [${callId}]:`, keyData);
+      // Only fetch sync status if there's an authenticated wallet
+      if (keyData.key) {
+        console.log(`updateSyncStatus: calling getSyncStatus() [${callId}]`);
+        try {
+          const sync = await commands.getSyncStatus({});
+          console.log(`updateSyncStatus: getSyncStatus completed [${callId}]`);
+          useWalletState.setState({ sync });
+        } catch (syncError) {
+          console.log(`updateSyncStatus: getSyncStatus failed [${callId}]:`, syncError);
+          throw syncError; // Re-throw to be caught by outer catch
+        }
+      } else {
+        console.log(`updateSyncStatus: no key found, skipping getSyncStatus [${callId}]`);
+      }
+    })
+    .catch((error) => {
+      console.log(`updateSyncStatus: error caught [${callId}]:`, error);
+      // Don't show unauthorized errors (happens when no wallet is logged in)
+      if (error?.kind !== 'unauthorized') {
+        console.error(`updateSyncStatus error [${callId}]:`, error);
+      } else {
+        console.log(`updateSyncStatus: ignoring unauthorized error [${callId}]`);
+      }
+    })
     .finally(() => {
+      console.log(`updateSyncStatus: finally block, clearing promise [${callId}]`);
       updateSyncStatusPromise = null;
     });
 }
 
 events.syncEvent.listen((event) => {
+  console.log('state.ts: syncEvent received:', event.payload.type);
   switch (event.payload.type) {
     case 'coin_state':
     case 'derivation':
     case 'puzzle_batch_synced':
     case 'nft_data':
+      console.log('state.ts: calling updateSyncStatus()');
       updateSyncStatus();
       break;
   }
@@ -120,11 +153,16 @@ export function initializeWalletState(
 }
 
 export async function logoutAndUpdateState(): Promise<void> {
-  clearState();
-  if (setWalletState) {
-    setWalletState(null);
+  console.log('logoutAndUpdateState');
+  try {
+    clearState();
+    if (setWalletState) {
+      setWalletState(null);
+    }
+    await commands.logout({});
+  } catch (error) {
+    console.error('logoutAndUpdateState error:', error);
   }
-  await commands.logout({});
 }
 
 export function defaultState(): WalletState {
