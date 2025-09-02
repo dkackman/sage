@@ -293,6 +293,11 @@ export interface Theme {
   };
   // Button style flags for dynamic CSS application
   buttonStyles?: string[];
+  // Custom button style effects defined by the theme
+  // customButtonStyles?: Record<string, {
+  //   generateCSS: (variant: string) => string;
+  //   requiredVariables?: string[];
+  // }>;
   // Optional theme-specific switch configurations
   switches?: {
     checked?: {

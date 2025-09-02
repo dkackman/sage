@@ -55,7 +55,8 @@
     }
   },
   "buttonStyles": [
-    "shimmer"
+    "shimmer",
+    "rounded-buttons"
   ],
   "switches": {
     "checked": {

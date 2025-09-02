@@ -1,5 +1,6 @@
 import iconDark from '@/icon-dark.png';
 import iconLight from '@/icon-light.png';
+import { applyDynamicButtonStyles } from './button-styles';
 import { makeColorTransparent } from './color-utils';
 import { validateTheme } from './theme-schema-validation';
 import { Theme } from './theme.type';
@@ -181,7 +182,6 @@ export function applyTheme(theme: Theme, root: HTMLElement) {
     ...fontVariableNames,
     ...cornerVariableNames,
     ...shadowVariableNames,
-    ...themeFeatureFlagVariableNames,
     ...navigationAndButtonVariableNames,
     ...backgroundImageVariableNames,
     ...tableVariableNames,
@@ -303,22 +303,9 @@ export function applyTheme(theme: Theme, root: HTMLElement) {
   }
 
   const buttonStyles = theme.buttonStyles || [];
-  const buttonStyleMap = {
-    gradient: 'gradient-buttons',
-    shimmer: 'shimmer-effects',
-    'pixel-art': 'pixel-art',
-    '3d-effects': '3d-effects',
-    'rounded-buttons': 'rounded-buttons',
-  };
 
-  // Set CSS variables for button style flags
-  Object.entries(buttonStyleMap).forEach(([style, cssName]) => {
-    root.style.setProperty(
-      `--theme-has-${cssName}`,
-      buttonStyles.includes(style) ? '1' : '0',
-      'important',
-    );
-  });
+  // Apply dynamic button styles
+  applyDynamicButtonStyles(theme);
 
   document.body.setAttribute('data-theme-styles', buttonStyles.join(' '));
 
@@ -529,14 +516,6 @@ const shadowVariableNames = [
   '--shadow-card',
   '--shadow-button',
   '--shadow-dropdown',
-];
-
-const themeFeatureFlagVariableNames = [
-  '--theme-has-gradient-buttons',
-  '--theme-has-shimmer-effects',
-  '--theme-has-pixel-art',
-  '--theme-has-3d-effects',
-  '--theme-has-rounded-buttons',
 ];
 
 const navigationAndButtonVariableNames = [
