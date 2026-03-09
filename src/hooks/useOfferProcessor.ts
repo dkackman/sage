@@ -8,6 +8,7 @@ import { useCallback, useRef, useState } from 'react';
 interface UseOfferProcessorProps {
   offerState: OfferState;
   splitNftOffers: boolean;
+  selectedCoinIds?: string[];
   onProcessingEnd?: () => void; // Callback for when offer processing (success or fail) is done
   onProgress?: (index: number) => void; // Callback for progress updates
 }
@@ -23,6 +24,7 @@ interface UseOfferProcessorReturn {
 export function useOfferProcessor({
   offerState,
   splitNftOffers,
+  selectedCoinIds,
   onProcessingEnd,
   onProgress,
 }: UseOfferProcessorProps): UseOfferProcessorReturn {
@@ -118,6 +120,10 @@ export function useOfferProcessor({
               walletState.sync.unit.precision,
             ),
             expires_at_second: expiresAtSecond,
+            coin_ids:
+              selectedCoinIds && selectedCoinIds.length > 0
+                ? selectedCoinIds
+                : null,
           });
           if (!isCancelled.current) {
             newOffers.push(data.offer);
@@ -161,6 +167,10 @@ export function useOfferProcessor({
             walletState.sync.unit.precision,
           ),
           expires_at_second: expiresAtSecond,
+          coin_ids:
+            selectedCoinIds && selectedCoinIds.length > 0
+              ? selectedCoinIds
+              : null,
         });
         if (!isCancelled.current) {
           setCreatedOffers([data.offer]);
@@ -179,6 +189,7 @@ export function useOfferProcessor({
   }, [
     offerState,
     splitNftOffers,
+    selectedCoinIds,
     walletState.sync.unit.precision,
     promptIfEnabled,
     onProcessingEnd,

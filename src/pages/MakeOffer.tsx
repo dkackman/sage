@@ -2,6 +2,7 @@ import Container from '@/components/Container';
 import { MakeOfferConfirmationDialog } from '@/components/dialogs/MakeOfferConfirmationDialog';
 import { OfferCreationProgressDialog } from '@/components/dialogs/OfferCreationProgressDialog';
 import Header from '@/components/Header';
+import { OfferCoinSelector } from '@/components/OfferCoinSelector';
 import { AssetSelector } from '@/components/selectors/AssetSelector';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +29,7 @@ export function MakeOffer() {
   const [splitNftOffers, setSplitNftOffers] = useState(
     location.state?.splitNftOffers || false,
   );
+  const [selectedCoinIds, setSelectedCoinIds] = useState<string[]>([]);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isProgressDialogOpen, setIsProgressDialogOpen] = useState(false);
   const [enabledMarketplaces, setEnabledMarketplaces] = useState<
@@ -148,6 +150,12 @@ export function MakeOffer() {
               />
             </CardContent>
           </Card>
+
+          <OfferCoinSelector
+            offeredAssets={state.offered}
+            selectedCoinIds={selectedCoinIds}
+            setSelectedCoinIds={setSelectedCoinIds}
+          />
 
           <Card>
             <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2 pr-2 space-x-2'>
@@ -329,6 +337,7 @@ export function MakeOffer() {
           offerState={state}
           splitNftOffers={splitNftOffers}
           enabledMarketplaces={enabledMarketplaces}
+          selectedCoinIds={selectedCoinIds}
           clearOfferState={() => {
             setState(null);
             navigate('/offers', { replace: true });

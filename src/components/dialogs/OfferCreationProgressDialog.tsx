@@ -26,6 +26,7 @@ interface OfferCreationProgressDialogProps {
   offerState: OfferState;
   splitNftOffers: boolean;
   enabledMarketplaces?: Record<string, boolean>;
+  selectedCoinIds?: string[];
   clearOfferState: (offers: string[]) => void;
   isSwap?: boolean;
 }
@@ -36,6 +37,7 @@ export function OfferCreationProgressDialog({
   offerState,
   splitNftOffers,
   enabledMarketplaces,
+  selectedCoinIds,
   clearOfferState,
   isSwap,
 }: OfferCreationProgressDialogProps) {
@@ -62,6 +64,7 @@ export function OfferCreationProgressDialog({
   } = useOfferProcessor({
     offerState,
     splitNftOffers,
+    selectedCoinIds,
     onProcessingEnd: () => {
       // Don't auto-close on success
     },
