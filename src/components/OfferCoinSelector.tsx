@@ -78,8 +78,7 @@ export function OfferCoinSelector({
           .then((res) => ({
             asset_id: assetId,
             name: res.token?.name ?? (assetId === null ? 'Chia' : 'Unknown'),
-            ticker:
-              res.token?.ticker ?? (assetId === null ? 'XCH' : 'CAT'),
+            ticker: res.token?.ticker ?? (assetId === null ? 'XCH' : 'CAT'),
             precision: res.token?.precision ?? (assetId === null ? 12 : 3),
           }))
           .catch(() => ({
@@ -248,8 +247,7 @@ function TokenCoinSelector({
   const allPageSelected =
     coins.length > 0 && coins.every((c) => selectedCoinIds.includes(c.coin_id));
   const somePageSelected =
-    !allPageSelected &&
-    coins.some((c) => selectedCoinIds.includes(c.coin_id));
+    !allPageSelected && coins.some((c) => selectedCoinIds.includes(c.coin_id));
 
   // Count and sum selected coins for this token
   const selectedForToken = useMemo(() => {
@@ -308,8 +306,7 @@ function TokenCoinSelector({
                 <div className='flex justify-center'>
                   <Checkbox
                     checked={
-                      allPageSelected ||
-                      (somePageSelected && 'indeterminate')
+                      allPageSelected || (somePageSelected && 'indeterminate')
                     }
                     onCheckedChange={(value) => toggleAllPage(!!value)}
                     aria-label={t`Select all coins on page`}
