@@ -34,5 +34,25 @@ fn setup_x86_64_android_workaround() {
 
 fn main() {
     setup_x86_64_android_workaround();
+
+    // The webauthn plugin links Swift code (via swift-rs) that uses async/await,
+    // which requires libswift_Concurrency. For deployment targets below macOS 15,
+    // this is a back-deploy library in the Xcode toolchain rather than /usr/lib/swift/.
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(output) = std::process::Command::new("xcode-select")
+            .arg("--print-path")
+            .output()
+        {
+            let xcode_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let swift_lib = format!(
+                "{xcode_path}/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.5/macosx"
+            );
+            if std::path::Path::new(&swift_lib).exists() {
+                println!("cargo:rustc-link-arg=-Wl,-rpath,{swift_lib}");
+            }
+        }
+    }
+
     tauri_build::build();
 }

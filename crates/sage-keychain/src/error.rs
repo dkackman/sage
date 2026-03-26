@@ -28,4 +28,10 @@ pub enum KeychainError {
 
     #[error("No secret key")]
     NoSecretKey,
+
+    #[error("Passkey required for this key")]
+    PasskeyRequired,
+
+    #[error("Password required for this key")]
+    PasswordRequired,
 }

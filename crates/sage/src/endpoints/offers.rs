@@ -24,8 +24,8 @@ use tracing::debug;
 
 use crate::{
     ConfirmationInfo, Error, ExtractedNftData, Result, Sage, extract_nft_data, json_bundle,
-    offer_expiration, parse_amount, parse_asset_id, parse_coin_ids, parse_hash, parse_nft_id,
-    parse_offer_id, parse_option_id,
+    offer_expiration, parse_amount, parse_asset_id, parse_coin_ids, parse_hash, parse_key_material,
+    parse_nft_id, parse_offer_id, parse_option_id,
 };
 
 #[derive(Debug, Clone)]
@@ -39,7 +39,7 @@ struct AssetToOffer {
 
 impl Sage {
     pub async fn make_offer(&self, req: MakeOffer) -> Result<MakeOfferResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
 
         let selected_coin_ids = parse_coin_ids(req.coin_ids.unwrap_or_default())?;
@@ -169,7 +169,7 @@ impl Sage {
 
         let (_mnemonic, Some(master_sk)) = self
             .keychain
-            .extract_secrets(wallet.fingerprint, &password)?
+            .extract_secrets(wallet.fingerprint, &key_material)?
         else {
             return Err(Error::NoSigningKey);
         };
@@ -199,7 +199,7 @@ impl Sage {
     }
 
     pub async fn take_offer(&self, req: TakeOffer) -> Result<TakeOfferResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
 
         let offer = decode_offer(&req.offer)?;
@@ -209,7 +209,7 @@ impl Sage {
 
         let (_mnemonic, Some(master_sk)) = self
             .keychain
-            .extract_secrets(wallet.fingerprint, &password)?
+            .extract_secrets(wallet.fingerprint, &key_material)?
         else {
             return Err(Error::NoSigningKey);
         };
@@ -703,7 +703,7 @@ impl Sage {
     }
 
     pub async fn cancel_offer(&self, req: CancelOffer) -> Result<CancelOfferResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let offer_id = parse_offer_id(req.offer_id)?;
         let fee = parse_amount(req.fee)?;
@@ -715,11 +715,11 @@ impl Sage {
         let offer = decode_offer(&row.encoded_offer)?;
         let coin_spends = wallet.cancel_offer(offer, fee).await?;
 
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn cancel_offers(&self, req: CancelOffers) -> Result<CancelOffersResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let fee = parse_amount(req.fee)?;
 
@@ -741,6 +741,6 @@ impl Sage {
             coin_spends.extend(spends);
         }
 
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 }

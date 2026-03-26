@@ -27,6 +27,10 @@ pub struct CreateTransaction {
     #[serde(default)]
     #[cfg_attr(feature = "openapi", schema(nullable = true))]
     pub password: Option<String>,
+    /// PRF output for passkey-based signing (hex-encoded, alternative to password)
+    #[serde(default)]
+    #[cfg_attr(feature = "openapi", schema(nullable = true))]
+    pub prf_output: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

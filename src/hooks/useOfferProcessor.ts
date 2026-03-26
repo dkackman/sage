@@ -28,7 +28,7 @@ export function useOfferProcessor({
   onProgress,
 }: UseOfferProcessorProps): UseOfferProcessorReturn {
   const walletState = useWalletState();
-  const { requestPassword } = usePassword();
+  const { requestAuth } = usePassword();
   const { wallet } = useWallet();
   const [createdOffers, setCreatedOffers] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -62,8 +62,13 @@ export function useOfferProcessor({
       expiresAtSecond = Math.ceil(Date.now() / 1000) + totalSeconds;
     }
 
-    const password = await requestPassword(wallet?.has_password ?? false);
-    if (password === undefined) {
+    const auth = await requestAuth({
+      has_password: wallet?.has_password ?? false,
+      has_passkey: wallet?.has_passkey ?? false,
+      credential_id: wallet?.credential_id,
+      prf_salt: wallet?.prf_salt,
+    });
+    if (!auth) {
       throw new Error(t`Authentication was cancelled`);
     }
 
@@ -121,7 +126,7 @@ export function useOfferProcessor({
               walletState.sync.unit.precision,
             ),
             expires_at_second: expiresAtSecond,
-            password,
+            ...auth,
           });
           if (!isCancelled.current) {
             newOffers.push(data.offer);
@@ -165,7 +170,7 @@ export function useOfferProcessor({
             walletState.sync.unit.precision,
           ),
           expires_at_second: expiresAtSecond,
-          password,
+          ...auth,
         });
         if (!isCancelled.current) {
           setCreatedOffers([data.offer]);
@@ -185,8 +190,11 @@ export function useOfferProcessor({
     offerState,
     splitNftOffers,
     walletState.sync.unit.precision,
-    requestPassword,
+    requestAuth,
     wallet?.has_password,
+    wallet?.has_passkey,
+    wallet?.credential_id,
+    wallet?.prf_salt,
     onProcessingEnd,
     onProgress,
   ]);

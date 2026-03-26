@@ -2,8 +2,24 @@
 
 use chia_wallet_sdk::prelude::*;
 use sage_api::Amount;
+use sage_keychain::KeyMaterial;
 
 use crate::{Error, Result};
+
+/// Convert the password/prf_output fields from API requests into `KeyMaterial`.
+///
+/// If `prf_output` is provided (hex-encoded 32 bytes), returns `PrfOutput`.
+/// Otherwise falls back to `Password` (defaults to empty password if `None`).
+pub fn parse_key_material(password: Option<String>, prf_output: Option<String>) -> KeyMaterial {
+    if let Some(prf_hex) = prf_output {
+        if let Ok(bytes) = hex::decode(&prf_hex) {
+            if let Ok(arr) = <[u8; 32]>::try_from(bytes.as_slice()) {
+                return KeyMaterial::PrfOutput(arr);
+            }
+        }
+    }
+    KeyMaterial::Password(password.unwrap_or_default().into_bytes())
+}
 
 pub fn parse_asset_id(input: String) -> Result<Bytes32> {
     let asset_id: [u8; 32] = hex::decode(&input)?

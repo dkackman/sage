@@ -10,6 +10,11 @@ pub struct KeyInfo {
     pub kind: KeyKind,
     pub has_secrets: bool,
     pub has_password: bool,
+    pub has_passkey: bool,
+    /// WebAuthn credential ID (hex-encoded), present when passkey-protected
+    pub credential_id: Option<String>,
+    /// PRF salt (hex-encoded), present when passkey-protected
+    pub prf_salt: Option<String>,
     pub network_id: String,
     pub emoji: Option<String>,
 }

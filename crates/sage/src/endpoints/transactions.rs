@@ -20,15 +20,17 @@ use sage_database::{Asset, AssetKind};
 use sage_wallet::{MultiSendPayment, WalletNftMint, WalletOptionMint};
 use tokio::time::timeout;
 
+use sage_keychain::KeyMaterial;
+
 use crate::{
     ConfirmationInfo, Error, Result, Sage, json_bundle, json_spend, parse_amount, parse_asset_id,
-    parse_coin_ids, parse_did_id, parse_hash, parse_memos, parse_nft_id, parse_option_id,
-    rust_bundle, rust_spend,
+    parse_coin_ids, parse_did_id, parse_hash, parse_key_material, parse_memos, parse_nft_id,
+    parse_option_id, rust_bundle, rust_spend,
 };
 
 impl Sage {
     pub async fn send_xch(&self, req: SendXch) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let puzzle_hash = self.parse_address(req.address)?;
         let amount = parse_amount(req.amount)?;
@@ -38,11 +40,11 @@ impl Sage {
         let coin_spends = wallet
             .send_xch(vec![(puzzle_hash, amount)], fee, memos, req.clawback)
             .await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn bulk_send_xch(&self, req: BulkSendXch) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
 
         let amount = parse_amount(req.amount)?;
@@ -57,21 +59,21 @@ impl Sage {
         let memos = parse_memos(req.memos)?;
 
         let coin_spends = wallet.send_xch(amounts, fee, memos, None).await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn combine(&self, req: Combine) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let fee = parse_amount(req.fee)?;
         let coin_ids = parse_coin_ids(req.coin_ids)?;
 
         let coin_spends = wallet.combine(coin_ids, fee).await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn auto_combine_xch(&self, req: AutoCombineXch) -> Result<AutoCombineXchResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let fee = parse_amount(req.fee)?;
         let max_amount = req.max_coin_amount.map(parse_amount).transpose()?;
@@ -100,7 +102,7 @@ impl Sage {
             .combine(coins.iter().map(Coin::coin_id).collect(), fee)
             .await?;
         let response = self
-            .transact(coin_spends, req.auto_submit, &password)
+            .transact(coin_spends, req.auto_submit, &key_material)
             .await?;
 
         Ok(AutoCombineXchResponse {
@@ -111,7 +113,7 @@ impl Sage {
     }
 
     pub async fn split(&self, req: Split) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let fee = parse_amount(req.fee)?;
         let coin_ids = parse_coin_ids(req.coin_ids)?;
@@ -119,11 +121,11 @@ impl Sage {
         let coin_spends = wallet
             .split(coin_ids, req.output_count as usize, fee)
             .await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn auto_combine_cat(&self, req: AutoCombineCat) -> Result<AutoCombineCatResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let fee = parse_amount(req.fee)?;
         let asset_id = parse_asset_id(req.asset_id)?;
@@ -153,7 +155,7 @@ impl Sage {
             .combine(cats.iter().map(|row| row.coin.coin_id()).collect(), fee)
             .await?;
         let response = self
-            .transact(coin_spends, req.auto_submit, &password)
+            .transact(coin_spends, req.auto_submit, &key_material)
             .await?;
 
         Ok(AutoCombineCatResponse {
@@ -164,7 +166,7 @@ impl Sage {
     }
 
     pub async fn issue_cat(&self, req: IssueCat) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let amount = parse_amount(req.amount)?;
         let fee = parse_amount(req.fee)?;
@@ -187,11 +189,11 @@ impl Sage {
         .await?;
         tx.commit().await?;
 
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn send_cat(&self, req: SendCat) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let asset_id = parse_asset_id(req.asset_id)?;
         let puzzle_hash = self.parse_address(req.address)?;
@@ -209,11 +211,11 @@ impl Sage {
                 req.clawback,
             )
             .await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn bulk_send_cat(&self, req: BulkSendCat) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let asset_id = parse_asset_id(req.asset_id)?;
 
@@ -231,11 +233,11 @@ impl Sage {
         let coin_spends = wallet
             .send_cat(asset_id, amounts, fee, req.include_hint, memos, None)
             .await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn multi_send(&self, req: MultiSend) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
 
         let mut payments = Vec::with_capacity(req.payments.len());
@@ -261,11 +263,11 @@ impl Sage {
         let fee = parse_amount(req.fee)?;
 
         let coin_spends = wallet.multi_send(payments, fee).await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn create_did(&self, req: CreateDid) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let fee = parse_amount(req.fee)?;
 
@@ -291,13 +293,13 @@ impl Sage {
             coin_spends,
             req.auto_submit,
             ConfirmationInfo::default(),
-            &password,
+            &key_material,
         )
         .await
     }
 
     pub async fn bulk_mint_nfts(&self, req: BulkMintNfts) -> Result<BulkMintNftsResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let fee = parse_amount(req.fee)?;
         let did_id = parse_did_id(req.did_id)?;
@@ -318,7 +320,7 @@ impl Sage {
         }
 
         let response = self
-            .transact_with(coin_spends, req.auto_submit, info, &password)
+            .transact_with(coin_spends, req.auto_submit, info, &key_material)
             .await?;
 
         Ok(BulkMintNftsResponse {
@@ -329,7 +331,7 @@ impl Sage {
     }
 
     pub async fn transfer_nfts(&self, req: TransferNfts) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let nft_ids = req
             .nft_ids
@@ -342,11 +344,11 @@ impl Sage {
         let coin_spends = wallet
             .transfer_nfts(nft_ids, puzzle_hash, fee, req.clawback)
             .await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn add_nft_uri(&self, req: AddNftUri) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let nft_id = parse_nft_id(req.nft_id)?;
         let fee = parse_amount(req.fee)?;
@@ -367,11 +369,11 @@ impl Sage {
         };
 
         let coin_spends = wallet.add_nft_uri(nft_id, fee, uri).await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn assign_nfts_to_did(&self, req: AssignNftsToDid) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let nft_ids = req
             .nft_ids
@@ -382,11 +384,11 @@ impl Sage {
         let fee = parse_amount(req.fee)?;
 
         let coin_spends = wallet.assign_nfts(nft_ids, did_id, fee).await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn transfer_dids(&self, req: TransferDids) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let did_ids = req
             .did_ids
@@ -399,11 +401,11 @@ impl Sage {
         let coin_spends = wallet
             .transfer_dids(did_ids, puzzle_hash, fee, req.clawback)
             .await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn normalize_dids(&self, req: NormalizeDids) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let did_ids = req
             .did_ids
@@ -413,11 +415,11 @@ impl Sage {
         let fee = parse_amount(req.fee)?;
 
         let coin_spends = wallet.normalize_dids(did_ids, fee).await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn mint_option(&self, req: MintOption) -> Result<MintOptionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let fee = parse_amount(req.fee)?;
 
@@ -436,7 +438,7 @@ impl Sage {
             .await?;
 
         let response = self
-            .transact(coin_spends, req.auto_submit, &password)
+            .transact(coin_spends, req.auto_submit, &key_material)
             .await?;
 
         Ok(MintOptionResponse {
@@ -480,7 +482,7 @@ impl Sage {
     }
 
     pub async fn transfer_options(&self, req: TransferOptions) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let option_ids = req
             .option_ids
@@ -493,11 +495,11 @@ impl Sage {
         let coin_spends = wallet
             .transfer_options(option_ids, puzzle_hash, fee, req.clawback)
             .await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn exercise_options(&self, req: ExerciseOptions) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let option_ids = req
             .option_ids
@@ -507,27 +509,27 @@ impl Sage {
         let fee = parse_amount(req.fee)?;
 
         let coin_spends = wallet.exercise_options(option_ids, fee).await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn finalize_clawback(&self, req: FinalizeClawback) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
         let coin_ids = parse_coin_ids(req.coin_ids)?;
         let fee = parse_amount(req.fee)?;
 
         let coin_spends = wallet.finalize_clawback(coin_ids, fee).await?;
-        self.transact(coin_spends, req.auto_submit, &password).await
+        self.transact(coin_spends, req.auto_submit, &key_material).await
     }
 
     pub async fn sign_coin_spends(&self, req: SignCoinSpends) -> Result<SignCoinSpendsResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let coin_spends = req
             .coin_spends
             .into_iter()
             .map(rust_spend)
             .collect::<Result<Vec<_>>>()?;
-        let spend_bundle = self.sign(coin_spends, req.partial, &password).await?;
+        let spend_bundle = self.sign(coin_spends, req.partial, &key_material).await?;
         let json_bundle = json_bundle(&spend_bundle);
 
         if req.auto_submit {
@@ -567,13 +569,13 @@ impl Sage {
         &self,
         coin_spends: Vec<CoinSpend>,
         auto_submit: bool,
-        password: &[u8],
+        key_material: &KeyMaterial,
     ) -> Result<TransactionResponse> {
         self.transact_with(
             coin_spends,
             auto_submit,
             ConfirmationInfo::default(),
-            password,
+            key_material,
         )
         .await
     }
@@ -583,10 +585,10 @@ impl Sage {
         coin_spends: Vec<CoinSpend>,
         auto_submit: bool,
         info: ConfirmationInfo,
-        password: &[u8],
+        key_material: &KeyMaterial,
     ) -> Result<TransactionResponse> {
         if auto_submit {
-            let spend_bundle = self.sign(coin_spends.clone(), false, password).await?;
+            let spend_bundle = self.sign(coin_spends.clone(), false, key_material).await?;
             self.submit(spend_bundle).await?;
         }
 

@@ -18,6 +18,16 @@ pub enum KeyData {
         encrypted: Encrypted,
         password_protected: bool,
     },
+    PasskeyProtected {
+        #[serde_as(as = "Bytes")]
+        master_pk: [u8; 48],
+        entropy: bool,
+        encrypted: Encrypted,
+        #[serde_as(as = "Bytes")]
+        credential_id: Vec<u8>,
+        #[serde_as(as = "Bytes")]
+        prf_salt: [u8; 32],
+    },
 }
 
 #[serde_as]

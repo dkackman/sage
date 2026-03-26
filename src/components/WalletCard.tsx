@@ -66,7 +66,7 @@ export function WalletCard({
   const navigate = useNavigate();
   const { addError } = useErrors();
   const { setWallet } = useWallet();
-  const { requestPassword } = usePassword();
+  const { requestAuth } = usePassword();
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -79,18 +79,23 @@ export function WalletCard({
   const { currentTheme } = useTheme();
 
   const deleteSelf = async () => {
-    const password = await requestPassword(info.has_password);
-    if (password === undefined) {
+    const auth = await requestAuth({
+      has_password: info.has_password,
+      has_passkey: info.has_passkey,
+      credential_id: info.credential_id,
+      prf_salt: info.prf_salt,
+    });
+    if (!auth) {
       setIsDeleteOpen(false);
       return;
     }
 
-    // Verify password before allowing deletion
-    if (info.has_password) {
+    // Verify credentials before allowing deletion
+    if (info.has_password || info.has_passkey) {
       try {
         await commands.getSecretKey({
           fingerprint: info.fingerprint,
-          password,
+          ...auth,
         });
       } catch (error) {
         addError(error as CustomError);
@@ -191,14 +196,19 @@ export function WalletCard({
         return;
       }
 
-      const password = await requestPassword(info.has_password);
-      if (password === undefined) {
+      const auth = await requestAuth({
+        has_password: info.has_password,
+        has_passkey: info.has_passkey,
+        credential_id: info.credential_id,
+        prf_salt: info.prf_salt,
+      });
+      if (!auth) {
         setIsDetailsOpen(false);
         return;
       }
 
       commands
-        .getSecretKey({ fingerprint: info.fingerprint, password })
+        .getSecretKey({ fingerprint: info.fingerprint, ...auth })
         .then((data) => data.secrets !== null && setSecrets(data.secrets))
         .catch(addError);
     })();
@@ -206,8 +216,11 @@ export function WalletCard({
     isDetailsOpen,
     info.fingerprint,
     info.has_password,
+    info.has_passkey,
+    info.credential_id,
+    info.prf_salt,
     addError,
-    requestPassword,
+    requestAuth,
   ]);
 
   const values = useSortable({

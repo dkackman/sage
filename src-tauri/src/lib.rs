@@ -142,6 +142,8 @@ pub fn run() {
             commands::get_logs,
             commands::is_asset_owned,
             commands::change_password,
+            commands::set_passkey,
+            commands::remove_passkey,
         ])
         .events(collect_events![SyncEvent]);
 
@@ -157,7 +159,8 @@ pub fn run() {
     let mut tauri_builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_os::init());
+        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_webauthn::init());
 
     #[cfg(not(mobile))]
     {

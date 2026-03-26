@@ -16,8 +16,8 @@ use sage_database::{Asset, AssetKind, Derivation};
 use sage_wallet::SyncCommand;
 
 use crate::{
-    Error, Result, Sage, parse_asset_id, parse_collection_id, parse_did_id, parse_nft_id,
-    parse_option_id,
+    Error, Result, Sage, parse_asset_id, parse_collection_id, parse_did_id, parse_key_material,
+    parse_nft_id, parse_option_id,
 };
 
 impl Sage {
@@ -189,7 +189,7 @@ impl Sage {
         &self,
         req: IncreaseDerivationIndex,
     ) -> Result<IncreaseDerivationIndexResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
 
         let hardened = req.hardened.is_none_or(|hardened| hardened);
@@ -200,7 +200,7 @@ impl Sage {
         if hardened {
             let (_mnemonic, Some(master_sk)) = self
                 .keychain
-                .extract_secrets(wallet.fingerprint, &password)?
+                .extract_secrets(wallet.fingerprint, &key_material)?
             else {
                 return Err(Error::NoSigningKey);
             };

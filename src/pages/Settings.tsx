@@ -1036,8 +1036,9 @@ function RpcSettings() {
 
 function WalletSettings({ fingerprint }: { fingerprint: number }) {
   const { addError } = useErrors();
-  const { requestPassword } = usePassword();
+  const { requestAuth } = usePassword();
   const { setWallet: setGlobalWallet } = useWallet();
+  const isMobile = platform() === 'ios' || platform() === 'android';
 
   const walletState = useWalletState();
 
@@ -1060,6 +1061,7 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordDialogMode, setPasswordDialogMode] =
     useState<PasswordDialogMode>('set');
+  const [passkeyPending, setPasskeyPending] = useState(false);
 
   const saveChangeAddress = (address: string) => {
     const trimmedAddress = address.trim();
@@ -1231,11 +1233,215 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
     );
   };
 
+  const handleSetPasskey = async () => {
+    setPasskeyPending(true);
+    try {
+      const { register, authenticate } = await import(
+        'tauri-plugin-webauthn-api'
+      );
+      const rpId = 'net.kackman.webauthn.example';
+      const origin = `https://${rpId}`;
+
+      // Generate a random PRF salt (32 bytes, base64url-encoded)
+      const prfSaltBytes = crypto.getRandomValues(new Uint8Array(32));
+      const prfSaltB64 = btoa(String.fromCharCode(...prfSaltBytes))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+      // Step 1: Register a new passkey with PRF support
+      const regResult = await register(origin, {
+        rp: { name: 'Sage Wallet', id: rpId },
+        user: {
+          id: btoa(String(fingerprint))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, ''),
+          name: key?.name || `Wallet ${fingerprint}`,
+          displayName: key?.name || `Wallet ${fingerprint}`,
+        },
+        challenge: btoa(
+          String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))),
+        )
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, ''),
+        pubKeyCredParams: [
+          { alg: -7, type: 'public-key' },
+          { alg: -257, type: 'public-key' },
+        ],
+        timeout: 60000,
+        authenticatorSelection: {
+          authenticatorAttachment: 'platform',
+          residentKey: 'required',
+          requireResidentKey: true,
+          userVerification: 'required',
+        },
+        attestation: 'none',
+        extensions: {
+          hmacCreateSecret: true,
+        } as Record<string, unknown>,
+      });
+
+      // Check if PRF is supported
+      const prfSupported = regResult.extensions?.hmac_secret;
+      if (!prfSupported) {
+        toast.error(t`Your authenticator does not support passkey encryption`);
+        return;
+      }
+
+      const credentialId = regResult.id;
+
+      // Step 2: Authenticate with PRF salt to get the PRF output
+      const authResult = await authenticate(origin, {
+        rpId,
+        challenge: btoa(
+          String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))),
+        )
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, ''),
+        allowCredentials: [{ id: credentialId, type: 'public-key' }],
+        timeout: 60000,
+        userVerification: 'required',
+        extensions: {
+          hmacGetSecret: { output1: prfSaltB64 },
+        } as Record<string, unknown>,
+      });
+
+      const prfResult = authResult.extensions?.hmac_get_secret?.output1;
+      if (!prfResult) {
+        toast.error(t`Failed to get passkey encryption key`);
+        return;
+      }
+
+      // Convert base64url PRF output to hex
+      const prfBytes = Uint8Array.from(
+        atob(
+          prfResult
+            .replace(/-/g, '+')
+            .replace(/_/g, '/')
+            .padEnd(
+              prfResult.length + ((4 - (prfResult.length % 4)) % 4),
+              '=',
+            ),
+        ),
+        (c) => c.charCodeAt(0),
+      );
+      const prfHex = Array.from(prfBytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      // Convert PRF salt bytes to hex
+      const prfSaltHex = Array.from(prfSaltBytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      // Step 3: Call the API to switch from password (or no protection) to passkey
+      await commands.setPasskey({
+        fingerprint,
+        old_password: '',
+        credential_id: credentialId,
+        prf_output: prfHex,
+        prf_salt: prfSaltHex,
+      });
+
+      // Refresh key info
+      const data = await commands.getKey({ fingerprint });
+      setKey(data.key);
+      setGlobalWallet(data.key);
+
+      toast.success(t`Passkey set up successfully`);
+    } catch {
+      toast.error(t`Passkey setup failed or was cancelled`);
+    } finally {
+      setPasskeyPending(false);
+    }
+  };
+
+  const handleRemovePasskey = async () => {
+    setPasskeyPending(true);
+    try {
+      const { authenticate } = await import('tauri-plugin-webauthn-api');
+      const rpId = 'net.kackman.webauthn.example';
+      const origin = `https://${rpId}`;
+
+      // Authenticate with PRF to get the current key material
+      const prfSalt = key?.prf_salt;
+      const credentialId = key?.credential_id;
+      if (!prfSalt || !credentialId) {
+        toast.error(t`Missing passkey data`);
+        return;
+      }
+
+      const result = await authenticate(origin, {
+        rpId,
+        challenge: btoa(
+          String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))),
+        )
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, ''),
+        allowCredentials: [{ id: credentialId, type: 'public-key' }],
+        timeout: 60000,
+        userVerification: 'required',
+        extensions: {
+          hmacGetSecret: { output1: prfSalt },
+        } as Record<string, unknown>,
+      });
+
+      const prfResult = result.extensions?.hmac_get_secret?.output1;
+      if (!prfResult) {
+        toast.error(t`Failed to authenticate with passkey`);
+        return;
+      }
+
+      // Convert base64url PRF output to hex
+      const prfBytes = Uint8Array.from(
+        atob(
+          prfResult
+            .replace(/-/g, '+')
+            .replace(/_/g, '/')
+            .padEnd(
+              prfResult.length + ((4 - (prfResult.length % 4)) % 4),
+              '=',
+            ),
+        ),
+        (c) => c.charCodeAt(0),
+      );
+      const prfHex = Array.from(prfBytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      await commands.removePasskey({
+        fingerprint,
+        prf_output: prfHex,
+        new_password: '',
+      });
+
+      // Refresh key info
+      const data = await commands.getKey({ fingerprint });
+      setKey(data.key);
+      setGlobalWallet(data.key);
+
+      toast.success(t`Passkey removed successfully`);
+    } catch {
+      toast.error(t`Passkey removal failed or was cancelled`);
+    } finally {
+      setPasskeyPending(false);
+    }
+  };
+
   const handler = async (values: z.infer<typeof schema>) => {
-    const needsPassword = key?.has_secrets && hardened;
-    if (needsPassword) {
-      const password = await requestPassword(key?.has_password ?? false);
-      if (password === undefined) return;
+    const needsAuth = key?.has_secrets && hardened;
+    if (needsAuth && key) {
+      const auth = await requestAuth({
+        has_password: key.has_password,
+        has_passkey: key.has_passkey,
+        credential_id: key.credential_id,
+        prf_salt: key.prf_salt,
+      });
+      if (!auth) return;
 
       setPending(true);
       commands
@@ -1243,7 +1449,7 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
           index: parseInt(values.index),
           hardened: true,
           unhardened,
-          password,
+          ...auth,
         })
         .then(() => {
           setDeriveOpen(false);
@@ -1363,42 +1569,83 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
 
       {key?.has_secrets && (
         <SettingsSection title={t`Security`}>
-          <SettingItem
-            label={key?.has_password ? t`Wallet Password` : t`Set Password`}
-            description={
-              key?.has_password
-                ? t`Your wallet is password-protected`
-                : t`Protect signing and secret access with a password`
-            }
-            control={
-              key?.has_password ? (
-                <div className='flex gap-2'>
+          {!key?.has_passkey && (
+            <SettingItem
+              label={key?.has_password ? t`Wallet Password` : t`Set Password`}
+              description={
+                key?.has_password
+                  ? t`Your wallet is password-protected`
+                  : t`Protect signing and secret access with a password`
+              }
+              control={
+                key?.has_password ? (
+                  <div className='flex gap-2'>
+                    <Button
+                      variant='secondary'
+                      size='sm'
+                      onClick={() => openPasswordDialog('change')}
+                    >
+                      <Trans>Change</Trans>
+                    </Button>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={() => openPasswordDialog('remove')}
+                    >
+                      <Trans>Remove</Trans>
+                    </Button>
+                  </div>
+                ) : (
                   <Button
                     variant='secondary'
                     size='sm'
-                    onClick={() => openPasswordDialog('change')}
+                    onClick={() => openPasswordDialog('set')}
                   >
-                    <Trans>Change</Trans>
+                    <Trans>Set Password</Trans>
                   </Button>
+                )
+              }
+            />
+          )}
+          {!isMobile && !key?.has_password && (
+            <SettingItem
+              label={key?.has_passkey ? t`Passkey` : t`Set Up Passkey`}
+              description={
+                key?.has_passkey
+                  ? t`Your wallet is protected with a passkey`
+                  : t`Use a passkey for hardware-bound encryption`
+              }
+              control={
+                key?.has_passkey ? (
                   <Button
                     variant='outline'
                     size='sm'
-                    onClick={() => openPasswordDialog('remove')}
+                    disabled={passkeyPending}
+                    onClick={handleRemovePasskey}
                   >
-                    <Trans>Remove</Trans>
+                    {passkeyPending ? (
+                      <LoaderCircleIcon className='h-4 w-4 animate-spin' />
+                    ) : (
+                      <Trans>Remove</Trans>
+                    )}
                   </Button>
-                </div>
-              ) : (
-                <Button
-                  variant='secondary'
-                  size='sm'
-                  onClick={() => openPasswordDialog('set')}
-                >
-                  <Trans>Set Password</Trans>
-                </Button>
-              )
-            }
-          />
+                ) : (
+                  <Button
+                    variant='secondary'
+                    size='sm'
+                    disabled={passkeyPending}
+                    onClick={handleSetPasskey}
+                  >
+                    {passkeyPending ? (
+                      <LoaderCircleIcon className='h-4 w-4 animate-spin' />
+                    ) : (
+                      <Trans>Set Up Passkey</Trans>
+                    )}
+                  </Button>
+                )
+              }
+            />
+          )}
         </SettingsSection>
       )}
 

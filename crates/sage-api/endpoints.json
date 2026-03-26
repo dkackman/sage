@@ -99,5 +99,7 @@
   "redownload_nft": true,
   "increase_derivation_index": true,
   "is_asset_owned": true,
-  "change_password": false
+  "change_password": false,
+  "set_passkey": false,
+  "remove_passkey": false
 }

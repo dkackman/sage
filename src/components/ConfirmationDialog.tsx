@@ -65,7 +65,7 @@ export default function ConfirmationDialog({
   const ticker = walletState.sync.unit.ticker;
 
   const { addError } = useErrors();
-  const { requestPassword } = usePassword();
+  const { requestAuth } = usePassword();
   const { wallet } = useWallet();
 
   const [pending, setPending] = useState(false);
@@ -517,10 +517,13 @@ export default function ConfirmationDialog({
                   <Button
                     size='sm'
                     onClick={async () => {
-                      const password = await requestPassword(
-                        wallet?.has_password ?? false,
-                      );
-                      if (password === undefined) return;
+                      const auth = await requestAuth({
+                        has_password: wallet?.has_password ?? false,
+                        has_passkey: wallet?.has_passkey ?? false,
+                        credential_id: wallet?.credential_id,
+                        prf_salt: wallet?.prf_salt,
+                      });
+                      if (!auth) return;
 
                       commands
                         .signCoinSpends({
@@ -530,7 +533,7 @@ export default function ConfirmationDialog({
                               : 'coin_spends' in response
                                 ? response.coin_spends
                                 : response.spend_bundle.coin_spends,
-                          password,
+                          ...auth,
                         })
                         .then((data) => {
                           setSignature(data.spend_bundle.aggregated_signature);
@@ -624,15 +627,18 @@ export default function ConfirmationDialog({
                   response !== null &&
                   'coin_spends' in response
                 ) {
-                  const password = await requestPassword(
-                    wallet?.has_password ?? false,
-                  );
-                  if (password === undefined) return;
+                  const auth = await requestAuth({
+                    has_password: wallet?.has_password ?? false,
+                    has_passkey: wallet?.has_passkey ?? false,
+                    credential_id: wallet?.credential_id,
+                    prf_salt: wallet?.prf_salt,
+                  });
+                  if (!auth) return;
 
                   const data = await commands
                     .signCoinSpends({
                       coin_spends: response.coin_spends,
-                      password,
+                      ...auth,
                     })
                     .catch(addError);
 

@@ -361,6 +361,12 @@ async isAssetOwned(req: IsAssetOwned) : Promise<IsAssetOwnedResponse> {
 },
 async changePassword(req: ChangePassword) : Promise<ChangePasswordResponse> {
     return await TAURI_INVOKE("change_password", { req });
+},
+async setPasskey(req: SetPasskey) : Promise<SetPasskeyResponse> {
+    return await TAURI_INVOKE("set_passkey", { req });
+},
+async removePasskey(req: RemovePasskey) : Promise<RemovePasskeyResponse> {
+    return await TAURI_INVOKE("remove_passkey", { req });
 }
 }
 
@@ -407,7 +413,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Add a new peer to connect to
  */
@@ -447,7 +457,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Automatically combine CAT coins
  */
@@ -475,7 +489,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Response for auto-combine CAT
  */
@@ -515,7 +533,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Response for auto-combine XCH
  */
@@ -555,7 +577,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Response for bulk NFT minting
  */
@@ -607,7 +633,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Send XCH to multiple addresses
  */
@@ -635,7 +665,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Cancel an offer on-chain
  */
@@ -655,7 +689,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Cancel multiple offers
  */
@@ -675,7 +713,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Change the password for a wallet's secret key
  */
@@ -768,7 +810,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Combine multiple offers
  */
@@ -804,7 +850,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 export type CreateTransaction = { 
 /**
  * Pre-selected coins to use in the transaction prior to coin selection
@@ -821,7 +871,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Delete a wallet database
  */
@@ -895,7 +949,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 export type FeeAction = { 
 /**
  * The fee amount, in mojos
@@ -936,7 +994,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Generate a new mnemonic phrase for wallet creation
  */
@@ -1508,7 +1570,11 @@ fingerprint: number;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Response with secret key information
  */
@@ -1735,7 +1801,11 @@ emoji?: string | null;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Response with imported key fingerprint
  */
@@ -1779,7 +1849,11 @@ index: number;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Response after increasing the derivation index
  */
@@ -1828,8 +1902,20 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
-export type KeyInfo = { name: string; fingerprint: number; public_key: string; kind: KeyKind; has_secrets: boolean; has_password: boolean; network_id: string; emoji: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
+export type KeyInfo = { name: string; fingerprint: number; public_key: string; kind: KeyKind; has_secrets: boolean; has_password: boolean; has_passkey: boolean; 
+/**
+ * WebAuthn credential ID (hex-encoded), present when passkey-protected
+ */
+credential_id: string | null; 
+/**
+ * PRF salt (hex-encoded), present when passkey-protected
+ */
+prf_salt: string | null; network_id: string; emoji: string | null }
 export type KeyKind = "bls"
 /**
  * Lineage proof for CAT coins
@@ -1903,7 +1989,11 @@ coin_ids?: string[] | null;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Response with created offer
  */
@@ -1988,7 +2078,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Response for minting an option
  */
@@ -2100,7 +2194,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Asset amount in an offer
  */
@@ -2186,6 +2284,26 @@ nft_id: string }
  * Response after re-downloading an `NFT`
  */
 export type RedownloadNftResponse = Record<string, never>
+/**
+ * Remove passkey protection and switch back to password
+ */
+export type RemovePasskey = { 
+/**
+ * Wallet fingerprint
+ */
+fingerprint: number; 
+/**
+ * 32-byte PRF output to decrypt current data (hex-encoded)
+ */
+prf_output: string; 
+/**
+ * New password (empty string for no password protection)
+ */
+new_password: string }
+/**
+ * Response after removing passkey protection
+ */
+export type RemovePasskeyResponse = Record<string, never>
 /**
  * Remove a peer from the connection list
  */
@@ -2332,7 +2450,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Send a transaction immediately
  */
@@ -2384,7 +2506,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Set the change address for transactions
  */
@@ -2446,6 +2572,34 @@ fingerprint: number;
  */
 name: string | null }
 /**
+ * Set up passkey protection for a wallet (replaces any existing password)
+ */
+export type SetPasskey = { 
+/**
+ * Wallet fingerprint
+ */
+fingerprint: number; 
+/**
+ * Current password (empty string if no password is set)
+ */
+old_password: string; 
+/**
+ * WebAuthn credential ID (hex-encoded)
+ */
+credential_id: string; 
+/**
+ * 32-byte PRF output from the authentication ceremony (hex-encoded)
+ */
+prf_output: string; 
+/**
+ * 32-byte PRF salt used during authentication (hex-encoded)
+ */
+prf_salt: string }
+/**
+ * Response after setting passkey protection
+ */
+export type SetPasskeyResponse = Record<string, never>
+/**
  * Set target number of peers to maintain
  */
 export type SetTargetPeers = { 
@@ -2488,7 +2642,11 @@ partial?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Response with signed spend bundle
  */
@@ -2512,7 +2670,11 @@ address: string;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prfOutput?: string | null }
 /**
  * Response with signed message
  */
@@ -2540,7 +2702,11 @@ publicKey: string;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prfOutput?: string | null }
 /**
  * Response with message signature
  */
@@ -2613,7 +2779,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Submit a transaction to the network
  */
@@ -2646,7 +2816,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Response with accepted offer details
  */
@@ -2708,7 +2882,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Transfer NFTs to a new owner
  */
@@ -2736,7 +2914,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 /**
  * Transfer options to another address
  */
@@ -2764,7 +2946,11 @@ auto_submit?: boolean;
 /**
  * Password for signing (required if wallet is password-protected)
  */
-password?: string | null }
+password?: string | null; 
+/**
+ * PRF output for passkey-based signing (hex-encoded, alternative to password)
+ */
+prf_output?: string | null }
 export type Unit = { ticker: string; precision: number }
 /**
  * Update a `CAT` token's metadata and visibility

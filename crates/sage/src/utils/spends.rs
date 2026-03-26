@@ -1,4 +1,5 @@
 use chia_wallet_sdk::prelude::*;
+use sage_keychain::KeyMaterial;
 use sage_wallet::{SyncCommand, Transaction, insert_transaction};
 
 use crate::{Error, Result, Sage};
@@ -8,13 +9,13 @@ impl Sage {
         &self,
         coin_spends: Vec<CoinSpend>,
         partial: bool,
-        password: &[u8],
+        key_material: &KeyMaterial,
     ) -> Result<SpendBundle> {
         let wallet = self.wallet()?;
 
         let (_mnemonic, Some(master_sk)) = self
             .keychain
-            .extract_secrets(wallet.fingerprint, password)?
+            .extract_secrets(wallet.fingerprint, key_material)?
         else {
             return Err(Error::NoSigningKey);
         };

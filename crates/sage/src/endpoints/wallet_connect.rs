@@ -19,8 +19,9 @@ use sage_wallet::{Status, SyncCommand, Transaction, insert_transaction, submit_t
 use tracing::{debug, info, warn};
 
 use crate::{
-    Error, Result, Sage, parse_asset_id, parse_coin_id, parse_did_id, parse_hash, parse_nft_id,
-    parse_program, parse_public_key, parse_signature, parse_signature_message,
+    Error, Result, Sage, parse_asset_id, parse_coin_id, parse_did_id, parse_hash,
+    parse_key_material, parse_nft_id, parse_program, parse_public_key, parse_signature,
+    parse_signature_message,
 };
 
 impl Sage {
@@ -170,7 +171,7 @@ impl Sage {
         &self,
         req: SignMessageWithPublicKey,
     ) -> Result<SignMessageWithPublicKeyResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
 
         let public_key = parse_public_key(req.public_key)?;
@@ -180,7 +181,7 @@ impl Sage {
 
         let (_mnemonic, Some(master_sk)) = self
             .keychain
-            .extract_secrets(wallet.fingerprint, &password)?
+            .extract_secrets(wallet.fingerprint, &key_material)?
         else {
             return Err(Error::NoSigningKey);
         };
@@ -207,7 +208,7 @@ impl Sage {
         &self,
         req: SignMessageByAddress,
     ) -> Result<SignMessageByAddressResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
 
         let p2_puzzle_hash = self.parse_address(req.address)?;
@@ -221,7 +222,7 @@ impl Sage {
 
         let (_mnemonic, Some(master_sk)) = self
             .keychain
-            .extract_secrets(wallet.fingerprint, &password)?
+            .extract_secrets(wallet.fingerprint, &key_material)?
         else {
             return Err(Error::NoSigningKey);
         };

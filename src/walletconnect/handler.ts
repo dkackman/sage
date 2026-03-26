@@ -25,7 +25,16 @@ import {
 
 export interface HandlerContext {
   requestPassword: (hasPassword: boolean) => Promise<string | null | undefined>;
+  requestAuth: (wallet: {
+    has_password: boolean;
+    has_passkey: boolean;
+    credential_id?: string | null;
+    prf_salt?: string | null;
+  }) => Promise<{ password?: string | null; prf_output?: string | null } | undefined>;
   hasPassword: boolean;
+  hasPasskey: boolean;
+  credentialId?: string | null;
+  prfSalt?: string | null;
 }
 
 export const handleCommand = async (

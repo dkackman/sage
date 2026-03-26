@@ -181,6 +181,10 @@ pub struct ImportKey {
     #[serde(default)]
     #[cfg_attr(feature = "openapi", schema(nullable = true))]
     pub password: Option<String>,
+    /// PRF output for passkey-based signing (hex-encoded, alternative to password)
+    #[serde(default)]
+    #[cfg_attr(feature = "openapi", schema(nullable = true))]
+    pub prf_output: Option<String>,
 }
 
 fn yes() -> bool {
@@ -390,6 +394,10 @@ pub struct GetSecretKey {
     #[serde(default)]
     #[cfg_attr(feature = "openapi", schema(nullable = true))]
     pub password: Option<String>,
+    /// PRF output for passkey-based signing (hex-encoded, alternative to password)
+    #[serde(default)]
+    #[cfg_attr(feature = "openapi", schema(nullable = true))]
+    pub prf_output: Option<String>,
 }
 
 /// Response with secret key information
@@ -435,6 +443,70 @@ pub struct ChangePassword {
 #[cfg_attr(feature = "tauri", derive(specta::Type))]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ChangePasswordResponse {}
+
+/// Set up passkey protection for a wallet (replaces any existing password)
+#[cfg_attr(
+    feature = "openapi",
+    crate::openapi_attr(
+        tag = "Authentication & Keys",
+        description = "Switch a wallet's encryption to passkey+PRF. Decrypts with the old password and re-encrypts with the PRF output."
+    )
+)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tauri", derive(specta::Type))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SetPasskey {
+    /// Wallet fingerprint
+    pub fingerprint: u32,
+    /// Current password (empty string if no password is set)
+    pub old_password: String,
+    /// WebAuthn credential ID (hex-encoded)
+    pub credential_id: String,
+    /// 32-byte PRF output from the authentication ceremony (hex-encoded)
+    pub prf_output: String,
+    /// 32-byte PRF salt used during authentication (hex-encoded)
+    pub prf_salt: String,
+}
+
+/// Response after setting passkey protection
+#[cfg_attr(
+    feature = "openapi",
+    crate::openapi_attr(tag = "Authentication & Keys")
+)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "tauri", derive(specta::Type))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SetPasskeyResponse {}
+
+/// Remove passkey protection and switch back to password
+#[cfg_attr(
+    feature = "openapi",
+    crate::openapi_attr(
+        tag = "Authentication & Keys",
+        description = "Remove passkey protection from a wallet. Decrypts with the PRF output and re-encrypts with the new password."
+    )
+)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tauri", derive(specta::Type))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct RemovePasskey {
+    /// Wallet fingerprint
+    pub fingerprint: u32,
+    /// 32-byte PRF output to decrypt current data (hex-encoded)
+    pub prf_output: String,
+    /// New password (empty string for no password protection)
+    pub new_password: String,
+}
+
+/// Response after removing passkey protection
+#[cfg_attr(
+    feature = "openapi",
+    crate::openapi_attr(tag = "Authentication & Keys")
+)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "tauri", derive(specta::Type))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct RemovePasskeyResponse {}
 
 /// List all custom theme NFTs
 #[cfg_attr(

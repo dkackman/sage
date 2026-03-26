@@ -185,6 +185,9 @@ importers:
       tauri-plugin-sage:
         specifier: file:tauri-plugin-sage
         version: tauri-plugin-sage-api@file:tauri-plugin-sage
+      tauri-plugin-webauthn-api:
+        specifier: file:../tauri-plugin-webauthn
+        version: file:../tauri-plugin-webauthn
       theme-o-rama:
         specifier: 0.2.0
         version: 0.2.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1532,6 +1535,10 @@ packages:
 
   '@scure/bip39@1.6.0':
     resolution: {integrity: sha512-+lF0BbLiJNwVlev4eKelw1WWLaiKXw7sSl8T6FvBlWkdX+94aGJ4o8XjUdlyhTCjd8c+B3KT3JfS8P0bLRNU6A==}
+
+  '@simplewebauthn/types@12.0.0':
+    resolution: {integrity: sha512-q6y8MkoV8V8jB4zzp18Uyj2I7oFp2/ONL8c3j8uT06AOWu3cIChc1au71QYHrP2b+xDapkGTiv+9lX7xkTlAsA==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   '@sinclair/typebox@0.27.10':
     resolution: {integrity: sha512-MTBk/3jGLNB2tVxv6uLlFh1iu64iYOQ2PbdOSK3NW8JZsmlaOh2q6sdtKowBhfw8QFLmYNzTW4/oK4uATIi6ZA==}
@@ -3544,6 +3551,9 @@ packages:
   tauri-plugin-sage-api@file:tauri-plugin-sage:
     resolution: {directory: tauri-plugin-sage, type: directory}
 
+  tauri-plugin-webauthn-api@file:../tauri-plugin-webauthn:
+    resolution: {directory: ../tauri-plugin-webauthn, type: directory}
+
   terser@5.46.0:
     resolution: {integrity: sha512-jTwoImyr/QbOWFFso3YoU3ik0jBBDJ6JTOQiy/J2YxVJdZCc+5u7skhNwiOR3FQIygFqVUPHl7qbbxtjW2K3Qg==}
     engines: {node: '>=10'}
@@ -5008,6 +5018,8 @@ snapshots:
     dependencies:
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
+
+  '@simplewebauthn/types@12.0.0': {}
 
   '@sinclair/typebox@0.27.10': {}
 
@@ -7474,6 +7486,11 @@ snapshots:
 
   tauri-plugin-sage-api@file:tauri-plugin-sage:
     dependencies:
+      '@tauri-apps/api': 2.10.1
+
+  tauri-plugin-webauthn-api@file:../tauri-plugin-webauthn:
+    dependencies:
+      '@simplewebauthn/types': 12.0.0
       '@tauri-apps/api': 2.10.1
 
   terser@5.46.0:

@@ -76,6 +76,7 @@ tauri-plugin-barcode-scanner = "2.4.4"
 tauri-plugin-biometric = "2.3.2"
 tauri-plugin-safe-area-insets = "0.1.0"
 tauri-plugin-sage = { path = "./tauri-plugin-sage" }
+tauri-plugin-webauthn = { path = "../tauri-plugin-webauthn" }
 tauri-build = "2.5.5"
 tauri-plugin = "2.5.3"
 
@@ -98,6 +99,8 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 aes-gcm = "0.10.3"
 argon2 = "0.5.3"
+hkdf = "0.12.4"
+sha2 = "0.10.8"
 
 # Async
 tokio = "1.39.2"

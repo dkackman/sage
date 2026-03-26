@@ -1,8 +1,10 @@
 use aes_gcm::{AeadCore, Aes256Gcm, Key, KeyInit, Nonce, aead::Aead};
 use argon2::Argon2;
+use hkdf::Hkdf;
 use rand::{CryptoRng, Rng};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_with::{Bytes, serde_as};
+use sha2::Sha256;
 
 use crate::KeychainError;
 
@@ -52,6 +54,55 @@ where
     T: DeserializeOwned,
 {
     let key = encryption_key(password, &encrypted.salt)?;
+    let cipher = Aes256Gcm::new(&key);
+
+    let nonce = Nonce::from_slice(&encrypted.nonce);
+    let ciphertext = encrypted.ciphertext.as_ref();
+    let data = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| KeychainError::Decrypt)?;
+
+    Ok(bincode::deserialize(&data)?)
+}
+
+fn encryption_key_from_prf(
+    prf_output: &[u8; 32],
+    salt: &[u8],
+) -> Result<Key<Aes256Gcm>, KeychainError> {
+    let hk = Hkdf::<Sha256>::new(Some(salt), prf_output);
+    let mut key_material = [0u8; 32];
+    hk.expand(b"sage-wallet-encryption", &mut key_material)
+        .map_err(|_| KeychainError::Encrypt)?;
+    Ok(*Key::<Aes256Gcm>::from_slice(&key_material))
+}
+
+pub fn encrypt_with_prf(
+    prf_output: &[u8; 32],
+    rng: &mut (impl CryptoRng + Rng),
+    data: &impl Serialize,
+) -> Result<Encrypted, KeychainError> {
+    let salt: [u8; 32] = rng.r#gen();
+    let key = encryption_key_from_prf(prf_output, &salt)?;
+    let cipher = Aes256Gcm::new(&key);
+    let nonce = Aes256Gcm::generate_nonce(rng);
+
+    let data = bincode::serialize(data)?;
+    let ciphertext = cipher
+        .encrypt(&nonce, data.as_ref())
+        .map_err(|_| KeychainError::Encrypt)?;
+
+    Ok(Encrypted {
+        ciphertext,
+        nonce: nonce.to_vec(),
+        salt,
+    })
+}
+
+pub fn decrypt_with_prf<T>(encrypted: &Encrypted, prf_output: &[u8; 32]) -> Result<T, KeychainError>
+where
+    T: DeserializeOwned,
+{
+    let key = encryption_key_from_prf(prf_output, &encrypted.salt)?;
     let cipher = Aes256Gcm::new(&key);
 
     let nonce = Nonce::from_slice(&encrypted.nonce);

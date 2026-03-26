@@ -151,6 +151,10 @@ pub struct SignMessageWithPublicKey {
     #[serde(default)]
     #[cfg_attr(feature = "openapi", schema(nullable = true))]
     pub password: Option<String>,
+    /// PRF output for passkey-based signing (hex-encoded, alternative to password)
+    #[serde(default)]
+    #[cfg_attr(feature = "openapi", schema(nullable = true))]
+    pub prf_output: Option<String>,
 }
 
 /// Response with message signature
@@ -242,6 +246,10 @@ pub struct SignMessageByAddress {
     #[serde(default)]
     #[cfg_attr(feature = "openapi", schema(nullable = true))]
     pub password: Option<String>,
+    /// PRF output for passkey-based signing (hex-encoded, alternative to password)
+    #[serde(default)]
+    #[cfg_attr(feature = "openapi", schema(nullable = true))]
+    pub prf_output: Option<String>,
 }
 
 /// Response with signed message

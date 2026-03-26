@@ -44,6 +44,10 @@ pub struct MakeOffer {
     #[serde(default)]
     #[cfg_attr(feature = "openapi", schema(nullable = true))]
     pub password: Option<String>,
+    /// PRF output for passkey-based signing (hex-encoded, alternative to password)
+    #[serde(default)]
+    #[cfg_attr(feature = "openapi", schema(nullable = true))]
+    pub prf_output: Option<String>,
 }
 
 /// Asset amount in an offer
@@ -100,6 +104,10 @@ pub struct TakeOffer {
     #[serde(default)]
     #[cfg_attr(feature = "openapi", schema(nullable = true))]
     pub password: Option<String>,
+    /// PRF output for passkey-based signing (hex-encoded, alternative to password)
+    #[serde(default)]
+    #[cfg_attr(feature = "openapi", schema(nullable = true))]
+    pub prf_output: Option<String>,
 }
 
 /// Response with accepted offer details
@@ -319,6 +327,10 @@ pub struct CancelOffer {
     #[serde(default)]
     #[cfg_attr(feature = "openapi", schema(nullable = true))]
     pub password: Option<String>,
+    /// PRF output for passkey-based signing (hex-encoded, alternative to password)
+    #[serde(default)]
+    #[cfg_attr(feature = "openapi", schema(nullable = true))]
+    pub prf_output: Option<String>,
 }
 
 pub type CancelOfferResponse = TransactionResponse;
@@ -348,6 +360,10 @@ pub struct CancelOffers {
     #[serde(default)]
     #[cfg_attr(feature = "openapi", schema(nullable = true))]
     pub password: Option<String>,
+    /// PRF output for passkey-based signing (hex-encoded, alternative to password)
+    #[serde(default)]
+    #[cfg_attr(feature = "openapi", schema(nullable = true))]
+    pub prf_output: Option<String>,
 }
 
 pub type CancelOffersResponse = TransactionResponse;

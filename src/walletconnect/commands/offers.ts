@@ -6,8 +6,13 @@ export async function handleCreateOffer(
   params: Params<'chia_createOffer'>,
   context: HandlerContext,
 ) {
-  const password = await context.requestPassword(context.hasPassword);
-  if (password === undefined) throw new Error('Authentication failed');
+  const auth = await context.requestAuth({
+    has_password: context.hasPassword,
+    has_passkey: context.hasPasskey,
+    credential_id: context.credentialId,
+    prf_salt: context.prfSalt,
+  });
+  if (!auth) throw new Error('Authentication failed');
 
   const data = await commands.makeOffer({
     fee: params.fee ?? 0,
@@ -22,7 +27,7 @@ export async function handleCreateOffer(
       amount: asset.amount,
     })),
     expires_at_second: null,
-    password,
+    ...auth,
   });
 
   return {
@@ -35,14 +40,19 @@ export async function handleTakeOffer(
   params: Params<'chia_takeOffer'>,
   context: HandlerContext,
 ) {
-  const password = await context.requestPassword(context.hasPassword);
-  if (password === undefined) throw new Error('Authentication failed');
+  const auth = await context.requestAuth({
+    has_password: context.hasPassword,
+    has_passkey: context.hasPasskey,
+    credential_id: context.credentialId,
+    prf_salt: context.prfSalt,
+  });
+  if (!auth) throw new Error('Authentication failed');
 
   const data = await commands.takeOffer({
     offer: params.offer,
     fee: params.fee ?? 0,
     auto_submit: true,
-    password,
+    ...auth,
   });
 
   return { id: data.transaction_id };
@@ -52,14 +62,19 @@ export async function handleCancelOffer(
   params: Params<'chia_cancelOffer'>,
   context: HandlerContext,
 ) {
-  const password = await context.requestPassword(context.hasPassword);
-  if (password === undefined) throw new Error('Authentication failed');
+  const auth = await context.requestAuth({
+    has_password: context.hasPassword,
+    has_passkey: context.hasPasskey,
+    credential_id: context.credentialId,
+    prf_salt: context.prfSalt,
+  });
+  if (!auth) throw new Error('Authentication failed');
 
   await commands.cancelOffer({
     offer_id: params.id,
     fee: params.fee ?? 0,
     auto_submit: true,
-    password,
+    ...auth,
   });
 
   return {};

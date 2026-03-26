@@ -64,7 +64,7 @@ type SessionRequest = SignClientTypes.EventArguments['session_request'];
 export function WalletConnectProvider({ children }: { children: ReactNode }) {
   const { wallet } = useWallet();
   const { addError } = useErrors();
-  const { requestPassword } = usePassword();
+  const { requestPassword, requestAuth } = usePassword();
 
   const [signClient, setSignClient] = useState<Awaited<
     ReturnType<typeof SignClient.init>
@@ -105,7 +105,11 @@ export function WalletConnectProvider({ children }: { children: ReactNode }) {
           request.params.request.params,
           {
             requestPassword,
+            requestAuth,
             hasPassword: wallet?.has_password ?? false,
+            hasPasskey: wallet?.has_passkey ?? false,
+            credentialId: wallet?.credential_id,
+            prfSalt: wallet?.prf_salt,
           },
         );
 
@@ -140,7 +144,7 @@ export function WalletConnectProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [signClient, addError, requestPassword, wallet?.has_password],
+    [signClient, addError, requestPassword, requestAuth, wallet?.has_password, wallet?.has_passkey, wallet?.credential_id, wallet?.prf_salt],
   );
 
   useEffect(() => {

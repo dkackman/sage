@@ -17,14 +17,15 @@ use sage_api::{
     ChangePassword, ChangePasswordResponse, DeleteDatabase, DeleteDatabaseResponse, DeleteKey,
     DeleteKeyResponse, GenerateMnemonic, GenerateMnemonicResponse, GetKey, GetKeyResponse, GetKeys,
     GetKeysResponse, GetSecretKey, GetSecretKeyResponse, ImportKey, ImportKeyResponse, KeyInfo,
-    KeyKind, Login, LoginResponse, Logout, LogoutResponse, RenameKey, RenameKeyResponse, Resync,
-    ResyncResponse, SecretKeyInfo, SetWalletEmoji, SetWalletEmojiResponse,
+    KeyKind, Login, LoginResponse, Logout, LogoutResponse, RemovePasskey, RemovePasskeyResponse,
+    RenameKey, RenameKeyResponse, Resync, ResyncResponse, SecretKeyInfo, SetPasskey,
+    SetPasskeyResponse, SetWalletEmoji, SetWalletEmojiResponse,
 };
 use sage_config::Wallet;
 use sage_database::{Database, Derivation};
 use sqlx::query;
 
-use crate::{Error, Result, Sage};
+use crate::{Error, Result, Sage, parse_key_material};
 
 impl Sage {
     pub async fn login(&mut self, req: Login) -> Result<LoginResponse> {
@@ -345,6 +346,15 @@ impl Sage {
                 kind: KeyKind::Bls,
                 has_secrets: self.keychain.has_secret_key(fingerprint),
                 has_password: self.keychain.is_password_protected(fingerprint),
+                has_passkey: self.keychain.is_passkey_protected(fingerprint),
+                credential_id: self
+                    .keychain
+                    .passkey_credential_id(fingerprint)
+                    .map(hex::encode),
+                prf_salt: self
+                    .keychain
+                    .passkey_prf_salt(fingerprint)
+                    .map(hex::encode),
                 network_id,
                 emoji: wallet_config.emoji,
             }),
@@ -352,9 +362,9 @@ impl Sage {
     }
 
     pub fn get_secret_key(&self, req: GetSecretKey) -> Result<GetSecretKeyResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let (mnemonic, Some(secret_key)) =
-            self.keychain.extract_secrets(req.fingerprint, &password)?
+            self.keychain.extract_secrets(req.fingerprint, &key_material)?
         else {
             return Ok(GetSecretKeyResponse { secrets: None });
         };
@@ -376,6 +386,39 @@ impl Sage {
         Ok(ChangePasswordResponse {})
     }
 
+    pub fn set_passkey(&mut self, req: SetPasskey) -> Result<SetPasskeyResponse> {
+        let old_password = req.old_password.into_bytes();
+        let credential_id = hex::decode(&req.credential_id)?;
+        let prf_output: [u8; 32] = hex::decode(&req.prf_output)?
+            .as_slice()
+            .try_into()?;
+        let prf_salt: [u8; 32] = hex::decode(&req.prf_salt)?
+            .as_slice()
+            .try_into()?;
+
+        self.keychain.switch_to_passkey(
+            req.fingerprint,
+            &old_password,
+            &prf_output,
+            credential_id,
+            prf_salt,
+        )?;
+        self.save_keychain()?;
+        Ok(SetPasskeyResponse {})
+    }
+
+    pub fn remove_passkey(&mut self, req: RemovePasskey) -> Result<RemovePasskeyResponse> {
+        let prf_output: [u8; 32] = hex::decode(&req.prf_output)?
+            .as_slice()
+            .try_into()?;
+        let new_password = req.new_password.into_bytes();
+
+        self.keychain
+            .switch_to_password(req.fingerprint, &prf_output, &new_password)?;
+        self.save_keychain()?;
+        Ok(RemovePasskeyResponse {})
+    }
+
     pub fn get_keys(&self, _req: GetKeys) -> Result<GetKeysResponse> {
         let mut keys = Vec::new();
 
@@ -391,6 +434,15 @@ impl Sage {
                 kind: KeyKind::Bls,
                 has_secrets: self.keychain.has_secret_key(wallet.fingerprint),
                 has_password: self.keychain.is_password_protected(wallet.fingerprint),
+                has_passkey: self.keychain.is_passkey_protected(wallet.fingerprint),
+                credential_id: self
+                    .keychain
+                    .passkey_credential_id(wallet.fingerprint)
+                    .map(hex::encode),
+                prf_salt: self
+                    .keychain
+                    .passkey_prf_salt(wallet.fingerprint)
+                    .map(hex::encode),
                 network_id: wallet.network.clone().unwrap_or_else(|| self.network_id()),
                 emoji: wallet.emoji.clone(),
             });

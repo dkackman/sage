@@ -10,12 +10,13 @@ use sage_api::{CreateTransaction, NftUriKind, TransactionResponse};
 use sage_wallet::{Hint, calculate_memos};
 
 use crate::{
-    ConfirmationInfo, Result, Sage, parse_amount, parse_any_asset_id, parse_coin_ids, parse_memos,
+    ConfirmationInfo, Result, Sage, parse_amount, parse_any_asset_id, parse_coin_ids,
+    parse_key_material, parse_memos,
 };
 
 impl Sage {
     pub async fn create_transaction(&self, req: CreateTransaction) -> Result<TransactionResponse> {
-        let password = req.password.unwrap_or_default().into_bytes();
+        let key_material = parse_key_material(req.password, req.prf_output);
         let wallet = self.wallet()?;
 
         let sender_puzzle_hash = wallet.change_p2_puzzle_hash().await?;
@@ -147,7 +148,7 @@ impl Sage {
 
         let coin_spends = ctx.take();
 
-        self.transact_with(coin_spends, req.auto_submit, info, &password)
+        self.transact_with(coin_spends, req.auto_submit, info, &key_material)
             .await
     }
 }
