@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Required for debugging with Xcode / lldb -->
+    <key>com.apple.security.get-task-allow</key>
+    <true/>
+
+    <!-- Must match: TEAM_ID.BUNDLE_ID from tauri.conf.json -->
+    <key>com.apple.application-identifier</key>
+    <string>86TDY6D9V2.net.kackman.webauthn.example</string>
+
+    <key>com.apple.developer.team-identifier</key>
+    <string>86TDY6D9V2</string>
+
+    <!--
+        Associated domain for WebAuthn / passkeys.
+        The domain here MUST match the RP_ID constant in src/hooks/usePasskey.ts.
+        ?mode=developer bypasses AASA hosting during development.
+
+        AASA at https://webauthn.dkackman.com/.well-known/apple-app-site-association
+        must include:
+           { "webcredentials": { "apps": ["86TDY6D9V2.net.kackman.webauthn.example"] } }
+
+        TODO: replace with com.rigidnetwork.sage credentials before merging to main.
+    -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>webcredentials:webauthn.dkackman.com?mode=developer</string>
+    </array>
+</dict>
+</plist>

@@ -1,5 +1,6 @@
 import { PasswordDialog } from '@/components/dialogs/PasswordDialog';
 import { useBiometric } from '@/hooks/useBiometric';
+import { usePasskey } from '@/hooks/usePasskey';
 import { platform } from '@tauri-apps/plugin-os';
 import { createContext, ReactNode, useCallback, useRef, useState } from 'react';
 
@@ -47,6 +48,7 @@ export function PasswordProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const pendingRef = useRef<PasswordRequest | null>(null);
   const { enabled: biometricEnabled } = useBiometric();
+  const { authenticatePasskey } = usePasskey();
 
   // Biometric caching for standalone gate
   const lastBiometricPromptRef = useRef<number | null>(null);
@@ -92,81 +94,13 @@ export function PasswordProvider({ children }: { children: ReactNode }) {
   const requestAuth = useCallback(
     async (wallet: WalletAuth): Promise<AuthCredential | undefined> => {
       // Case 1: Passkey-protected → trigger WebAuthn PRF ceremony
-      if (
-        wallet.has_passkey &&
-        wallet.credential_id &&
-        wallet.prf_salt
-      ) {
-        try {
-          const { authenticate } = await import(
-            'tauri-plugin-webauthn-api'
-          );
-          const rpId = 'net.kackman.webauthn.example';
-          const origin = `https://${rpId}`;
-
-          // Decode the stored credential ID and PRF salt for the WebAuthn request
-          const credentialId = wallet.credential_id;
-          const prfSalt = wallet.prf_salt;
-
-          const result = await authenticate(origin, {
-            rpId,
-            challenge: btoa(
-              String.fromCharCode(
-                ...crypto.getRandomValues(new Uint8Array(32)),
-              ),
-            )
-              .replace(/\+/g, '-')
-              .replace(/\//g, '_')
-              .replace(/=+$/, ''),
-            allowCredentials: [
-              {
-                id: credentialId,
-                type: 'public-key',
-              },
-            ],
-            timeout: 60000,
-            userVerification: 'required',
-            extensions: {
-              hmacGetSecret: {
-                output1: prfSalt,
-              },
-            } as Record<string, unknown>,
-          });
-
-          // Extract PRF output from the response extensions
-          const prfResult = (
-            result as {
-              extensions?: {
-                hmac_get_secret?: { output1?: string };
-              };
-            }
-          )?.extensions?.hmac_get_secret?.output1;
-
-          if (!prfResult) {
-            return undefined; // PRF not available or failed
-          }
-
-          // Convert base64url PRF output to hex for the API
-          const prfBytes = Uint8Array.from(
-            atob(
-              prfResult
-                .replace(/-/g, '+')
-                .replace(/_/g, '/')
-                .padEnd(
-                  prfResult.length + ((4 - (prfResult.length % 4)) % 4),
-                  '=',
-                ),
-            ),
-            (c) => c.charCodeAt(0),
-          );
-          const prfHex = Array.from(prfBytes)
-            .map((b) => b.toString(16).padStart(2, '0'))
-            .join('');
-
-          return { prf_output: prfHex };
-        } catch {
-          return undefined; // WebAuthn ceremony failed or cancelled
-        }
+      if (wallet.has_passkey && wallet.credential_id && wallet.prf_salt) {
+        const prfHex = await authenticatePasskey(
+          wallet.credential_id,
+          wallet.prf_salt,
+        );
+        if (!prfHex) return undefined;
+        return { prf_output: prfHex };
       }
 
       // Case 2: Password-protected → show password dialog

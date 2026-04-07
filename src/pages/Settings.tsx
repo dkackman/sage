@@ -46,6 +46,7 @@ import { useDefaultClawback } from '@/hooks/useDefaultClawback';
 import { useDefaultFee } from '@/hooks/useDefaultFee';
 import { useDefaultOfferExpiry } from '@/hooks/useDefaultOfferExpiry';
 import { useErrors } from '@/hooks/useErrors';
+import { usePasskey } from '@/hooks/usePasskey';
 import { usePassword } from '@/hooks/usePassword';
 import { useScannerOrClipboard } from '@/hooks/useScannerOrClipboard';
 import { useWalletConnect } from '@/hooks/useWalletConnect';
@@ -1037,6 +1038,7 @@ function RpcSettings() {
 function WalletSettings({ fingerprint }: { fingerprint: number }) {
   const { addError } = useErrors();
   const { requestAuth } = usePassword();
+  const { setupPasskey, authenticatePasskey } = usePasskey();
   const { setWallet: setGlobalWallet } = useWallet();
   const isMobile = platform() === 'ios' || platform() === 'android';
 
@@ -1236,117 +1238,23 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
   const handleSetPasskey = async () => {
     setPasskeyPending(true);
     try {
-      const { register, authenticate } = await import(
-        'tauri-plugin-webauthn-api'
+      const result = await setupPasskey(
+        fingerprint,
+        key?.name || `Wallet ${fingerprint}`,
       );
-      const rpId = 'net.kackman.webauthn.example';
-      const origin = `https://${rpId}`;
-
-      // Generate a random PRF salt (32 bytes, base64url-encoded)
-      const prfSaltBytes = crypto.getRandomValues(new Uint8Array(32));
-      const prfSaltB64 = btoa(String.fromCharCode(...prfSaltBytes))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
-
-      // Step 1: Register a new passkey with PRF support
-      const regResult = await register(origin, {
-        rp: { name: 'Sage Wallet', id: rpId },
-        user: {
-          id: btoa(String(fingerprint))
-            .replace(/\+/g, '-')
-            .replace(/\//g, '_')
-            .replace(/=+$/, ''),
-          name: key?.name || `Wallet ${fingerprint}`,
-          displayName: key?.name || `Wallet ${fingerprint}`,
-        },
-        challenge: btoa(
-          String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))),
-        )
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_')
-          .replace(/=+$/, ''),
-        pubKeyCredParams: [
-          { alg: -7, type: 'public-key' },
-          { alg: -257, type: 'public-key' },
-        ],
-        timeout: 60000,
-        authenticatorSelection: {
-          authenticatorAttachment: 'platform',
-          residentKey: 'required',
-          requireResidentKey: true,
-          userVerification: 'required',
-        },
-        attestation: 'none',
-        extensions: {
-          hmacCreateSecret: true,
-        } as Record<string, unknown>,
-      });
-
-      // Check if PRF is supported
-      const prfSupported = regResult.extensions?.hmac_secret;
-      if (!prfSupported) {
+      if (!result) {
         toast.error(t`Your authenticator does not support passkey encryption`);
         return;
       }
 
-      const credentialId = regResult.id;
-
-      // Step 2: Authenticate with PRF salt to get the PRF output
-      const authResult = await authenticate(origin, {
-        rpId,
-        challenge: btoa(
-          String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))),
-        )
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_')
-          .replace(/=+$/, ''),
-        allowCredentials: [{ id: credentialId, type: 'public-key' }],
-        timeout: 60000,
-        userVerification: 'required',
-        extensions: {
-          hmacGetSecret: { output1: prfSaltB64 },
-        } as Record<string, unknown>,
-      });
-
-      const prfResult = authResult.extensions?.hmac_get_secret?.output1;
-      if (!prfResult) {
-        toast.error(t`Failed to get passkey encryption key`);
-        return;
-      }
-
-      // Convert base64url PRF output to hex
-      const prfBytes = Uint8Array.from(
-        atob(
-          prfResult
-            .replace(/-/g, '+')
-            .replace(/_/g, '/')
-            .padEnd(
-              prfResult.length + ((4 - (prfResult.length % 4)) % 4),
-              '=',
-            ),
-        ),
-        (c) => c.charCodeAt(0),
-      );
-      const prfHex = Array.from(prfBytes)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-
-      // Convert PRF salt bytes to hex
-      const prfSaltHex = Array.from(prfSaltBytes)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-
-      // Step 3: Call the API to switch from password (or no protection) to passkey
       await commands.setPasskey({
         fingerprint,
         old_password: '',
-        credential_id: credentialId,
-        prf_output: prfHex,
-        prf_salt: prfSaltHex,
+        credential_id: result.credentialId,
+        prf_output: result.prfOutput,
+        prf_salt: result.prfSalt,
       });
 
-      // Refresh key info
       const data = await commands.getKey({ fingerprint });
       setKey(data.key);
       setGlobalWallet(data.key);
@@ -1362,11 +1270,6 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
   const handleRemovePasskey = async () => {
     setPasskeyPending(true);
     try {
-      const { authenticate } = await import('tauri-plugin-webauthn-api');
-      const rpId = 'net.kackman.webauthn.example';
-      const origin = `https://${rpId}`;
-
-      // Authenticate with PRF to get the current key material
       const prfSalt = key?.prf_salt;
       const credentialId = key?.credential_id;
       if (!prfSalt || !credentialId) {
@@ -1374,44 +1277,11 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
         return;
       }
 
-      const result = await authenticate(origin, {
-        rpId,
-        challenge: btoa(
-          String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))),
-        )
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_')
-          .replace(/=+$/, ''),
-        allowCredentials: [{ id: credentialId, type: 'public-key' }],
-        timeout: 60000,
-        userVerification: 'required',
-        extensions: {
-          hmacGetSecret: { output1: prfSalt },
-        } as Record<string, unknown>,
-      });
-
-      const prfResult = result.extensions?.hmac_get_secret?.output1;
-      if (!prfResult) {
+      const prfHex = await authenticatePasskey(credentialId, prfSalt);
+      if (!prfHex) {
         toast.error(t`Failed to authenticate with passkey`);
         return;
       }
-
-      // Convert base64url PRF output to hex
-      const prfBytes = Uint8Array.from(
-        atob(
-          prfResult
-            .replace(/-/g, '+')
-            .replace(/_/g, '/')
-            .padEnd(
-              prfResult.length + ((4 - (prfResult.length % 4)) % 4),
-              '=',
-            ),
-        ),
-        (c) => c.charCodeAt(0),
-      );
-      const prfHex = Array.from(prfBytes)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
 
       await commands.removePasskey({
         fingerprint,
@@ -1419,7 +1289,6 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
         new_password: '',
       });
 
-      // Refresh key info
       const data = await commands.getKey({ fingerprint });
       setKey(data.key);
       setGlobalWallet(data.key);
