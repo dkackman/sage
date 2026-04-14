@@ -445,6 +445,21 @@ pub fn handle_app_protocol_request(
     let request_path = uri.path();
 
     let file_path = resolve_protocol_file(base_path, app_id, request_path)?;
+    let app = read_installed_app_by_id(base_path, app_id)?;
+
+    if request_path.is_empty() || request_path == "/" || request_path == "/index.html" {
+        let html = fs::read_to_string(&file_path)
+            .with_context(|| format!("failed to read {}", file_path.display()))?;
+
+        let injected = inject_bootstrap_into_index_html(&html, &app);
+
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "text/html; charset=utf-8")
+            .body(injected.into_bytes())
+            .map_err(|err| anyhow!("failed to build protocol response: {err}"));
+    }
+
     let bytes = fs::read(&file_path)
         .with_context(|| format!("failed to read {}", file_path.display()))?;
 
@@ -458,4 +473,91 @@ pub fn handle_app_protocol_request(
         .header("Content-Type", mime)
         .body(bytes)
         .map_err(|err| anyhow!("failed to build protocol response: {err}"))
+}
+
+fn html_escape_json_string(value: &str) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string())
+}
+
+fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
+    let app_id = html_escape_json_string(&app.id);
+    let app_name = html_escape_json_string(&app.name);
+    let app_version = html_escape_json_string(&app.version);
+    let permissions = serde_json::to_string(&app.permissions).unwrap_or_else(|_| "{}".to_string());
+
+    format!(
+        r#"<script>
+(function () {{
+  const __sageAppInfo = {{
+    id: {app_id},
+    name: {app_name},
+    version: {app_version},
+    permissions: {permissions},
+  }};
+
+  function callHost(method, params) {{
+    return new Promise((resolve, reject) => {{
+      const id = `sage-${{Date.now()}}-${{Math.random().toString(36).slice(2)}}`;
+
+      function onMessage(event) {{
+        const data = event.data;
+        if (!data || data.channel !== 'sage-bridge' || data.id !== id) {{
+          return;
+        }}
+
+        window.removeEventListener('message', onMessage);
+
+        if (data.ok) {{
+          resolve(data.result);
+        }} else {{
+          reject(new Error(data.error?.message || 'Unknown Sage bridge error'));
+        }}
+      }}
+
+      window.addEventListener('message', onMessage);
+
+      window.parent.postMessage({{
+        channel: 'sage-bridge',
+        id,
+        method,
+        params,
+      }}, '*');
+    }});
+  }}
+
+  window.__SAGE__ = {{
+    async bridgePing() {{
+      return callHost('bridge.ping');
+    }},
+    async getAppInfo() {{
+      return callHost('app.getInfo');
+    }},
+    async getPermissions() {{
+      return callHost('sage.getPermissions');
+    }},
+    appInfo: __sageAppInfo,
+  }};
+}})();
+</script>"#
+    )
+}
+
+fn inject_bootstrap_into_index_html(html: &str, app: &InstalledSageApp) -> String {
+    let bootstrap = build_sage_bootstrap(app);
+
+    if let Some(idx) = html.find("<head>") {
+        let insert_at = idx + "<head>".len();
+        let mut out = String::with_capacity(html.len() + bootstrap.len());
+        out.push_str(&html[..insert_at]);
+        out.push_str(&bootstrap);
+        out.push_str(&html[insert_at..]);
+        out
+    } else {
+        format!("{bootstrap}{html}")
+    }
+}
+
+fn read_installed_app_by_id(base_path: &Path, app_id: &str) -> AnyResult<InstalledSageApp> {
+    let install_dir = app_install_dir(base_path, app_id);
+    read_installed_app_from_dir(&install_dir)
 }

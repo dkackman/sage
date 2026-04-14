@@ -1,3 +1,5 @@
+import { InstalledSageApp } from '@/lib/apps/types';
+
 export interface SageBridgeRequest {
   channel: 'sage-bridge';
   id: string;
@@ -22,29 +24,88 @@ export interface SageBridgeErrorResponse {
   };
 }
 
-export function isBridgeRequest(_value: unknown): _value is SageBridgeRequest {
-  return false;
+export type SageBridgeResponse =
+  | SageBridgeSuccessResponse
+  | SageBridgeErrorResponse;
+
+export interface SageBridgeContext {
+  app: InstalledSageApp;
 }
 
-export function getAppOrigin(entry: string): string | null {
-  try {
-    return new URL(entry).origin;
-  } catch {
-    return null;
-  }
-}
-
-export async function handleBridgeRequest(): Promise<
-  SageBridgeSuccessResponse | SageBridgeErrorResponse
-> {
+function success(id: string, result: unknown): SageBridgeSuccessResponse {
   return {
     channel: 'sage-bridge',
-    id: 'unsupported',
+    id,
+    ok: true,
+    result,
+  };
+}
+
+function failure(
+  id: string,
+  code: string,
+  message: string,
+): SageBridgeErrorResponse {
+  return {
+    channel: 'sage-bridge',
+    id,
     ok: false,
     error: {
-      code: 'unsupported',
-      message: 'Bridge is not enabled for installed zip apps yet.',
+      code,
+      message,
     },
   };
+}
+
+export function isBridgeRequest(value: unknown): value is SageBridgeRequest {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const maybe = value as Partial<SageBridgeRequest>;
+
+  return (
+    maybe.channel === 'sage-bridge' &&
+    typeof maybe.id === 'string' &&
+    typeof maybe.method === 'string'
+  );
+}
+
+export async function handleBridgeRequest(
+  ctx: SageBridgeContext,
+  request: SageBridgeRequest,
+): Promise<SageBridgeResponse> {
+  try {
+    switch (request.method) {
+      case 'bridge.ping':
+        return success(request.id, {
+          ok: true,
+          appId: ctx.app.id,
+          appName: ctx.app.name,
+        });
+
+      case 'app.getInfo':
+        return success(request.id, {
+          id: ctx.app.id,
+          name: ctx.app.name,
+          version: ctx.app.version,
+        });
+
+      case 'sage.getPermissions':
+        return success(request.id, ctx.app.permissions);
+
+      default:
+        return failure(
+          request.id,
+          'method_not_found',
+          `Unknown bridge method: ${request.method}`,
+        );
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown bridge error';
+
+    return failure(request.id, 'internal_error', message);
+  }
 }
 

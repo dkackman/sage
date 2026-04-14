@@ -1,8 +1,9 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useApps } from '@/hooks/useApps';
+import { handleBridgeRequest, isBridgeRequest } from '@/lib/apps/bridge';
 import { ArrowLeft } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 function AppNotFound() {
@@ -19,6 +20,7 @@ function AppNotFound() {
 export function AppHost() {
   const { appId = '' } = useParams();
   const { getApp, loading } = useApps();
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   const app = getApp(appId);
 
@@ -28,6 +30,36 @@ export function AppHost() {
     }
 
     return `sage-app://${app.id}/index.html`;
+  }, [app]);
+
+  useEffect(() => {
+    if (!app) {
+      return;
+    }
+
+    function onMessage(event: MessageEvent) {
+      const iframeWindow = iframeRef.current?.contentWindow;
+      if (!iframeWindow) {
+        return;
+      }
+
+      if (event.source !== iframeWindow) {
+        return;
+      }
+
+      if (!isBridgeRequest(event.data)) {
+        return;
+      }
+
+      void handleBridgeRequest({ app }, event.data).then((response) => {
+        iframeWindow.postMessage(response, '*');
+      });
+    }
+
+    window.addEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('message', onMessage);
+    };
   }, [app]);
 
   if (loading) {
@@ -74,6 +106,7 @@ export function AppHost() {
         ) : (
           <div className='rounded-xl border overflow-hidden bg-background h-[calc(100vh-220px)] min-h-[500px]'>
             <iframe
+              ref={iframeRef}
               key={app.id}
               src={entrySrc}
               title={app.name}
@@ -86,3 +119,4 @@ export function AppHost() {
     </div>
   );
 }
+
