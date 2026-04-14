@@ -358,6 +358,15 @@ async getLogs() : Promise<LogFile[]> {
 },
 async isAssetOwned(req: IsAssetOwned) : Promise<IsAssetOwnedResponse> {
     return await TAURI_INVOKE("is_asset_owned", { req });
+},
+async listInstalledApps() : Promise<InstalledSageApp[]> {
+    return await TAURI_INVOKE("list_installed_apps");
+},
+async installAppZip(zipPath: string) : Promise<InstalledSageApp> {
+    return await TAURI_INVOKE("install_app_zip", { zipPath });
+},
+async uninstallApp(appId: string) : Promise<null> {
+    return await TAURI_INVOKE("uninstall_app", { appId });
 }
 }
 
@@ -1694,6 +1703,7 @@ index: number }
  */
 export type IncreaseDerivationIndexResponse = Record<string, never>
 export type InheritedNetwork = "mainnet" | "testnet11"
+export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; permissions: SageAppPermissions }
 /**
  * Check if an asset is owned
  */
@@ -2155,6 +2165,7 @@ export type ResyncCatResponse = Record<string, never>
  * Response from resynchronizing the wallet
  */
 export type ResyncResponse = Record<string, never>
+export type SageAppPermissions = { network: boolean; persistentStorage: boolean }
 /**
  * Save a theme NFT to the wallet
  */

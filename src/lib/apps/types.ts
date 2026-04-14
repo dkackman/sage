@@ -1,28 +1,15 @@
-export interface SageAppPermissionMap {
-  'wallet.read.addresses': true;
-  'wallet.read.balance': true;
-  'wallet.tx.create': true;
-  'wallet.tx.submit': true;
-  'storage.readwrite': true;
+export interface SageAppPermissions {
+  network: boolean;
+  persistent_storage: boolean;
 }
 
-export type SageAppPermission = keyof SageAppPermissionMap;
-
-export interface SageAppManifest {
+export interface InstalledSageApp {
   id: string;
   name: string;
   version: string;
-  description: string;
-  entry: string;
-  permissions: SageAppPermission[];
-  verified?: boolean;
-  publisher?: string | null;
-  source?: 'local' | 'marketplace' | 'manual';
-  installDir?: string | null;
-  icon?: string | null;
-}
-
-export interface InstalledAppsState {
-  [appId: string]: SageAppManifest;
+  installDir: string;
+  entryFile: string;
+  iconFile: string;
+  permissions: SageAppPermissions;
 }
 

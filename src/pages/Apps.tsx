@@ -3,7 +3,7 @@ import { InstalledAppCard } from '@/components/apps/InstalledAppCard';
 import { useApps } from '@/hooks/useApps';
 
 export function Apps() {
-  const { apps, installApp, uninstallApp } = useApps();
+  const { apps, loading, error, installApp, uninstallApp } = useApps();
 
   return (
     <div className='flex-1 overflow-auto'>
@@ -11,8 +11,7 @@ export function Apps() {
         <div className='space-y-2'>
           <h1 className='text-2xl font-semibold tracking-tight'>Apps</h1>
           <p className='text-muted-foreground'>
-            Manage installed wallet apps. Later this page can also host a
-            verified Sage marketplace.
+            Install and manage Sage app packages.
           </p>
         </div>
 
@@ -20,13 +19,22 @@ export function Apps() {
 
         <section className='space-y-4'>
           <h2 className='text-lg font-semibold'>Installed</h2>
-          {apps.length > 0 ? (
+
+          {loading ? (
+            <div className='rounded-lg border p-6 text-sm text-muted-foreground'>
+              Loading apps...
+            </div>
+          ) : error ? (
+            <div className='rounded-lg border border-destructive/30 p-6 text-sm text-destructive'>
+              {error}
+            </div>
+          ) : apps.length > 0 ? (
             <div className='grid gap-4'>
-              {apps.map((manifest) => (
+              {apps.map((app) => (
                 <InstalledAppCard
-                  key={manifest.id}
-                  manifest={manifest}
-                  onUninstall={() => uninstallApp(manifest.id)}
+                  key={app.id}
+                  app={app}
+                  onUninstall={() => uninstallApp(app.id)}
                 />
               ))}
             </div>

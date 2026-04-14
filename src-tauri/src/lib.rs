@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use app_state::{AppState, Initialized, RpcTask};
 use rustls::crypto::aws_lc_rs::default_provider;
 use sage::Sage;
@@ -6,6 +7,7 @@ use tauri::Manager;
 use tauri_specta::{Builder, ErrorHandlingMode, collect_commands, collect_events};
 use tokio::sync::Mutex;
 
+mod apps;
 mod app_state;
 mod commands;
 mod error;
@@ -141,6 +143,9 @@ pub fn run() {
             commands::download_cni_offercode,
             commands::get_logs,
             commands::is_asset_owned,
+            apps::list_installed_apps,
+            apps::install_app_zip,
+            apps::uninstall_app,
         ])
         .events(collect_events![SyncEvent]);
 
@@ -176,8 +181,21 @@ pub fn run() {
             .plugin(tauri_plugin_sage::init());
     }
 
-    tauri_builder
-        .invoke_handler(builder.invoke_handler())
+        tauri_builder
+            .register_uri_scheme_protocol("sage-app", move |ctx, request| {
+                    let base_path: PathBuf = ctx
+                        .app_handle()
+                        .path()
+                        .app_data_dir()
+                        .expect("failed to resolve app data dir");
+
+                    apps::handle_app_protocol_request(&base_path, &request).unwrap_or_else(|err| tauri::http::Response::builder()
+                        .status(404)
+                        .header("Content-Type", "text/plain; charset=utf-8")
+                        .body(format!("sage-app error: {err}").into_bytes())
+                        .expect("failed to build error response"))
+                })
+            .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
             let path = app.path().app_data_dir()?;
