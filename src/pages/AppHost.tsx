@@ -5,6 +5,7 @@ import { handleBridgeRequest, isBridgeRequest } from '@/lib/apps/bridge';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { openAppWindow } from '@/lib/apps/openAppWindow.ts';
 
 function AppNotFound() {
   return (
@@ -37,6 +38,8 @@ export function AppHost() {
       return;
     }
 
+    const installedApp = app;
+
     function onMessage(event: MessageEvent) {
       const iframeWindow = iframeRef.current?.contentWindow;
       if (!iframeWindow) {
@@ -51,9 +54,11 @@ export function AppHost() {
         return;
       }
 
-      void handleBridgeRequest({ app }, event.data).then((response) => {
-        iframeWindow.postMessage(response, '*');
-      });
+      void handleBridgeRequest({ app: installedApp }, event.data).then(
+        (response) => {
+          iframeWindow.postMessage(response, '*');
+        },
+      );
     }
 
     window.addEventListener('message', onMessage);
@@ -95,6 +100,16 @@ export function AppHost() {
             App URL: {entrySrc}
           </p>
         </div>
+        <Button
+          variant='outline'
+          onClick={() => {
+            void openAppWindow(app.id, app.name).catch((err) => {
+              console.error('Failed to open app window:', err);
+            });
+          }}
+        >
+          Open in window
+        </Button>
 
         {!entrySrc ? (
           <Alert>
