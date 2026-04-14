@@ -11,6 +11,7 @@ import { platform } from '@tauri-apps/plugin-os';
 import {
   ArrowDownUp,
   ArrowLeftRight,
+  Blocks,
   BookUser,
   Cog,
   FilePenLine,
@@ -103,7 +104,13 @@ export function TopNav({ isCollapsed }: NavProps) {
       >
         <BookUser className={className} aria-hidden='true' />
       </NavLink>
-
+      <NavLink
+        url={'/apps'}
+        isCollapsed={isCollapsed}
+        message={<Trans>Apps</Trans>}
+      >
+        <Blocks className={className} aria-hidden='true' />
+      </NavLink>
       <NavLink
         url={'/transactions'}
         isCollapsed={isCollapsed}
