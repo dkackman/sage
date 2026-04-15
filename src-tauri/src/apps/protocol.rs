@@ -1,57 +1,13 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
-use anyhow::{anyhow, Context, Result as AnyResult};
+use anyhow::{anyhow, Result as AnyResult};
 use tauri::http::{Response, StatusCode};
 
 use crate::apps::{
     csp::build_app_csp,
-    install::{app_install_dir, read_installed_app_by_id},
+    install::read_installed_app_by_id,
+    snapshot::read_snapshot_file,
 };
-
-fn resolve_protocol_file(base_path: &Path, app_id: &str, request_path: &str) -> AnyResult<PathBuf> {
-    let install_dir = app_install_dir(base_path, app_id);
-
-    let path = if request_path.is_empty() || request_path == "/" || request_path == "/index.html" {
-        install_dir.join("dist").join("index.html")
-    } else if request_path == "/icon.png" {
-        install_dir.join("icon.png")
-    } else {
-        let trimmed = request_path.trim_start_matches('/');
-
-        if trimmed.contains("..") {
-            return Err(anyhow!("invalid app path"));
-        }
-
-        install_dir.join("dist").join(trimmed)
-    };
-
-    let canonical_install_dir = install_dir.canonicalize().with_context(|| {
-        format!(
-            "failed to canonicalize install dir {}",
-            install_dir.display()
-        )
-    })?;
-
-    let canonical_path = path.canonicalize().with_context(|| {
-        format!(
-            "failed to canonicalize requested path {}",
-            path.display()
-        )
-    })?;
-
-    if !canonical_path.starts_with(&canonical_install_dir) {
-        return Err(anyhow!("requested path escapes app directory"));
-    }
-
-    if !canonical_path.is_file() {
-        return Err(anyhow!("requested file does not exist"));
-    }
-
-    Ok(canonical_path)
-}
 
 pub fn handle_app_protocol_request(
     base_path: &Path,
@@ -64,13 +20,13 @@ pub fn handle_app_protocol_request(
         .ok_or_else(|| anyhow!("missing app id in sage-app URL"))?;
 
     let request_path = uri.path();
-
-    let file_path = resolve_protocol_file(base_path, app_id, request_path)?;
     let app = read_installed_app_by_id(base_path, app_id)?;
 
+    let snapshot_dir = Path::new(&app.active_snapshot.snapshot_dir);
+    let file_path = read_snapshot_file(snapshot_dir, request_path)?;
+
     if request_path.is_empty() || request_path == "/" || request_path == "/index.html" {
-        let html = fs::read_to_string(&file_path)
-            .with_context(|| format!("failed to read {}", file_path.display()))?;
+        let html = fs::read_to_string(&file_path)?;
         let csp = build_app_csp(&app);
 
         return Response::builder()
@@ -81,9 +37,7 @@ pub fn handle_app_protocol_request(
             .map_err(|err| anyhow!("failed to build protocol response: {err}"));
     }
 
-    let bytes = fs::read(&file_path)
-        .with_context(|| format!("failed to read {}", file_path.display()))?;
-
+    let bytes = fs::read(&file_path)?;
     let mime = mime_guess::from_path(&file_path)
         .first_or_octet_stream()
         .essence_str()

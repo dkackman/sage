@@ -14,15 +14,16 @@ use crate::{
     apps::{
         permissions::{
             validate_granted_permissions_against_requested,
-            validate_requested_permissions,
         },
         types::{
-            CorruptedInstalledSageApp, InstalledSageApp, ListedSageApp, SageAppPackageManifest,
-            SageAppUrlPreview, SageGrantedPermissions, SageInstalledAppSource,
+            CorruptedInstalledSageApp, InstalledSageApp, ListedSageApp, SageAppPackageManifest, SageGrantedPermissions,
         },
     },
     error::Result,
 };
+use crate::apps::manifest::validate_package_manifest;
+use crate::apps::snapshot::{derive_manifest_url, download_url_snapshot, fetch_url_manifest};
+use crate::apps::types::{InstalledSageAppSource, SageAppUrlPreview};
 
 const INSTALLED_METADATA_FILE: &str = ".sage-installed.json";
 
@@ -63,14 +64,6 @@ fn generate_app_id(name: &str) -> String {
     format!("{}-{}", slugify_name(name), current_millis())
 }
 
-fn generate_url_app_id(name: &str, manifest_url: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(manifest_url.as_bytes());
-    let digest = hasher.finalize();
-    let short = hex::encode(&digest[..6]);
-    format!("{}-{}", slugify_name(name), short)
-}
-
 fn should_ignore_root_entry(path: &Path) -> bool {
     let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
         return false;
@@ -99,6 +92,48 @@ fn copy_dir_all(src: &Path, dst: &Path) -> AnyResult<()> {
     }
 
     Ok(())
+}
+
+fn prepare_zip_snapshot(
+    package_root: &Path,
+    install_dir: &Path,
+    manifest: &SageAppPackageManifest,
+) -> AnyResult<crate::apps::types::InstalledSageAppSnapshot> {
+    let manifest_json = serde_json::to_string_pretty(manifest)
+        .map_err(|err| anyhow!("failed to serialize manifest: {err}"))?;
+    let manifest_hash = hash_string(&manifest_json);
+
+    let snapshot_dir = install_dir.join("snapshots").join(&manifest_hash);
+    if snapshot_dir.exists() {
+        fs::remove_dir_all(&snapshot_dir)?;
+    }
+    fs::create_dir_all(&snapshot_dir)?;
+
+    let dist_dir = package_root.join("dist");
+    if !dist_dir.is_dir() {
+        return Err(anyhow!("package is missing dist directory"));
+    }
+
+    copy_dir_all(&dist_dir, &snapshot_dir)?;
+
+    let icon_src = package_root.join("icon.png");
+    if icon_src.is_file() {
+        fs::copy(&icon_src, snapshot_dir.join("icon.png"))?;
+    }
+
+    fs::write(
+        snapshot_dir.join("sage-manifest.json"),
+        format!("{manifest_json}\n"),
+    )?;
+
+    let total_bytes = manifest.files.iter().map(|f| f.size).sum();
+
+    Ok(crate::apps::types::InstalledSageAppSnapshot {
+        manifest_hash,
+        snapshot_dir: snapshot_dir.to_string_lossy().to_string(),
+        total_bytes,
+        manifest: manifest.clone(),
+    })
 }
 
 fn unzip_to_dir(zip_path: &Path, out_dir: &Path) -> AnyResult<()> {
@@ -176,16 +211,7 @@ fn read_manifest(package_root: &Path) -> AnyResult<SageAppPackageManifest> {
 }
 
 fn validate_manifest(manifest: &SageAppPackageManifest) -> AnyResult<()> {
-    if manifest.name.trim().is_empty() {
-        return Err(anyhow!("manifest name cannot be empty"));
-    }
-
-    if manifest.version.trim().is_empty() {
-        return Err(anyhow!("manifest version cannot be empty"));
-    }
-
-    validate_requested_permissions(&manifest.permissions)?;
-    Ok(())
+    validate_package_manifest(manifest).map(|_| ())
 }
 
 fn validate_package_structure(package_root: &Path) -> AnyResult<()> {
@@ -329,56 +355,10 @@ fn normalize_app_url(url: &str) -> AnyResult<String> {
     Ok(parsed.to_string())
 }
 
-fn derive_manifest_url(app_url: &str) -> AnyResult<String> {
-    let parsed = reqwest::Url::parse(app_url).context("invalid normalized app URL")?;
-    let manifest = parsed
-        .join("sage-manifest.json")
-        .context("failed to derive manifest URL")?;
-    Ok(manifest.to_string())
-}
-
 fn hash_string(input: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
     hex::encode(hasher.finalize())
-}
-
-async fn fetch_url_manifest(app_url: &str) -> AnyResult<SageAppUrlPreview> {
-    let app_url = normalize_app_url(app_url)?;
-    let manifest_url = derive_manifest_url(&app_url)?;
-
-    let response = reqwest::Client::new()
-        .get(&manifest_url)
-        .send()
-        .await
-        .with_context(|| format!("failed to fetch {}", manifest_url))?;
-
-    if !response.status().is_success() {
-        return Err(anyhow!(
-            "failed to fetch Sage manifest at {}: HTTP {}",
-            manifest_url,
-            response.status()
-        ));
-    }
-
-    let manifest_text = response
-        .text()
-        .await
-        .with_context(|| format!("failed to read {}", manifest_url))?;
-
-    let manifest: SageAppPackageManifest =
-        serde_json::from_str(&manifest_text).context("failed to parse sage-manifest.json")?;
-
-    validate_manifest(&manifest)?;
-
-    let manifest_hash = hash_string(&manifest_text);
-
-    Ok(SageAppUrlPreview {
-        app_url,
-        manifest_url,
-        manifest_hash,
-        manifest,
-    })
 }
 
 #[command]
@@ -404,9 +384,24 @@ pub async fn preview_app_zip(zip_path: String) -> Result<SageAppPackageManifest>
 #[command]
 #[specta::specta]
 pub async fn preview_app_url(app_url: String) -> Result<SageAppUrlPreview> {
-    fetch_url_manifest(&app_url)
+    let app_url = normalize_app_url(&app_url).map_err(|err| {
+        io::Error::other(format!("failed to normalize app URL {}: {err}", app_url))
+    })?;
+
+    let manifest_url = derive_manifest_url(&app_url).map_err(|err| {
+        io::Error::other(format!("failed to derive manifest URL for {}: {err}", app_url))
+    })?;
+
+    let (manifest, manifest_hash) = fetch_url_manifest(&manifest_url)
         .await
-        .map_err(|err| io::Error::other(format!("failed to preview app URL {}: {err}", app_url)).into())
+        .map_err(|err| io::Error::other(format!("failed to preview app URL {}: {err}", app_url)))?;
+
+    Ok(SageAppUrlPreview {
+        app_url,
+        manifest_url,
+        manifest_hash,
+        manifest,
+    })
 }
 
 #[command]
@@ -494,22 +489,25 @@ pub async fn install_app_zip(
 
         copy_dir_all(&package_root, &install_dir)?;
 
+        let snapshot = prepare_zip_snapshot(&package_root, &install_dir, &manifest)?;
+
         let installed = InstalledSageApp {
             id: app_id,
-            name: manifest.name,
-            version: manifest.version,
+            name: manifest.name.clone(),
+            version: manifest.version.clone(),
             install_dir: install_dir.to_string_lossy().to_string(),
-            entry_file: install_dir
-                .join("dist")
+            entry_file: Path::new(&snapshot.snapshot_dir)
                 .join("index.html")
                 .to_string_lossy()
                 .to_string(),
-            icon_file: install_dir.join("icon.png").to_string_lossy().to_string(),
-            requested_permissions: manifest.permissions,
+            icon_file: Path::new(&snapshot.snapshot_dir)
+                .join("icon.png")
+                .to_string_lossy()
+                .to_string(),
+            requested_permissions: manifest.permissions.clone(),
             granted_permissions,
-            source: SageInstalledAppSource::Zip {
-                install_dir: install_dir.to_string_lossy().to_string(),
-            },
+            source: InstalledSageAppSource::Zip,
+            active_snapshot: snapshot,
         };
 
         write_installed_app_metadata(&installed, &install_dir)?;
@@ -525,19 +523,19 @@ pub async fn install_app_zip(
     })
 }
 
-#[command]
+#[tauri::command]
 #[specta::specta]
 pub async fn install_app_url(
-    state: State<'_, AppState>,
+    state: tauri::State<'_, crate::app_state::AppState>,
     app_url: String,
     granted_permissions: SageGrantedPermissions,
-) -> Result<InstalledSageApp> {
+) -> crate::error::Result<InstalledSageApp> {
     let base_path = {
         let state = state.lock().await;
         state.path.clone()
     };
 
-    let root = apps_root(&base_path);
+    let root = super::install::apps_root(&base_path);
 
     fs::create_dir_all(&root).map_err(|err| {
         io::Error::other(format!(
@@ -546,11 +544,9 @@ pub async fn install_app_url(
         ))
     })?;
 
-    let preview = fetch_url_manifest(&app_url)
-        .await
-        .map_err(|err| io::Error::other(format!("failed to install app URL {}: {err}", app_url)))?;
+    let preview = preview_app_url(app_url.clone()).await?;
 
-    validate_granted_permissions_against_requested(
+    super::install::validate_granted_permissions_against_requested(
         &preview.manifest.permissions,
         &granted_permissions,
     )
@@ -561,7 +557,20 @@ pub async fn install_app_url(
             ))
         })?;
 
-    let app_id = generate_url_app_id(&preview.manifest.name, &preview.manifest_url);
+    let existing = super::install::list_installed_apps_internal(&root)
+        .map_err(|err| io::Error::other(format!("failed to list installed apps: {err}")))?
+        .into_iter()
+        .find_map(|app| match app {
+            ListedSageApp::Installed(installed) if installed.name == preview.manifest.name => {
+                Some(installed)
+            }
+            _ => None,
+        });
+
+    let app_id = existing
+        .map(|app| app.id)
+        .unwrap_or_else(|| super::install::generate_app_id(&preview.manifest.name));
+
     let install_dir = root.join(&app_id);
     fs::create_dir_all(&install_dir).map_err(|err| {
         io::Error::other(format!(
@@ -570,27 +579,47 @@ pub async fn install_app_url(
         ))
     })?;
 
+    let snapshot = download_url_snapshot(
+        &install_dir,
+        &preview.app_url,
+        &preview.manifest,
+        &preview.manifest_hash,
+    )
+        .await
+        .map_err(|err| io::Error::other(format!("failed to download URL app snapshot: {err}")))?;
+
     let installed = InstalledSageApp {
-        id: app_id,
-        name: preview.manifest.name,
-        version: preview.manifest.version,
+        id: app_id.clone(),
+        name: preview.manifest.name.clone(),
+        version: preview.manifest.version.clone(),
         install_dir: install_dir.to_string_lossy().to_string(),
-        entry_file: preview.app_url.clone(),
-        icon_file: String::new(),
-        requested_permissions: preview.manifest.permissions,
+        entry_file: Path::new(&snapshot.snapshot_dir)
+            .join("index.html")
+            .to_string_lossy()
+            .to_string(),
+        icon_file: Path::new(&snapshot.snapshot_dir)
+            .join("icon.png")
+            .to_string_lossy()
+            .to_string(),
+        requested_permissions: preview.manifest.permissions.clone(),
         granted_permissions,
-        source: SageInstalledAppSource::Url {
-            app_url: preview.app_url,
-            manifest_url: preview.manifest_url,
-            last_seen_manifest_hash: preview.manifest_hash,
+        source: InstalledSageAppSource::Url {
+            app_url: preview.app_url.clone(),
+            manifest_url: preview.manifest_url.clone(),
         },
+        active_snapshot: snapshot,
     };
 
-    write_installed_app_metadata(&installed, &install_dir)
-        .map_err(|err| io::Error::other(format!("failed to persist URL app metadata: {err}")))?;
+    super::install::write_installed_app_metadata(&installed, &install_dir).map_err(|err| {
+        io::Error::other(format!(
+            "failed to write installed app metadata for {}: {err}",
+            app_id
+        ))
+    })?;
 
     Ok(installed)
 }
+
 #[command]
 #[specta::specta]
 pub async fn uninstall_app(state: State<'_, AppState>, app_id: String) -> Result<()> {

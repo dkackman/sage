@@ -120,10 +120,7 @@ export async function ensureInlineRuntime(
 
   const runtimeId = runtimeIdFor(app.id);
   const webviewLabel = inlineLabelFor(app.id);
-  const entrySrc =
-    app.source.kind === 'url'
-      ? app.source.appUrl
-      : `sage-app://${app.id}/index.html`;
+  const entrySrc = `sage-app://${app.id}/index.html`;
 
   let webview = await Webview.getByLabel(webviewLabel);
   if (!webview) {

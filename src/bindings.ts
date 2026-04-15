@@ -1722,7 +1722,9 @@ index: number }
  */
 export type IncreaseDerivationIndexResponse = Record<string, never>
 export type InheritedNetwork = "mainnet" | "testnet11"
-export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; source: SageInstalledAppSource }
+export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot }
+export type InstalledSageAppSnapshot = { manifestHash: string; snapshotDir: string; totalBytes: number; manifest: SageAppPackageManifest }
+export type InstalledSageAppSource = { kind: "zip" } | { kind: "url"; appUrl: string; manifestUrl: string }
 /**
  * Check if an asset is owned
  */
@@ -2185,14 +2187,14 @@ export type ResyncCatResponse = Record<string, never>
  * Response from resynchronizing the wallet
  */
 export type ResyncResponse = Record<string, never>
-export type SageAppPackageManifest = { name: string; version: string; permissions?: SageRequestedPermissions }
+export type SageAppManifestFile = { path: string; sha256: string; size: number }
+export type SageAppPackageManifest = { name: string; version: string; permissions?: SageRequestedPermissions; files?: SageAppManifestFile[] }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageBridgeFetchBatchRequest = { requests: SageBridgeFetchRequest[]; max_concurrency?: number | null }
 export type SageBridgeFetchRequest = { url: string; method?: string | null; headers?: Partial<{ [key in string]: string }>; body?: string | null }
 export type SageBridgeFetchResponse = { ok: boolean; status: number; status_text: string; headers: Partial<{ [key in string]: string }>; body_text: string }
 export type SageGrantedNetworkPermissionEntry = { scheme: string; host: string }
 export type SageGrantedPermissions = { network?: SageGrantedNetworkPermissionEntry[]; persistentStorage?: boolean }
-export type SageInstalledAppSource = { kind: "zip"; installDir: string } | { kind: "url"; appUrl: string; manifestUrl: string; lastSeenManifestHash: string }
 export type SageNetworkPermissionEntry = { scheme: string; host: string; required?: boolean }
 export type SagePersistentStoragePermission = { required?: boolean }
 export type SageRequestedPermissions = { network?: SageNetworkPermissionEntry[]; persistent_storage?: SagePersistentStoragePermission | null }
