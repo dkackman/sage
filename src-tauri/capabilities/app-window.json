@@ -6,4 +6,3 @@
   "webviews": ["app-*", "app-inline-*"],
   "permissions": ["core:event:default", "core:webview:default"]
 }
-

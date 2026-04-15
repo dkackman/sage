@@ -505,17 +505,35 @@ fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
   const currentWebview = tauri.webview.getCurrentWebview();
   const sourceLabel = currentWebview.label;
 
-  function callHost(method, params) {{
-    return new Promise(async (resolve, reject) => {{
-      const id = `sage-${{Date.now()}}-${{Math.random().toString(36).slice(2)}}`;
+  async function callHost(method, params) {{
+    const id = `sage-${{Date.now()}}-${{Math.random().toString(36).slice(2)}}`;
 
-      const unlisten = await currentWebview.listen('sage-bridge:response', (event) => {{
+    return new Promise(async (resolve, reject) => {{
+      let settled = false;
+
+      const timeoutId = window.setTimeout(() => {{
+        if (settled) {{
+          return;
+        }}
+        settled = true;
+        unlistenPromise.then((unlisten) => unlisten()).catch(() => {{}});
+        reject(new Error(`Sage bridge timeout for ${{method}}`));
+      }}, 15000);
+
+      const unlistenPromise = currentWebview.listen('sage-bridge:response', (event) => {{
         const data = event.payload;
         if (!data || data.channel !== 'sage-bridge' || data.id !== id) {{
           return;
         }}
 
-        unlisten();
+        if (settled) {{
+          return;
+        }}
+
+        settled = true;
+        window.clearTimeout(timeoutId);
+
+        unlistenPromise.then((unlisten) => unlisten()).catch(() => {{}});
 
         if (data.ok) {{
           resolve(data.result);
@@ -524,16 +542,27 @@ fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
         }}
       }});
 
-      await currentWebview.emitTo('main', 'sage-bridge:request', {{
-        sourceLabel,
-        appId: __sageAppInfo.id,
-        request: {{
-          channel: 'sage-bridge',
-          id,
-          method,
-          params
+      try {{
+        await currentWebview.emitTo('main', 'sage-bridge:request', {{
+          sourceLabel,
+          appId: __sageAppInfo.id,
+          request: {{
+            channel: 'sage-bridge',
+            id,
+            method,
+            params
+          }}
+        }});
+      }} catch (error) {{
+        if (settled) {{
+          return;
         }}
-      }});
+
+        settled = true;
+        window.clearTimeout(timeoutId);
+        unlistenPromise.then((unlisten) => unlisten()).catch(() => {{}});
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }}
     }});
   }}
 

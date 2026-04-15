@@ -32,6 +32,12 @@ export interface SageBridgeContext {
   app: InstalledSageApp;
 }
 
+export interface SageBridgeEventPayload {
+  sourceLabel: string;
+  appId: string;
+  request: SageBridgeRequest;
+}
+
 function success(id: string, result: unknown): SageBridgeSuccessResponse {
   return {
     channel: 'sage-bridge',
@@ -71,6 +77,19 @@ export function isBridgeRequest(value: unknown): value is SageBridgeRequest {
   );
 }
 
+export function isBridgeResponse(value: unknown): value is SageBridgeResponse {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const maybe = value as Partial<SageBridgeResponse>;
+  return (
+    maybe.channel === 'sage-bridge' &&
+    typeof maybe.id === 'string' &&
+    typeof maybe.ok === 'boolean'
+  );
+}
+
 export async function handleBridgeRequest(
   ctx: SageBridgeContext,
   request: SageBridgeRequest,
@@ -103,9 +122,8 @@ export async function handleBridgeRequest(
     }
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : 'Unknown bridge error';
+      error instanceof Error ? error.message : 'Unknown Sage bridge error';
 
     return failure(request.id, 'internal_error', message);
   }
 }
-

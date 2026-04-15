@@ -4,7 +4,7 @@ import { useApps } from '@/hooks/useApps';
 import {
   handleBridgeRequest,
   isBridgeRequest,
-  type SageBridgeRequest,
+  type SageBridgeEventPayload,
 } from '@/lib/apps/bridge';
 import { openAppWindow } from '@/lib/apps/openAppWindow';
 import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
@@ -13,12 +13,6 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
-
-interface SageBridgeEventPayload {
-  sourceLabel: string;
-  appId: string;
-  request: SageBridgeRequest;
-}
 
 function AppNotFound() {
   return (
@@ -245,9 +239,9 @@ export function AppHost() {
           </Button>
         </div>
 
-        <div className='space-y-1 shrink-0'>
+        <div className='shrink-0 space-y-1'>
           <h1 className='text-2xl font-semibold tracking-tight'>{app.name}</h1>
-          <p className='text-xs break-all text-muted-foreground'>
+          <p className='break-all text-xs text-muted-foreground'>
             App URL: {entrySrc}
           </p>
         </div>
