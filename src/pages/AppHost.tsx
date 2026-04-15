@@ -42,7 +42,9 @@ export function AppHost() {
       return null;
     }
 
-    return `sage-app://${app.id}/index.html`;
+    return app.source.kind === 'url'
+      ? app.source.appUrl
+      : `sage-app://${app.id}/index.html`;
   }, [app]);
 
   useEffect(() => {
@@ -93,7 +95,7 @@ export function AppHost() {
     };
 
     const mount = async () => {
-      const runtime = await ensureInlineRuntime(installedApp);
+      await ensureInlineRuntime(installedApp);
       await markRuntimeVisible(installedApp.id, true);
 
       scheduleSyncBounds();

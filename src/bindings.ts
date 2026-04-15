@@ -365,8 +365,14 @@ async listInstalledApps() : Promise<ListedSageApp[]> {
 async previewAppZip(zipPath: string) : Promise<SageAppPackageManifest> {
     return await TAURI_INVOKE("preview_app_zip", { zipPath });
 },
+async previewAppUrl(appUrl: string) : Promise<SageAppUrlPreview> {
+    return await TAURI_INVOKE("preview_app_url", { appUrl });
+},
 async installAppZip(zipPath: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
     return await TAURI_INVOKE("install_app_zip", { zipPath, grantedPermissions });
+},
+async installAppUrl(appUrl: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
+    return await TAURI_INVOKE("install_app_url", { appUrl, grantedPermissions });
 },
 async uninstallApp(appId: string) : Promise<null> {
     return await TAURI_INVOKE("uninstall_app", { appId });
@@ -1716,7 +1722,7 @@ index: number }
  */
 export type IncreaseDerivationIndexResponse = Record<string, never>
 export type InheritedNetwork = "mainnet" | "testnet11"
-export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions }
+export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; source: SageInstalledAppSource }
 /**
  * Check if an asset is owned
  */
@@ -2179,12 +2185,14 @@ export type ResyncCatResponse = Record<string, never>
  * Response from resynchronizing the wallet
  */
 export type ResyncResponse = Record<string, never>
-export type SageAppPackageManifest = { name: string; version: string; permissions: SageRequestedPermissions }
+export type SageAppPackageManifest = { name: string; version: string; permissions?: SageRequestedPermissions }
+export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageBridgeFetchBatchRequest = { requests: SageBridgeFetchRequest[]; max_concurrency?: number | null }
 export type SageBridgeFetchRequest = { url: string; method?: string | null; headers?: Partial<{ [key in string]: string }>; body?: string | null }
 export type SageBridgeFetchResponse = { ok: boolean; status: number; status_text: string; headers: Partial<{ [key in string]: string }>; body_text: string }
 export type SageGrantedNetworkPermissionEntry = { scheme: string; host: string }
 export type SageGrantedPermissions = { network?: SageGrantedNetworkPermissionEntry[]; persistentStorage?: boolean }
+export type SageInstalledAppSource = { kind: "zip"; installDir: string } | { kind: "url"; appUrl: string; manifestUrl: string; lastSeenManifestHash: string }
 export type SageNetworkPermissionEntry = { scheme: string; host: string; required?: boolean }
 export type SagePersistentStoragePermission = { required?: boolean }
 export type SageRequestedPermissions = { network?: SageNetworkPermissionEntry[]; persistent_storage?: SagePersistentStoragePermission | null }

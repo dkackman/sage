@@ -52,7 +52,26 @@ pub struct SageGrantedNetworkPermissionEntry {
 pub struct SageAppPackageManifest {
     pub name: String,
     pub version: String,
+
+    #[serde(default)]
     pub permissions: SageRequestedPermissions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SageInstalledAppSource {
+    Zip {
+        #[serde(rename = "installDir", alias = "install_dir")]
+        install_dir: String,
+    },
+    Url {
+        #[serde(rename = "appUrl", alias = "app_url")]
+        app_url: String,
+        #[serde(rename = "manifestUrl", alias = "manifest_url")]
+        manifest_url: String,
+        #[serde(rename = "lastSeenManifestHash", alias = "last_seen_manifest_hash")]
+        last_seen_manifest_hash: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -75,6 +94,8 @@ pub struct InstalledSageApp {
 
     #[serde(rename = "grantedPermissions", alias = "granted_permissions")]
     pub granted_permissions: SageGrantedPermissions,
+
+    pub source: SageInstalledAppSource,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -116,4 +137,15 @@ pub struct SageBridgeFetchBatchRequest {
     pub requests: Vec<SageBridgeFetchRequest>,
     #[serde(default)]
     pub max_concurrency: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SageAppUrlPreview {
+    #[serde(rename = "appUrl", alias = "app_url")]
+    pub app_url: String,
+    #[serde(rename = "manifestUrl", alias = "manifest_url")]
+    pub manifest_url: String,
+    #[serde(rename = "manifestHash", alias = "manifest_hash")]
+    pub manifest_hash: String,
+    pub manifest: SageAppPackageManifest,
 }

@@ -1,6 +1,7 @@
 import { getCurrentWebview, Webview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
+import { InstalledSageApp } from '@/bindings.ts';
 
 export type SageAppRuntimeState =
   | 'starting'
@@ -97,10 +98,9 @@ export function getRuntimeByAppId(
   return record ? stripInternal(record) : undefined;
 }
 
-export async function ensureInlineRuntime(app: {
-  id: string;
-  name: string;
-}): Promise<SageAppRuntimeRecord> {
+export async function ensureInlineRuntime(
+  app: InstalledSageApp,
+): Promise<SageAppRuntimeRecord> {
   const existingRuntimeId = runtimeByAppId.get(app.id);
   if (existingRuntimeId) {
     const existing = runtimes.get(existingRuntimeId);
@@ -120,7 +120,10 @@ export async function ensureInlineRuntime(app: {
 
   const runtimeId = runtimeIdFor(app.id);
   const webviewLabel = inlineLabelFor(app.id);
-  const entrySrc = `sage-app://${app.id}/index.html`;
+  const entrySrc =
+    app.source.kind === 'url'
+      ? app.source.appUrl
+      : `sage-app://${app.id}/index.html`;
 
   let webview = await Webview.getByLabel(webviewLabel);
   if (!webview) {

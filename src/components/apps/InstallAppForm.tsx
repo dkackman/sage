@@ -8,19 +8,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { invoke } from '@tauri-apps/api/core';
+import { Input } from '@/components/ui/input';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useMemo, useState } from 'react';
 import type {
   SageAppPackageManifest,
+  SageAppUrlPreview,
   SageGrantedNetworkPermissionEntry,
   SageGrantedPermissions,
   SageNetworkPermissionEntry,
 } from '@/bindings';
+import { formatAppError } from '@/lib/apps/formatAppError.ts';
 
 interface Props {
-  onInstall: (
+  onPreviewZip: (zipPath: string) => Promise<SageAppPackageManifest>;
+  onPreviewUrl: (appUrl: string) => Promise<SageAppUrlPreview>;
+  onInstallZip: (
     zipPath: string,
+    permissions: SageGrantedPermissions,
+  ) => Promise<void>;
+  onInstallUrl: (
+    appUrl: string,
     permissions: SageGrantedPermissions,
   ) => Promise<void>;
 }
@@ -37,12 +45,34 @@ function sortNetworkEntries(entries: SageNetworkPermissionEntry[]) {
   });
 }
 
-export function InstallAppForm({ onInstall }: Props) {
+type InstallSource =
+  | {
+      kind: 'zip';
+      zipPath: string;
+      manifest: SageAppPackageManifest;
+    }
+  | {
+      kind: 'url';
+      appUrl: string;
+      preview: SageAppUrlPreview;
+    };
+
+export function InstallAppForm({
+  onPreviewZip,
+  onPreviewUrl,
+  onInstallZip,
+  onInstallUrl,
+}: Props) {
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [urlInput, setUrlInput] = useState('');
 
-  const [manifest, setManifest] = useState<SageAppPackageManifest | null>(null);
-  const [zipPath, setZipPath] = useState<string | null>(null);
+  const [source, setSource] = useState<InstallSource | null>(null);
+
+  const manifest = useMemo(() => {
+    if (!source) return null;
+    return source.kind === 'zip' ? source.manifest : source.preview.manifest;
+  }, [source]);
 
   const [grantedNetworkKeys, setGrantedNetworkKeys] = useState<string[]>([]);
   const [persistentStorageGranted, setPersistentStorageGranted] =
@@ -54,7 +84,7 @@ export function InstallAppForm({ onInstall }: Props) {
       : [];
   }, [manifest]);
 
-  async function handleSelect() {
+  async function handleSelectZip() {
     try {
       setError(null);
 
@@ -68,32 +98,65 @@ export function InstallAppForm({ onInstall }: Props) {
         return;
       }
 
-      const nextManifest = await invoke<SageAppPackageManifest>(
-        'preview_app_zip',
-        {
-          zipPath: selected,
-        },
-      );
+      const nextManifest = await onPreviewZip(selected);
 
       const network = nextManifest.permissions.network ?? [];
       const persistentStorage =
         nextManifest.permissions.persistent_storage ?? null;
 
-      setManifest({
-        ...nextManifest,
-        permissions: {
-          ...nextManifest.permissions,
-          network,
-          persistent_storage: persistentStorage,
+      setSource({
+        kind: 'zip',
+        zipPath: selected,
+        manifest: {
+          ...nextManifest,
+          permissions: {
+            ...nextManifest.permissions,
+            network,
+            persistent_storage: persistentStorage,
+          },
         },
       });
-      setZipPath(selected);
 
       setGrantedNetworkKeys(network.map((entry) => networkEntryKey(entry)));
-
-      setPersistentStorageGranted(!!nextManifest.permissions.persistent_storage);
+      setPersistentStorageGranted(
+        !!nextManifest.permissions.persistent_storage,
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(formatAppError(err));
+    }
+  }
+
+  async function handlePreviewUrl() {
+    try {
+      setError(null);
+
+      const preview = await onPreviewUrl(urlInput.trim());
+      const network = preview.manifest.permissions.network ?? [];
+      const persistentStorage =
+        preview.manifest.permissions.persistent_storage ?? null;
+
+      setSource({
+        kind: 'url',
+        appUrl: preview.appUrl,
+        preview: {
+          ...preview,
+          manifest: {
+            ...preview.manifest,
+            permissions: {
+              ...preview.manifest.permissions,
+              network,
+              persistent_storage: persistentStorage,
+            },
+          },
+        },
+      });
+
+      setGrantedNetworkKeys(network.map((entry) => networkEntryKey(entry)));
+      setPersistentStorageGranted(
+        !!preview.manifest.permissions.persistent_storage,
+      );
+    } catch (err) {
+      setError(formatAppError(err));
     }
   }
 
@@ -113,7 +176,7 @@ export function InstallAppForm({ onInstall }: Props) {
   }
 
   async function confirmInstall() {
-    if (!zipPath || !manifest) {
+    if (!source || !manifest) {
       return;
     }
 
@@ -121,14 +184,20 @@ export function InstallAppForm({ onInstall }: Props) {
       setInstalling(true);
       setError(null);
 
-      await onInstall(zipPath, buildGrantedPermissions());
+      const permissions = buildGrantedPermissions();
 
-      setManifest(null);
-      setZipPath(null);
+      if (source.kind === 'zip') {
+        await onInstallZip(source.zipPath, permissions);
+      } else {
+        await onInstallUrl(source.appUrl, permissions);
+      }
+
+      setSource(null);
       setGrantedNetworkKeys([]);
       setPersistentStorageGranted(false);
+      setUrlInput('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(formatAppError(err));
     } finally {
       setInstalling(false);
     }
@@ -142,12 +211,32 @@ export function InstallAppForm({ onInstall }: Props) {
         </CardHeader>
         <CardContent className='space-y-4'>
           <p className='text-sm text-muted-foreground'>
-            Install a Sage app package from a zip file.
+            Install a Sage app package from a zip file or URL.
           </p>
 
-          <Button onClick={handleSelect} disabled={installing}>
-            Choose .zip
-          </Button>
+          <div className='flex flex-wrap gap-2'>
+            <Button onClick={handleSelectZip} disabled={installing}>
+              Install from .zip
+            </Button>
+          </div>
+
+          <div className='space-y-2 rounded-md border p-3'>
+            <div className='text-sm font-medium'>Install from URL</div>
+            <div className='flex gap-2'>
+              <Input
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder='https://example.com/my-app/'
+                disabled={installing}
+              />
+              <Button
+                onClick={handlePreviewUrl}
+                disabled={installing || urlInput.trim().length === 0}
+              >
+                Preview URL
+              </Button>
+            </div>
+          </div>
 
           {error ? (
             <div className='text-sm text-destructive'>{error}</div>
@@ -159,8 +248,7 @@ export function InstallAppForm({ onInstall }: Props) {
         open={!!manifest}
         onOpenChange={(open) => {
           if (!open) {
-            setManifest(null);
-            setZipPath(null);
+            setSource(null);
             setGrantedNetworkKeys([]);
             setPersistentStorageGranted(false);
           }
@@ -172,8 +260,16 @@ export function InstallAppForm({ onInstall }: Props) {
           </DialogHeader>
 
           <div className='space-y-5'>
-            <div className='text-sm text-muted-foreground'>
-              v{manifest?.version}
+            <div className='space-y-1 text-sm text-muted-foreground'>
+              <div>v{manifest?.version}</div>
+              {source?.kind === 'url' ? (
+                <>
+                  <div className='break-all'>URL: {source.preview.appUrl}</div>
+                  <div className='break-all'>
+                    Manifest: {source.preview.manifestUrl}
+                  </div>
+                </>
+              ) : null}
             </div>
 
             <div className='space-y-3'>
@@ -255,8 +351,7 @@ export function InstallAppForm({ onInstall }: Props) {
             <Button
               variant='outline'
               onClick={() => {
-                setManifest(null);
-                setZipPath(null);
+                setSource(null);
                 setGrantedNetworkKeys([]);
                 setPersistentStorageGranted(false);
               }}

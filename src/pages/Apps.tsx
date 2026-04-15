@@ -8,7 +8,16 @@ import { Button } from '@/components/ui/button.tsx';
 import { Link } from 'react-router-dom';
 
 export function Apps() {
-  const { apps, loading, error, installApp, uninstallApp } = useApps();
+  const {
+    apps,
+    loading,
+    error,
+    previewAppZip,
+    previewAppUrl,
+    installApp,
+    installAppUrl,
+    uninstallApp,
+  } = useApps();
   const runtimes = useAppRuntimes();
 
   return (
@@ -20,14 +29,17 @@ export function Apps() {
             Install and manage Sage app packages.
           </p>
           <Button asChild variant='outline'>
-            <Link to='/apps/task-manager'>Task Manager ({runtimes.length})</Link>
+            <Link to='/apps/task-manager'>
+              Task Manager ({runtimes.length})
+            </Link>
           </Button>
         </div>
 
         <InstallAppForm
-          onInstall={(zipPath: string, permissions: SageGrantedPermissions) =>
-            installApp(zipPath, permissions)
-          }
+          onPreviewZip={previewAppZip}
+          onPreviewUrl={previewAppUrl}
+          onInstallZip={installApp}
+          onInstallUrl={installAppUrl}
         />
 
         <section className='space-y-4'>

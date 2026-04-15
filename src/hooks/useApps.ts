@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   InstalledSageApp,
   ListedSageApp,
+  SageAppPackageManifest,
+  SageAppUrlPreview,
   SageGrantedPermissions,
 } from '@/bindings.ts';
 
@@ -28,10 +30,33 @@ export function useApps() {
     void refresh();
   }, [refresh]);
 
+  const previewAppZip = useCallback(async (zipPath: string) => {
+    return await invoke<SageAppPackageManifest>('preview_app_zip', {
+      zipPath,
+    });
+  }, []);
+
+  const previewAppUrl = useCallback(async (appUrl: string) => {
+    return await invoke<SageAppUrlPreview>('preview_app_url', {
+      appUrl,
+    });
+  }, []);
+
   const installApp = useCallback(
     async (zipPath: string, permissions: SageGrantedPermissions) => {
       await invoke<InstalledSageApp>('install_app_zip', {
         zipPath,
+        grantedPermissions: permissions,
+      });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const installAppUrl = useCallback(
+    async (appUrl: string, permissions: SageGrantedPermissions) => {
+      await invoke<InstalledSageApp>('install_app_url', {
+        appUrl,
         grantedPermissions: permissions,
       });
       await refresh();
@@ -49,13 +74,7 @@ export function useApps() {
 
   const getApp = useCallback(
     (appId: string): InstalledSageApp | undefined => {
-      const app = apps.find((app) => {
-        if (app.kind === 'installed') {
-          return app.id === appId;
-        }
-        return app.id === appId;
-      });
-
+      const app = apps.find((app) => app.id === appId);
       return app?.kind === 'installed' ? app : undefined;
     },
     [apps],
@@ -85,10 +104,12 @@ export function useApps() {
     loading,
     error,
     refresh,
+    previewAppZip,
+    previewAppUrl,
     installApp,
+    installAppUrl,
     uninstallApp,
     isInstalled,
     getApp,
   };
 }
-
