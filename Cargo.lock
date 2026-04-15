@@ -6503,6 +6503,7 @@ version = "0.12.10"
 dependencies = [
  "anyhow",
  "aws-lc-rs",
+ "base64 0.22.1",
  "chia-wallet-sdk",
  "futures",
  "glob",
@@ -6521,6 +6522,7 @@ dependencies = [
  "sha2",
  "specta",
  "specta-typescript",
+ "sqlx",
  "tauri",
  "tauri-build",
  "tauri-plugin-barcode-scanner",

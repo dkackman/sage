@@ -394,6 +394,42 @@ async bridgeFetchHttpBatch(appId: string, req: SageBridgeFetchBatchRequest) : Pr
 },
 async bridgeFetchHttpBatchStream(appId: string, sourceLabel: string, req: SageBridgeFetchBatchRequest) : Promise<string> {
     return await TAURI_INVOKE("bridge_fetch_http_batch_stream", { appId, sourceLabel, req });
+},
+async storageOpenDatabase(appId: string, req: SageStorageOpenDatabaseRequest) : Promise<SageStorageDatabaseInfo> {
+    return await TAURI_INVOKE("storage_open_database", { appId, req });
+},
+async storageDeleteDatabase(appId: string, dbName: string) : Promise<null> {
+    return await TAURI_INVOKE("storage_delete_database", { appId, dbName });
+},
+async storageDescribeDatabase(appId: string, dbName: string) : Promise<SageStorageDatabaseDescription> {
+    return await TAURI_INVOKE("storage_describe_database", { appId, dbName });
+},
+async storageCreateObjectStore(appId: string, req: SageStorageCreateObjectStoreRequest) : Promise<null> {
+    return await TAURI_INVOKE("storage_create_object_store", { appId, req });
+},
+async storageCreateIndex(appId: string, req: SageStorageCreateIndexRequest) : Promise<null> {
+    return await TAURI_INVOKE("storage_create_index", { appId, req });
+},
+async storageGet(appId: string, req: SageStorageGetRequest) : Promise<string | null> {
+    return await TAURI_INVOKE("storage_get", { appId, req });
+},
+async storagePut(appId: string, req: SageStoragePutRequest) : Promise<null> {
+    return await TAURI_INVOKE("storage_put", { appId, req });
+},
+async storageDelete(appId: string, req: SageStorageDeleteRequest) : Promise<null> {
+    return await TAURI_INVOKE("storage_delete", { appId, req });
+},
+async storageClear(appId: string, req: SageStorageClearRequest) : Promise<null> {
+    return await TAURI_INVOKE("storage_clear", { appId, req });
+},
+async storageCount(appId: string, req: SageStorageCountRequest) : Promise<number> {
+    return await TAURI_INVOKE("storage_count", { appId, req });
+},
+async storageGetAll(appId: string, req: SageStorageGetAllRequest) : Promise<SageStorageValueRecord[]> {
+    return await TAURI_INVOKE("storage_get_all", { appId, req });
+},
+async storageGetAllFromIndex(appId: string, req: SageStorageGetAllFromIndexRequest) : Promise<SageStorageValueRecord[]> {
+    return await TAURI_INVOKE("storage_get_all_from_index", { appId, req });
 }
 }
 
@@ -2208,6 +2244,22 @@ export type SageGrantedPermissions = { network?: SageGrantedNetworkPermissionEnt
 export type SageNetworkPermissionEntry = { scheme: string; host: string; required?: boolean }
 export type SagePersistentStoragePermission = { required?: boolean }
 export type SageRequestedPermissions = { network?: SageNetworkPermissionEntry[]; persistent_storage?: SagePersistentStoragePermission | null }
+export type SageStorageClearRequest = { dbName: string; storeName: string }
+export type SageStorageCountRequest = { dbName: string; storeName: string }
+export type SageStorageCreateIndexRequest = { dbName: string; storeName: string; indexName: string }
+export type SageStorageCreateObjectStoreRequest = { dbName: string; storeName: string }
+export type SageStorageDatabaseDescription = { name: string; version: number; stores: SageStorageObjectStoreInfo[]; indexes: SageStorageIndexInfo[] }
+export type SageStorageDatabaseInfo = { name: string; version: number }
+export type SageStorageDeleteRequest = { dbName: string; storeName: string; keyBase64: string }
+export type SageStorageGetAllFromIndexRequest = { dbName: string; storeName: string; indexName: string; keyBase64: string }
+export type SageStorageGetAllRequest = { dbName: string; storeName: string }
+export type SageStorageGetRequest = { dbName: string; storeName: string; keyBase64: string }
+export type SageStorageIndexInfo = { store: string; name: string }
+export type SageStorageIndexValue = { indexName: string; keyBase64: string }
+export type SageStorageObjectStoreInfo = { name: string }
+export type SageStorageOpenDatabaseRequest = { name: string; version: number }
+export type SageStoragePutRequest = { dbName: string; storeName: string; keyBase64: string; valueBase64: string; indexValues?: SageStorageIndexValue[] }
+export type SageStorageValueRecord = { keyBase64: string; valueBase64: string }
 /**
  * Save a theme NFT to the wallet
  */

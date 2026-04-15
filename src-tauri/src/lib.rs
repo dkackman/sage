@@ -155,6 +155,18 @@ pub fn run() {
             apps::bridge::fetch::bridge_fetch_http,
             apps::bridge::batch::bridge_fetch_http_batch,
             apps::bridge::batch::bridge_fetch_http_batch_stream,
+            apps::storage::commands::storage_open_database,
+            apps::storage::commands::storage_delete_database,
+            apps::storage::commands::storage_describe_database,
+            apps::storage::commands::storage_create_object_store,
+            apps::storage::commands::storage_create_index,
+            apps::storage::commands::storage_get,
+            apps::storage::commands::storage_put,
+            apps::storage::commands::storage_delete,
+            apps::storage::commands::storage_clear,
+            apps::storage::commands::storage_count,
+            apps::storage::commands::storage_get_all,
+            apps::storage::commands::storage_get_all_from_index,
         ])
         .events(collect_events![SyncEvent]);
 
@@ -190,21 +202,21 @@ pub fn run() {
             .plugin(tauri_plugin_sage::init());
     }
 
-        tauri_builder
-            .register_uri_scheme_protocol("sage-app", move |ctx, request| {
-                    let base_path: PathBuf = ctx
-                        .app_handle()
-                        .path()
-                        .app_data_dir()
-                        .expect("failed to resolve app data dir");
+    tauri_builder
+        .register_uri_scheme_protocol("sage-app", move |ctx, request| {
+            let base_path: PathBuf = ctx
+                .app_handle()
+                .path()
+                .app_data_dir()
+                .expect("failed to resolve app data dir");
 
-                    apps::handle_app_protocol_request(&base_path, &request).unwrap_or_else(|err| tauri::http::Response::builder()
-                        .status(404)
-                        .header("Content-Type", "text/plain; charset=utf-8")
-                        .body(format!("sage-app error: {err}").into_bytes())
-                        .expect("failed to build error response"))
-                })
-            .invoke_handler(builder.invoke_handler())
+            apps::handle_app_protocol_request(&base_path, &request).unwrap_or_else(|err| tauri::http::Response::builder()
+                .status(404)
+                .header("Content-Type", "text/plain; charset=utf-8")
+                .body(format!("sage-app error: {err}").into_bytes())
+                .expect("failed to build error response"))
+        })
+        .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
             let path = app.path().app_data_dir()?;

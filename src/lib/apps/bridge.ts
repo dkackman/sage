@@ -4,6 +4,8 @@ import type {
   SageBridgeFetchBatchRequest,
   SageBridgeFetchRequest,
   SageBridgeFetchResponse,
+  SageStorageDatabaseDescription,
+  SageStorageValueRecord,
 } from '@/bindings';
 
 export interface SageBridgeRequest {
@@ -490,6 +492,7 @@ export async function handleBridgeRequest(
           id: ctx.app.id,
           name: ctx.app.name,
           version: ctx.app.version,
+          permissions: ctx.app.grantedPermissions,
         });
 
       case 'sage.getPermissions':
@@ -555,6 +558,130 @@ export async function handleBridgeRequest(
           request.id,
           request.params as SageBridgeWebSocketCloseRequest,
         );
+
+      case 'storage.openDatabase': {
+        const response = await invoke<{ name: string; version: number }>(
+          'storage_open_database',
+          {
+            appId: ctx.app.id,
+            req: request.params,
+          },
+        );
+
+        return success(request.id, response);
+      }
+
+      case 'storage.deleteDatabase': {
+        const dbName = request.params as string;
+
+        await invoke('storage_delete_database', {
+          appId: ctx.app.id,
+          dbName,
+        });
+
+        return success(request.id, undefined);
+      }
+
+      case 'storage.describeDatabase': {
+        const dbName = request.params as string;
+
+        const response = await invoke<SageStorageDatabaseDescription>(
+          'storage_describe_database',
+          {
+            appId: ctx.app.id,
+            dbName,
+          },
+        );
+
+        return success(request.id, response);
+      }
+
+      case 'storage.createObjectStore': {
+        await invoke('storage_create_object_store', {
+          appId: ctx.app.id,
+          req: request.params,
+        });
+
+        return success(request.id, undefined);
+      }
+
+      case 'storage.createIndex': {
+        await invoke('storage_create_index', {
+          appId: ctx.app.id,
+          req: request.params,
+        });
+
+        return success(request.id, undefined);
+      }
+
+      case 'storage.get': {
+        const response = await invoke<string | null>('storage_get', {
+          appId: ctx.app.id,
+          req: request.params,
+        });
+
+        return success(request.id, response);
+      }
+
+      case 'storage.put': {
+        await invoke('storage_put', {
+          appId: ctx.app.id,
+          req: request.params,
+        });
+
+        return success(request.id, undefined);
+      }
+
+      case 'storage.delete': {
+        await invoke('storage_delete', {
+          appId: ctx.app.id,
+          req: request.params,
+        });
+
+        return success(request.id, undefined);
+      }
+
+      case 'storage.clear': {
+        await invoke('storage_clear', {
+          appId: ctx.app.id,
+          req: request.params,
+        });
+
+        return success(request.id, undefined);
+      }
+
+      case 'storage.count': {
+        const response = await invoke<number>('storage_count', {
+          appId: ctx.app.id,
+          req: request.params,
+        });
+
+        return success(request.id, response);
+      }
+
+      case 'storage.getAll': {
+        const response = await invoke<SageStorageValueRecord[]>(
+          'storage_get_all',
+          {
+            appId: ctx.app.id,
+            req: request.params,
+          },
+        );
+
+        return success(request.id, response);
+      }
+
+      case 'storage.getAllFromIndex': {
+        const response = await invoke<SageStorageValueRecord[]>(
+          'storage_get_all_from_index',
+          {
+            appId: ctx.app.id,
+            req: request.params,
+          },
+        );
+
+        return success(request.id, response);
+      }
 
       default:
         return failure(

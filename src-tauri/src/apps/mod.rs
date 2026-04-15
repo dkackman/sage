@@ -8,5 +8,6 @@ pub mod bridge;
 pub mod limits;
 pub mod manifest;
 pub mod snapshot;
+pub mod storage;
 
 pub use protocol::handle_app_protocol_request;
