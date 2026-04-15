@@ -483,7 +483,8 @@ fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
     let app_id = html_escape_json_string(&app.id);
     let app_name = html_escape_json_string(&app.name);
     let app_version = html_escape_json_string(&app.version);
-    let permissions = serde_json::to_string(&app.permissions).unwrap_or_else(|_| "{}".to_string());
+    let permissions =
+        serde_json::to_string(&app.permissions).unwrap_or_else(|_| "{}".to_string());
 
     format!(
         r#"<script>
@@ -495,33 +496,44 @@ fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
     permissions: {permissions},
   }};
 
+  const tauri = window.__TAURI__;
+  if (!tauri || !tauri.event || !tauri.webview) {{
+    console.warn("Sage bootstrap: Tauri global API is unavailable");
+    return;
+  }}
+
+  const currentWebview = tauri.webview.getCurrentWebview();
+  const sourceLabel = currentWebview.label;
+
   function callHost(method, params) {{
-    return new Promise((resolve, reject) => {{
+    return new Promise(async (resolve, reject) => {{
       const id = `sage-${{Date.now()}}-${{Math.random().toString(36).slice(2)}}`;
 
-      function onMessage(event) {{
-        const data = event.data;
+      const unlisten = await currentWebview.listen('sage-bridge:response', (event) => {{
+        const data = event.payload;
         if (!data || data.channel !== 'sage-bridge' || data.id !== id) {{
           return;
         }}
 
-        window.removeEventListener('message', onMessage);
+        unlisten();
 
         if (data.ok) {{
           resolve(data.result);
         }} else {{
           reject(new Error(data.error?.message || 'Unknown Sage bridge error'));
         }}
-      }}
+      }});
 
-      window.addEventListener('message', onMessage);
-
-      window.parent.postMessage({{
-        channel: 'sage-bridge',
-        id,
-        method,
-        params,
-      }}, '*');
+      await currentWebview.emitTo('main', 'sage-bridge:request', {{
+        sourceLabel,
+        appId: __sageAppInfo.id,
+        request: {{
+          channel: 'sage-bridge',
+          id,
+          method,
+          params
+        }}
+      }});
     }});
   }}
 
