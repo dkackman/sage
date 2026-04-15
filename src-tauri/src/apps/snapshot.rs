@@ -13,6 +13,24 @@ use crate::apps::{
     types::{InstalledSageAppSnapshot, SageAppPackageManifest},
 };
 
+fn is_local_dev_host(host: &str) -> bool {
+    matches!(host.to_ascii_lowercase().as_str(), "localhost" | "127.0.0.1" | "::1")
+}
+
+fn should_allow_invalid_certs(url: &Url) -> bool {
+    matches!(url.scheme(), "https") && url.host_str().map(is_local_dev_host).unwrap_or(false)
+}
+
+fn client_for_url(url: &Url) -> AnyResult<reqwest::Client> {
+    let mut builder = reqwest::Client::builder();
+
+    if should_allow_invalid_certs(url) {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+
+    builder.build().context("failed to build HTTP client")
+}
+
 fn sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
@@ -28,14 +46,27 @@ pub fn snapshot_dir_for_hash(install_dir: &Path, manifest_hash: &str) -> PathBuf
 }
 
 pub async fn fetch_url_bytes(url: &str, max_size: u64) -> AnyResult<Vec<u8>> {
-    let response = reqwest::Client::new()
-        .get(url)
+    let parsed = Url::parse(url).with_context(|| format!("invalid URL {}", url))?;
+    let client = client_for_url(&parsed)?;
+
+    let response = client
+        .get(parsed.clone())
         .send()
         .await
         .with_context(|| format!("failed to GET {}", url))?;
 
     if !response.status().is_success() {
         return Err(anyhow!("GET {} returned HTTP {}", url, response.status()));
+    }
+
+    if let Some(content_length) = response.content_length() {
+        if content_length > max_size {
+            return Err(anyhow!(
+                "response from {} exceeds size limit {}",
+                url,
+                max_size
+            ));
+        }
     }
 
     let bytes = response.bytes().await?;
