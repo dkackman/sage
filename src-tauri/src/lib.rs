@@ -143,13 +143,13 @@ pub fn run() {
             commands::download_cni_offercode,
             commands::get_logs,
             commands::is_asset_owned,
-            apps::list_installed_apps,
-            apps::preview_app_zip,
-            apps::install_app_zip,
-            apps::uninstall_app,
-            apps::bridge_fetch_http,
-            apps::bridge_fetch_http_batch,
-            apps::bridge_fetch_http_batch_stream,
+            apps::install::list_installed_apps,
+            apps::install::preview_app_zip,
+            apps::install::install_app_zip,
+            apps::install::uninstall_app,
+            apps::bridge::fetch::bridge_fetch_http,
+            apps::bridge::batch::bridge_fetch_http_batch,
+            apps::bridge::batch::bridge_fetch_http_batch_stream,
         ])
         .events(collect_events![SyncEvent]);
 
