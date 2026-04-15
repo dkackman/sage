@@ -1,17 +1,33 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
+import type {
   InstalledSageApp,
   ListedSageApp,
-  SageAppPackageManifest,
   SageAppUrlPreview,
   SageGrantedPermissions,
 } from '@/bindings.ts';
+
+type UpdateAvailabilityMap = Record<string, SageAppUrlPreview | null>;
 
 export function useApps() {
   const [apps, setApps] = useState<ListedSageApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updateAvailability, setUpdateAvailability] =
+    useState<UpdateAvailabilityMap>({});
+  const [busyAppIds, setBusyAppIds] = useState<Record<string, boolean>>({});
+
+  const setBusy = useCallback((appId: string, busy: boolean) => {
+    setBusyAppIds((prev) => {
+      if (busy) {
+        return { ...prev, [appId]: true };
+      }
+
+      return Object.fromEntries(
+        Object.entries(prev).filter(([key]) => key !== appId),
+      );
+    });
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -30,18 +46,6 @@ export function useApps() {
     void refresh();
   }, [refresh]);
 
-  const previewAppZip = useCallback(async (zipPath: string) => {
-    return await invoke<SageAppPackageManifest>('preview_app_zip', {
-      zipPath,
-    });
-  }, []);
-
-  const previewAppUrl = useCallback(async (appUrl: string) => {
-    return await invoke<SageAppUrlPreview>('preview_app_url', {
-      appUrl,
-    });
-  }, []);
-
   const installApp = useCallback(
     async (zipPath: string, permissions: SageGrantedPermissions) => {
       await invoke<InstalledSageApp>('install_app_zip', {
@@ -53,20 +57,14 @@ export function useApps() {
     [refresh],
   );
 
-  const installAppUrl = useCallback(
-    async (appUrl: string, permissions: SageGrantedPermissions) => {
-      await invoke<InstalledSageApp>('install_app_url', {
-        appUrl,
-        grantedPermissions: permissions,
-      });
-      await refresh();
-    },
-    [refresh],
-  );
-
   const uninstallApp = useCallback(
     async (appId: string) => {
       await invoke('uninstall_app', { appId });
+      setUpdateAvailability((prev) => {
+        return Object.fromEntries(
+          Object.entries(prev).filter(([key]) => key !== appId),
+        );
+      });
       await refresh();
     },
     [refresh],
@@ -74,7 +72,7 @@ export function useApps() {
 
   const getApp = useCallback(
     (appId: string): InstalledSageApp | undefined => {
-      const app = apps.find((app) => app.id === appId);
+      const app = apps.find((entry) => entry.id === appId);
       return app?.kind === 'installed' ? app : undefined;
     },
     [apps],
@@ -99,17 +97,131 @@ export function useApps() {
     });
   }, [apps]);
 
+  const checkForUpdate = useCallback(
+    async (appId: string, forceRefresh = true) => {
+      try {
+        setBusy(appId, true);
+        const preview = await invoke<SageAppUrlPreview | null>(
+          'check_app_update',
+          { appId },
+        );
+
+        setUpdateAvailability((prev) => ({
+          ...prev,
+          [appId]: preview,
+        }));
+
+        if (forceRefresh) {
+          await refresh();
+        }
+
+        return preview;
+      } finally {
+        setBusy(appId, false);
+      }
+    },
+    [refresh, setBusy],
+  );
+
+  const downloadUpdate = useCallback(
+    async (appId: string) => {
+      try {
+        setBusy(appId, true);
+        const installed = await invoke<InstalledSageApp>(
+          'download_app_update',
+          {
+            appId,
+          },
+        );
+
+        setUpdateAvailability((prev) => ({
+          ...prev,
+          [appId]: null,
+        }));
+
+        await refresh();
+        return installed;
+      } finally {
+        setBusy(appId, false);
+      }
+    },
+    [refresh, setBusy],
+  );
+
+  const applyUpdate = useCallback(
+    async (appId: string, grantedPermissions: SageGrantedPermissions) => {
+      try {
+        setBusy(appId, true);
+        const installed = await invoke<InstalledSageApp>('apply_app_update', {
+          appId,
+          grantedPermissions,
+        });
+
+        setUpdateAvailability((prev) => ({
+          ...prev,
+          [appId]: null,
+        }));
+
+        await refresh();
+        return installed;
+      } finally {
+        setBusy(appId, false);
+      }
+    },
+    [refresh, setBusy],
+  );
+
+  useEffect(() => {
+    const urlApps = apps.filter(
+      (entry) => entry.kind === 'installed' && entry.source?.kind === 'url',
+    );
+
+    if (urlApps.length === 0) {
+      return;
+    }
+
+    const intervalId = window.setInterval(
+      () => {
+        urlApps.forEach((entry) => {
+          if (busyAppIds[entry.id]) {
+            return;
+          }
+
+          void invoke<SageAppUrlPreview | null>('check_app_update', {
+            appId: entry.id,
+          })
+            .then((preview) => {
+              setUpdateAvailability((prev) => ({
+                ...prev,
+                [entry.id]: preview,
+              }));
+            })
+            .catch(() => {
+              // intentionally quiet
+            });
+        });
+      },
+      10 * 60 * 1000,
+    );
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [apps, busyAppIds]);
+
   return {
     apps: sortedApps,
     loading,
     error,
     refresh,
-    previewAppZip,
-    previewAppUrl,
     installApp,
-    installAppUrl,
     uninstallApp,
     isInstalled,
     getApp,
+    checkForUpdate,
+    downloadUpdate,
+    applyUpdate,
+    updateAvailability,
+    busyAppIds,
   };
 }

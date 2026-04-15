@@ -94,6 +94,22 @@ pub struct InstalledSageAppSnapshot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct InstalledSageAppPendingUpdate {
+    #[serde(rename = "appUrl", alias = "app_url")]
+    pub app_url: String,
+
+    #[serde(rename = "manifestUrl", alias = "manifest_url")]
+    pub manifest_url: String,
+
+    #[serde(rename = "manifestHash", alias = "manifest_hash")]
+    pub manifest_hash: String,
+
+    pub manifest: SageAppPackageManifest,
+
+    pub snapshot: InstalledSageAppSnapshot,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum InstalledSageAppSource {
     Zip,
@@ -130,6 +146,9 @@ pub struct InstalledSageApp {
 
     #[serde(rename = "activeSnapshot", alias = "active_snapshot")]
     pub active_snapshot: InstalledSageAppSnapshot,
+
+    #[serde(rename = "pendingUpdate", alias = "pending_update")]
+    pub pending_update: Option<InstalledSageAppPendingUpdate>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

@@ -374,6 +374,15 @@ async installAppZip(zipPath: string, grantedPermissions: SageGrantedPermissions)
 async installAppUrl(appUrl: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
     return await TAURI_INVOKE("install_app_url", { appUrl, grantedPermissions });
 },
+async checkAppUpdate(appId: string) : Promise<SageAppUrlPreview | null> {
+    return await TAURI_INVOKE("check_app_update", { appId });
+},
+async downloadAppUpdate(appId: string) : Promise<InstalledSageApp> {
+    return await TAURI_INVOKE("download_app_update", { appId });
+},
+async applyAppUpdate(appId: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
+    return await TAURI_INVOKE("apply_app_update", { appId, grantedPermissions });
+},
 async uninstallApp(appId: string) : Promise<null> {
     return await TAURI_INVOKE("uninstall_app", { appId });
 },
@@ -1722,7 +1731,8 @@ index: number }
  */
 export type IncreaseDerivationIndexResponse = Record<string, never>
 export type InheritedNetwork = "mainnet" | "testnet11"
-export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot }
+export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot; pendingUpdate: InstalledSageAppPendingUpdate | null }
+export type InstalledSageAppPendingUpdate = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest; snapshot: InstalledSageAppSnapshot }
 export type InstalledSageAppSnapshot = { manifestHash: string; snapshotDir: string; totalBytes: number; manifest: SageAppPackageManifest }
 export type InstalledSageAppSource = { kind: "zip" } | { kind: "url"; appUrl: string; manifestUrl: string }
 /**

@@ -33,6 +33,33 @@ interface Props {
   ) => Promise<void>;
 }
 
+interface NormalizedPermissions {
+  network: SageNetworkPermissionEntry[];
+  persistent_storage: { required?: boolean } | null;
+}
+
+interface NormalizedManifest extends Omit<
+  SageAppPackageManifest,
+  'permissions'
+> {
+  permissions: NormalizedPermissions;
+}
+
+function normalizeManifestPermissions(
+  manifest: SageAppPackageManifest,
+): NormalizedManifest {
+  const permissions = manifest.permissions ?? {};
+
+  return {
+    ...manifest,
+    permissions: {
+      ...permissions,
+      network: permissions.network ?? [],
+      persistent_storage: permissions.persistent_storage ?? null,
+    },
+  };
+}
+
 function networkEntryKey(entry: { scheme: string; host: string }): string {
   return `${entry.scheme}://${entry.host}`;
 }
@@ -71,7 +98,11 @@ export function InstallAppForm({
 
   const manifest = useMemo(() => {
     if (!source) return null;
-    return source.kind === 'zip' ? source.manifest : source.preview.manifest;
+
+    const raw =
+      source.kind === 'zip' ? source.manifest : source.preview.manifest;
+
+    return normalizeManifestPermissions(raw);
   }, [source]);
 
   const [grantedNetworkKeys, setGrantedNetworkKeys] = useState<string[]>([]);
@@ -80,7 +111,7 @@ export function InstallAppForm({
 
   const sortedNetworkEntries = useMemo(() => {
     return manifest
-      ? sortNetworkEntries(manifest.permissions.network ?? [])
+      ? sortNetworkEntries(manifest.permissions?.network ?? [])
       : [];
   }, [manifest]);
 
@@ -98,7 +129,9 @@ export function InstallAppForm({
         return;
       }
 
-      const nextManifest = await onPreviewZip(selected);
+      const nextManifest = normalizeManifestPermissions(
+        await onPreviewZip(selected),
+      );
 
       const network = nextManifest.permissions.network ?? [];
       const persistentStorage =
@@ -107,20 +140,11 @@ export function InstallAppForm({
       setSource({
         kind: 'zip',
         zipPath: selected,
-        manifest: {
-          ...nextManifest,
-          permissions: {
-            ...nextManifest.permissions,
-            network,
-            persistent_storage: persistentStorage,
-          },
-        },
+        manifest: nextManifest,
       });
 
       setGrantedNetworkKeys(network.map((entry) => networkEntryKey(entry)));
-      setPersistentStorageGranted(
-        !!nextManifest.permissions.persistent_storage,
-      );
+      setPersistentStorageGranted(!!persistentStorage);
     } catch (err) {
       setError(formatAppError(err));
     }
@@ -131,30 +155,22 @@ export function InstallAppForm({
       setError(null);
 
       const preview = await onPreviewUrl(urlInput.trim());
-      const network = preview.manifest.permissions.network ?? [];
+      const normalizedManifest = normalizeManifestPermissions(preview.manifest);
+      const network = normalizedManifest.permissions.network ?? [];
       const persistentStorage =
-        preview.manifest.permissions.persistent_storage ?? null;
+        normalizedManifest.permissions.persistent_storage ?? null;
 
       setSource({
         kind: 'url',
         appUrl: preview.appUrl,
         preview: {
           ...preview,
-          manifest: {
-            ...preview.manifest,
-            permissions: {
-              ...preview.manifest.permissions,
-              network,
-              persistent_storage: persistentStorage,
-            },
-          },
+          manifest: normalizedManifest,
         },
       });
 
       setGrantedNetworkKeys(network.map((entry) => networkEntryKey(entry)));
-      setPersistentStorageGranted(
-        !!preview.manifest.permissions.persistent_storage,
-      );
+      setPersistentStorageGranted(!!persistentStorage);
     } catch (err) {
       setError(formatAppError(err));
     }
@@ -275,18 +291,21 @@ export function InstallAppForm({
             <div className='space-y-3'>
               <h3 className='text-sm font-medium'>Permissions</h3>
 
-              {manifest?.permissions.persistent_storage ? (
+              {manifest?.permissions?.persistent_storage ? (
                 <label className='flex items-center gap-3 text-sm'>
                   <Checkbox
                     checked={persistentStorageGranted}
-                    disabled={manifest.permissions.persistent_storage.required}
+                    disabled={
+                      manifest.permissions?.persistent_storage?.required ??
+                      false
+                    }
                     onCheckedChange={(checked) => {
                       setPersistentStorageGranted(Boolean(checked));
                     }}
                   />
                   <span>
                     Persistent storage
-                    {manifest.permissions.persistent_storage.required
+                    {manifest.permissions?.persistent_storage?.required
                       ? ' (required)'
                       : ''}
                   </span>
@@ -334,7 +353,7 @@ export function InstallAppForm({
                 </div>
               ) : null}
 
-              {!manifest?.permissions.persistent_storage &&
+              {!manifest?.permissions?.persistent_storage &&
               sortedNetworkEntries.length === 0 ? (
                 <div className='text-sm text-muted-foreground'>
                   This app does not request any permissions.

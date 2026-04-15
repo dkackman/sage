@@ -15,8 +15,11 @@ import {
 import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { ArrowLeft } from 'lucide-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useAppRuntimePresence } from '@/hooks/useAppRuntimePresence.ts';
+import { invoke } from '@tauri-apps/api/core';
+import { SageAppUrlPreview } from '@/bindings.ts';
 
 function AppNotFound() {
   return (
@@ -36,6 +39,42 @@ export function AppHost() {
   const navigate = useNavigate();
 
   const app = getApp(appId);
+  const isRunning = useAppRuntimePresence(appId);
+  const [updatePreview, setUpdatePreview] = useState<null | {
+    manifest: { version: string };
+  }>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [applyingUpdate, setApplyingUpdate] = useState(false);
+
+  const handleUpdateAndReopen = async () => {
+    if (!app) {
+      return;
+    }
+
+    try {
+      setApplyingUpdate(true);
+
+      const refreshedPreview = await invoke<SageAppUrlPreview | null>(
+        'check_app_update',
+        {
+          appId: app.id,
+        },
+      );
+
+      if (refreshedPreview) {
+        await invoke('download_app_update', { appId: app.id });
+      }
+
+      await invoke('apply_app_update', {
+        appId: app.id,
+        grantedPermissions: app.grantedPermissions,
+      });
+
+      window.location.reload();
+    } finally {
+      setApplyingUpdate(false);
+    }
+  };
 
   const entrySrc = useMemo(() => {
     if (!app) {
@@ -47,6 +86,52 @@ export function AppHost() {
       : `sage-app://${app.id}/index.html`;
   }, [app]);
 
+  useEffect(() => {
+    if (!app || app.source?.kind !== 'url') {
+      setUpdatePreview(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const check = async () => {
+      try {
+        setCheckingUpdate(true);
+        const preview = await invoke<SageAppUrlPreview | null>(
+          'check_app_update',
+          {
+            appId: app.id,
+          },
+        );
+
+        if (!cancelled) {
+          setUpdatePreview(preview);
+        }
+      } catch {
+        if (!cancelled) {
+          setUpdatePreview(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setCheckingUpdate(false);
+        }
+      }
+    };
+
+    void check();
+
+    const intervalId = window.setInterval(
+      () => {
+        void check();
+      },
+      10 * 60 * 1000,
+    );
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [app]);
   useEffect(() => {
     if (!app || !entrySrc || !containerRef.current) {
       return;
@@ -214,6 +299,28 @@ export function AppHost() {
             Exit App
           </Button>
         </div>
+
+        {app.source?.kind === 'url' && updatePreview ? (
+          <Alert>
+            <AlertTitle>New version available</AlertTitle>
+            <AlertDescription className='flex items-center justify-between gap-4'>
+              <span>
+                Version {updatePreview.manifest.version} is available for this
+                app.
+              </span>
+
+              <Button
+                variant='outline'
+                disabled={checkingUpdate || applyingUpdate || !isRunning}
+                onClick={() => {
+                  void handleUpdateAndReopen();
+                }}
+              >
+                {applyingUpdate ? 'Updating...' : 'Update and reopen'}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         <div className='shrink-0 space-y-1'>
           <h1 className='text-2xl font-semibold tracking-tight'>{app.name}</h1>

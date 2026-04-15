@@ -1,84 +1,119 @@
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { InstallAppForm } from '@/components/apps/InstallAppForm';
 import { InstalledAppCard } from '@/components/apps/InstalledAppCard';
+import { CorruptedAppCard } from '@/components/apps/CorruptedAppCard';
+import { Button } from '@/components/ui/button';
 import { useApps } from '@/hooks/useApps';
-import { CorruptedAppCard } from '@/components/apps/CorruptedAppCard.tsx';
-import { SageGrantedPermissions } from '@/bindings.ts';
-import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
-import { Button } from '@/components/ui/button.tsx';
 import { Link } from 'react-router-dom';
+import { SageAppPackageManifest, SageAppUrlPreview } from '@/bindings.ts';
+import { invoke } from '@tauri-apps/api/core';
 
 export function Apps() {
   const {
     apps,
     loading,
     error,
-    previewAppZip,
-    previewAppUrl,
+    refresh,
     installApp,
-    installAppUrl,
     uninstallApp,
+    checkForUpdate,
+    downloadUpdate,
+    applyUpdate,
+    updateAvailability,
+    busyAppIds,
   } = useApps();
-  const runtimes = useAppRuntimes();
+
+  if (loading) {
+    return (
+      <div className='mx-auto w-full max-w-6xl p-4 md:p-6'>
+        <Alert>
+          <AlertTitle>Loading apps...</AlertTitle>
+          <AlertDescription>Please wait.</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
-    <div className='flex-1 overflow-auto'>
-      <div className='mx-auto w-full max-w-6xl p-4 md:p-6 space-y-8'>
-        <div className='space-y-2'>
+    <div className='mx-auto w-full max-w-6xl space-y-6 p-4 md:p-6'>
+      <div className='flex items-center justify-between gap-4'>
+        <div>
           <h1 className='text-2xl font-semibold tracking-tight'>Apps</h1>
-          <p className='text-muted-foreground'>
-            Install and manage Sage app packages.
+          <p className='text-sm text-muted-foreground'>
+            Install and manage Sage apps.
           </p>
-          <Button asChild variant='outline'>
-            <Link to='/apps/task-manager'>
-              Task Manager ({runtimes.length})
-            </Link>
-          </Button>
         </div>
 
-        <InstallAppForm
-          onPreviewZip={previewAppZip}
-          onPreviewUrl={previewAppUrl}
-          onInstallZip={installApp}
-          onInstallUrl={installAppUrl}
-        />
+        <Button asChild variant='outline'>
+          <Link to='/task-manager'>Task Manager</Link>
+        </Button>
+      </div>
 
-        <section className='space-y-4'>
-          <h2 className='text-lg font-semibold'>Installed</h2>
+      <InstallAppForm
+        onPreviewZip={(zipPath: string) =>
+          invoke<SageAppPackageManifest>('preview_app_zip', { zipPath })
+        }
+        onPreviewUrl={(appUrl: string) =>
+          invoke<SageAppUrlPreview>('preview_app_url', { appUrl })
+        }
+        onInstallZip={installApp}
+        onInstallUrl={async (appUrl, permissions) => {
+          await invoke('install_app_url', {
+            appUrl,
+            grantedPermissions: permissions,
+          });
+          await refresh();
+        }}
+      />
 
-          {loading ? (
-            <div className='rounded-lg border p-6 text-sm text-muted-foreground'>
-              Loading apps...
-            </div>
-          ) : error ? (
-            <div className='rounded-lg border border-destructive/30 p-6 text-sm text-destructive'>
-              {error}
-            </div>
-          ) : apps.length > 0 ? (
-            <div className='grid gap-4'>
-              {apps.map((app) =>
-                app.kind === 'installed' ? (
-                  <InstalledAppCard
-                    key={app.id}
-                    app={app}
-                    onUninstall={() => uninstallApp(app.id)}
-                  />
-                ) : (
-                  <CorruptedAppCard
-                    key={app.id}
-                    app={app}
-                    onRemove={() => uninstallApp(app.id)}
-                  />
-                ),
-              )}
-            </div>
-          ) : (
-            <div className='rounded-lg border p-6 text-sm text-muted-foreground'>
-              No apps installed.
-            </div>
-          )}
-        </section>
+      {error ? (
+        <Alert>
+          <AlertTitle>Apps error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className='space-y-4'>
+        {apps.length === 0 ? (
+          <Alert>
+            <AlertTitle>No apps installed</AlertTitle>
+            <AlertDescription>
+              Install a Sage app package to get started.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {apps.map((entry) => {
+          if (entry.kind === 'installed') {
+            return (
+              <InstalledAppCard
+                key={entry.id}
+                app={entry}
+                updatePreview={updateAvailability[entry.id]}
+                busy={busyAppIds[entry.id]}
+                onUninstall={() => uninstallApp(entry.id)}
+                onCheckForUpdate={async () => {
+                  await checkForUpdate(entry.id);
+                }}
+                onDownloadUpdate={async () => {
+                  await downloadUpdate(entry.id);
+                }}
+                onApplyUpdate={async () => {
+                  await applyUpdate(entry.id, entry.grantedPermissions);
+                }}
+              />
+            );
+          }
+
+          return (
+            <CorruptedAppCard
+              key={entry.id}
+              app={entry}
+              onRemove={() => uninstallApp(entry.id)}
+            />
+          );
+        })}
       </div>
     </div>
   );
 }
-
