@@ -16,13 +16,7 @@ pub fn build_app_csp(_app: &InstalledSageApp) -> String {
     let base_uri = csp_source_list(&["'none'"]);
     let form_action = csp_source_list(&["'none'"]);
 
-    let connect_src = csp_source_list(&[
-        "'self'",
-        "ipc:",
-        "ipc://localhost",
-        "http://ipc.localhost",
-        "https://ipc.localhost",
-    ]);
+    let connect_src = csp_source_list(&["'none'"]);
 
     format!(
         "default-src {default_src}; \
