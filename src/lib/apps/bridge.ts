@@ -1,4 +1,9 @@
-import { InstalledSageApp } from '@/bindings.ts';
+import { invoke } from '@tauri-apps/api/core';
+import type {
+  InstalledSageApp,
+  SageBridgeFetchRequest,
+  SageBridgeFetchResponse,
+} from '@/bindings';
 
 export interface SageBridgeRequest {
   channel: 'sage-bridge';
@@ -113,6 +118,24 @@ export async function handleBridgeRequest(
       case 'sage.getPermissions':
         return success(request.id, ctx.app.permissions);
 
+      case 'network.fetch': {
+        if (!ctx.app.permissions.network) {
+          return failure(
+            request.id,
+            'forbidden',
+            'Network access denied by Sage',
+          );
+        }
+
+        const params = request.params as SageBridgeFetchRequest;
+        const response = await invoke<SageBridgeFetchResponse>(
+          'bridge_fetch_http',
+          { req: params },
+        );
+
+        return success(request.id, response);
+      }
+
       default:
         return failure(
           request.id,
@@ -127,3 +150,4 @@ export async function handleBridgeRequest(
     return failure(request.id, 'internal_error', message);
   }
 }
+

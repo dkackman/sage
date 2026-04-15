@@ -4,8 +4,9 @@ use std::{
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
-
+use std::collections::BTreeMap;
 use anyhow::{Context, Result as AnyResult, anyhow};
+use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{State, command};
@@ -49,6 +50,26 @@ pub struct InstalledSageApp {
     pub icon_file: String,
 
     pub permissions: SageAppPermissions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SageBridgeFetchRequest {
+    pub url: String,
+    #[serde(default)]
+    pub method: Option<String>,
+    #[serde(default)]
+    pub headers: BTreeMap<String, String>,
+    #[serde(default)]
+    pub body: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SageBridgeFetchResponse {
+    pub ok: bool,
+    pub status: u16,
+    pub status_text: String,
+    pub headers: BTreeMap<String, String>,
+    pub body_text: String,
 }
 
 fn apps_root(base_path: &Path) -> PathBuf {
@@ -418,34 +439,111 @@ pub async fn uninstall_app(state: State<'_, AppState>, app_id: String) -> Result
     Ok(())
 }
 
+#[command]
+#[specta::specta]
+pub async fn bridge_fetch_http(
+    req: SageBridgeFetchRequest,
+) -> Result<SageBridgeFetchResponse> {
+    let method = req
+        .method
+        .as_deref()
+        .unwrap_or("GET")
+        .parse::<Method>()
+        .map_err(|err| io::Error::other(format!("invalid HTTP method: {err}")))?;
+
+    let parsed_url = reqwest::Url::parse(&req.url)
+        .map_err(|err| io::Error::other(format!("invalid URL: {err}")))?;
+
+    match parsed_url.scheme() {
+        "http" | "https" => {}
+        other => {
+            return Err(io::Error::other(format!(
+                "unsupported URL scheme: {other}"
+            ))
+                .into());
+        }
+    }
+
+    let client = reqwest::Client::new();
+    let mut request_builder = client.request(method, parsed_url);
+
+    for (key, value) in req.headers {
+        request_builder = request_builder.header(&key, &value);
+    }
+
+    if let Some(body) = req.body {
+        request_builder = request_builder.body(body);
+    }
+
+    let response = request_builder.send().await?;
+    let status = response.status();
+    let status_text = status
+        .canonical_reason()
+        .unwrap_or("unknown")
+        .to_string();
+
+    let mut headers = BTreeMap::new();
+    for (key, value) in response.headers() {
+        headers.insert(
+            key.to_string(),
+            value.to_str().unwrap_or_default().to_string(),
+        );
+    }
+
+    let body_text = response.text().await?;
+
+    Ok(SageBridgeFetchResponse {
+        ok: status.is_success(),
+        status: status.as_u16(),
+        status_text,
+        headers,
+        body_text,
+    })
+}
+
 fn app_install_dir(base_path: &Path, app_id: &str) -> PathBuf {
     apps_root(base_path).join(app_id)
 }
 
-fn resolve_protocol_file(base_path: &Path, app_id: &str, request_path: &str) -> AnyResult<PathBuf> {
+fn resolve_protocol_file(
+    base_path: &Path,
+    app_id: &str,
+    request_path: &str,
+) -> AnyResult<PathBuf> {
     let install_dir = app_install_dir(base_path, app_id);
 
-    let path = if request_path.is_empty() || request_path == "/" || request_path == "/index.html" {
-        install_dir.join("dist").join("index.html")
-    } else if request_path == "/icon.png" {
-        install_dir.join("icon.png")
-    } else {
-        let trimmed = request_path.trim_start_matches('/');
+    if request_path == "/__sage_bootstrap__.js" {
+        return Ok(install_dir.join("__virtual_sage_bootstrap__.js"));
+    }
 
-        if trimmed.contains("..") {
-            return Err(anyhow!("invalid app path"));
-        }
+    let path =
+        if request_path.is_empty() || request_path == "/" || request_path == "/index.html" {
+            install_dir.join("dist").join("index.html")
+        } else if request_path == "/icon.png" {
+            install_dir.join("icon.png")
+        } else {
+            let trimmed = request_path.trim_start_matches('/');
 
-        install_dir.join("dist").join(trimmed)
-    };
+            if trimmed.contains("..") {
+                return Err(anyhow!("invalid app path"));
+            }
 
-    let canonical_install_dir = install_dir
-        .canonicalize()
-        .with_context(|| format!("failed to canonicalize install dir {}", install_dir.display()))?;
+            install_dir.join("dist").join(trimmed)
+        };
 
-    let canonical_path = path
-        .canonicalize()
-        .with_context(|| format!("failed to canonicalize requested path {}", path.display()))?;
+    let canonical_install_dir = install_dir.canonicalize().with_context(|| {
+        format!(
+            "failed to canonicalize install dir {}",
+            install_dir.display()
+        )
+    })?;
+
+    let canonical_path = path.canonicalize().with_context(|| {
+        format!(
+            "failed to canonicalize requested path {}",
+            path.display()
+        )
+    })?;
 
     if !canonical_path.starts_with(&canonical_install_dir) {
         return Err(anyhow!("requested path escapes app directory"));
@@ -473,12 +571,21 @@ pub fn handle_app_protocol_request(
     let file_path = resolve_protocol_file(base_path, app_id, request_path)?;
     let app = read_installed_app_by_id(base_path, app_id)?;
 
+    if request_path == "/__sage_bootstrap__.js" {
+        let js = build_sage_bootstrap(&app);
+
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/javascript; charset=utf-8")
+            .body(js.into_bytes())
+            .map_err(|err| anyhow!("failed to build protocol response: {err}"));
+    }
+
     if request_path.is_empty() || request_path == "/" || request_path == "/index.html" {
         let html = fs::read_to_string(&file_path)
             .with_context(|| format!("failed to read {}", file_path.display()))?;
 
-        let injected = inject_bootstrap_into_index_html(&html, &app);
-
+        let injected = inject_bootstrap_into_index_html(&html);
         let csp = build_app_csp(&app);
 
         return Response::builder()
@@ -516,8 +623,7 @@ fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
         serde_json::to_string(&app.permissions).unwrap_or_else(|_| "{}".to_string());
 
     format!(
-        r#"<script>
-(function () {{
+        r#"(function () {{
   const __sageAppInfo = {{
     id: {app_id},
     name: {app_name},
@@ -605,25 +711,34 @@ fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
     async getPermissions() {{
       return callHost('sage.getPermissions');
     }},
+    async fetch(input) {{
+      const params = {{
+        url: input?.url,
+        method: input?.method ?? 'GET',
+        headers: input?.headers ?? {{}},
+        body: input?.body ?? null,
+      }};
+      return callHost('network.fetch', params);
+    }},
     appInfo: __sageAppInfo,
   }};
 }})();
-</script>"#
+"#
     )
 }
 
-fn inject_bootstrap_into_index_html(html: &str, app: &InstalledSageApp) -> String {
-    let bootstrap = build_sage_bootstrap(app);
+fn inject_bootstrap_into_index_html(html: &str) -> String {
+    let bootstrap_tag = r#"<script src="/__sage_bootstrap__.js"></script>"#;
 
     if let Some(idx) = html.find("<head>") {
         let insert_at = idx + "<head>".len();
-        let mut out = String::with_capacity(html.len() + bootstrap.len());
+        let mut out = String::with_capacity(html.len() + bootstrap_tag.len());
         out.push_str(&html[..insert_at]);
-        out.push_str(&bootstrap);
+        out.push_str(bootstrap_tag);
         out.push_str(&html[insert_at..]);
         out
     } else {
-        format!("{bootstrap}{html}")
+        format!("{bootstrap_tag}{html}")
     }
 }
 
@@ -638,7 +753,7 @@ fn csp_source_list(items: &[&str]) -> String {
 
 fn build_app_csp(app: &InstalledSageApp) -> String {
     let default_src = csp_source_list(&["'self'"]);
-    let script_src = csp_source_list(&["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"]);
+    let script_src = csp_source_list(&["'self'", "'wasm-unsafe-eval'"]);
     let style_src = csp_source_list(&["'self'", "'unsafe-inline'"]);
     let img_src = csp_source_list(&["'self'", "data:", "blob:"]);
     let font_src = csp_source_list(&["'self'", "data:"]);

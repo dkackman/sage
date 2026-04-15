@@ -147,6 +147,7 @@ pub fn run() {
             apps::preview_app_zip,
             apps::install_app_zip,
             apps::uninstall_app,
+            apps::bridge_fetch_http,
         ])
         .events(collect_events![SyncEvent]);
 

@@ -370,6 +370,9 @@ async installAppZip(zipPath: string, grantedPermissions: SageAppPermissions) : P
 },
 async uninstallApp(appId: string) : Promise<null> {
     return await TAURI_INVOKE("uninstall_app", { appId });
+},
+async bridgeFetchHttp(req: SageBridgeFetchRequest) : Promise<SageBridgeFetchResponse> {
+    return await TAURI_INVOKE("bridge_fetch_http", { req });
 }
 }
 
@@ -2170,6 +2173,8 @@ export type ResyncCatResponse = Record<string, never>
 export type ResyncResponse = Record<string, never>
 export type SageAppPackageManifest = { name: string; version: string; permissions: SageAppPermissions; required_permissions?: string[] }
 export type SageAppPermissions = { network: boolean; persistentStorage: boolean }
+export type SageBridgeFetchRequest = { url: string; method?: string | null; headers?: Partial<{ [key in string]: string }>; body?: string | null }
+export type SageBridgeFetchResponse = { ok: boolean; status: number; status_text: string; headers: Partial<{ [key in string]: string }>; body_text: string }
 /**
  * Save a theme NFT to the wallet
  */
