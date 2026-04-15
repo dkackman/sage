@@ -5,14 +5,18 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use anyhow::{Context, Result as AnyResult, anyhow};
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use tauri::{State, command};
+use tauri::{State, command, Emitter};
 use zip::ZipArchive;
 use tauri::http::{Response, StatusCode};
-
+use tokio::sync::Semaphore;
+use uuid::Uuid;
 use crate::{app_state::AppState, error::Result};
 
 const INSTALLED_METADATA_FILE: &str = ".sage-installed.json";
@@ -659,15 +663,13 @@ pub async fn uninstall_app(state: State<'_, AppState>, app_id: String) -> Result
     Ok(())
 }
 
-#[command]
-#[specta::specta]
-pub async fn bridge_fetch_http(
-    state: State<'_, AppState>,
+async fn bridge_fetch_http_inner(
+    app_state: AppState,
     app_id: String,
     req: SageBridgeFetchRequest,
 ) -> Result<SageBridgeFetchResponse> {
     let base_path = {
-        let state = state.lock().await;
+        let state = app_state.lock().await;
         state.path.clone()
     };
 
@@ -747,6 +749,16 @@ pub async fn bridge_fetch_http(
 
 #[command]
 #[specta::specta]
+pub async fn bridge_fetch_http(
+    state: State<'_, AppState>,
+    app_id: String,
+    req: SageBridgeFetchRequest,
+) -> Result<SageBridgeFetchResponse> {
+    bridge_fetch_http_inner(state.inner().clone(), app_id, req).await
+}
+
+#[command]
+#[specta::specta]
 pub async fn bridge_fetch_http_batch(
     state: State<'_, AppState>,
     app_id: String,
@@ -766,6 +778,83 @@ pub async fn bridge_fetch_http_batch(
     }
 
     Ok(results)
+}
+
+#[command]
+#[specta::specta]
+pub async fn bridge_fetch_http_batch_stream(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    app_id: String,
+    source_label: String,
+    req: SageBridgeFetchBatchRequest,
+) -> Result<String> {
+    let batch_id = format!("batch-{}", Uuid::new_v4());
+    let batch_id_for_task = batch_id.clone(); // ✅ fix move
+
+    let max = req.max_concurrency.unwrap_or(8);
+    let semaphore = Arc::new(Semaphore::new(max));
+
+    // ✅ clone inner state (important)
+    let app_state = state.inner().clone();
+
+    tauri::async_runtime::spawn(async move {
+        let mut futures = FuturesUnordered::new();
+
+        for (index, request) in req.requests.into_iter().enumerate() {
+            let permit = semaphore.clone().acquire_owned().await.unwrap();
+
+            let app_handle = app_handle.clone();
+            let app_id = app_id.clone();
+            let source_label = source_label.clone();
+            let batch_id = batch_id_for_task.clone();
+            let app_state = app_state.clone();
+
+            futures.push(async move {
+                let _permit = permit;
+
+                let result = bridge_fetch_http_inner(
+                    app_state.clone(),
+                    app_id,
+                    request,
+                )
+                    .await;
+
+                let payload = match result {
+                    Ok(res) => serde_json::json!({
+                        "batchId": batch_id,
+                        "index": index,
+                        "ok": true,
+                        "result": res
+                    }),
+                    Err(err) => serde_json::json!({
+                        "batchId": batch_id,
+                        "index": index,
+                        "ok": false,
+                        "error": err.to_string()
+                    }),
+                };
+
+                let _ = app_handle.emit_to(
+                    &source_label,
+                    "sage-bridge:batch:result",
+                    payload,
+                );
+            });
+        }
+
+        while futures.next().await.is_some() {}
+
+        let _ = app_handle.emit_to(
+            &source_label,
+            "sage-bridge:batch:done",
+            serde_json::json!({
+                "batchId": batch_id_for_task
+            }),
+        );
+    });
+
+    Ok(batch_id)
 }
 
 fn app_install_dir(base_path: &Path, app_id: &str) -> PathBuf {
@@ -1011,6 +1100,68 @@ fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
         max_concurrency: input?.max_concurrency ?? null,
       }};
       return callHost('network.fetchBatch', params);
+    }},
+    async fetchBatchStream(input) {{
+      const params = {{
+        requests: input?.requests ?? [],
+        max_concurrency: input?.max_concurrency ?? null,
+      }};
+
+      const batchId = await callHost('network.fetchBatchStream', params);
+
+      const listeners = {{
+        result: [],
+        done: [],
+      }};
+
+      let closed = false;
+
+      const unlisten = await currentWebview.listen(
+        'sage-bridge:batch:result',
+        (event) => {{
+          const data = event.payload;
+          if (!data || data.batchId !== batchId) return;
+
+          listeners.result.forEach((fn) => fn(data));
+        }}
+      );
+
+      const unlistenDone = await currentWebview.listen(
+        'sage-bridge:batch:done',
+        (event) => {{
+          const data = event.payload;
+          if (!data || data.batchId !== batchId) return;
+
+          listeners.done.forEach((fn) => fn());
+
+          cleanup();
+        }}
+      );
+
+      function cleanup() {{
+        if (closed) return;
+        closed = true;
+        unlisten();
+        unlistenDone();
+      }}
+
+      return {{
+        batchId,
+
+        onResult(fn) {{
+          listeners.result.push(fn);
+          return this;
+        }},
+
+        onDone(fn) {{
+          listeners.done.push(fn);
+          return this;
+        }},
+
+        dispose() {{
+          cleanup();
+        }},
+      }};
     }},
     async openWebSocket(input) {{
       const params = {{

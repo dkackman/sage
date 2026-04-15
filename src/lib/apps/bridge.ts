@@ -523,6 +523,18 @@ export async function handleBridgeRequest(
         return success(request.id, response);
       }
 
+      case 'network.fetchBatchStream': {
+        const params = request.params as SageBridgeFetchBatchRequest;
+
+        const batchId = await invoke<string>('bridge_fetch_http_batch_stream', {
+          appId: ctx.app.id,
+          sourceLabel: request.id,
+          req: params,
+        });
+
+        return success(request.id, { batchId });
+      }
+
       case 'network.wsOpen':
         return handleWebSocketOpen(
           ctx,

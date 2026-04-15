@@ -149,6 +149,7 @@ pub fn run() {
             apps::uninstall_app,
             apps::bridge_fetch_http,
             apps::bridge_fetch_http_batch,
+            apps::bridge_fetch_http_batch_stream,
         ])
         .events(collect_events![SyncEvent]);
 

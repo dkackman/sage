@@ -376,6 +376,9 @@ async bridgeFetchHttp(appId: string, req: SageBridgeFetchRequest) : Promise<Sage
 },
 async bridgeFetchHttpBatch(appId: string, req: SageBridgeFetchBatchRequest) : Promise<SageBridgeFetchResponse[]> {
     return await TAURI_INVOKE("bridge_fetch_http_batch", { appId, req });
+},
+async bridgeFetchHttpBatchStream(appId: string, sourceLabel: string, req: SageBridgeFetchBatchRequest) : Promise<string> {
+    return await TAURI_INVOKE("bridge_fetch_http_batch_stream", { appId, sourceLabel, req });
 }
 }
 
