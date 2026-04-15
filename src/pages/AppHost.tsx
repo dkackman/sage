@@ -1,6 +1,5 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { useApps } from '@/hooks/useApps';
 import {
   handleBridgeRequest,
   isBridgeRequest,
@@ -15,11 +14,10 @@ import {
 import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { ArrowLeft } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useAppRuntimePresence } from '@/hooks/useAppRuntimePresence.ts';
-import { invoke } from '@tauri-apps/api/core';
-import { SageAppUrlPreview } from '@/bindings.ts';
+import { useAppRuntimePresence } from '@/hooks/useAppRuntimePresence';
+import { useApps } from '@/contexts/AppsContext';
 
 function AppNotFound() {
   return (
@@ -34,49 +32,34 @@ function AppNotFound() {
 
 export function AppHost() {
   const { appId = '' } = useParams();
-  const { getApp, loading } = useApps();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
 
+  const {
+    getApp,
+    loading,
+    checkForUpdate,
+    performAppUpdate,
+    updateAvailability,
+    busyAppIds,
+  } = useApps();
+
   const app = getApp(appId);
   const isRunning = useAppRuntimePresence(appId);
-  const [updatePreview, setUpdatePreview] = useState<null | {
-    manifest: { version: string };
-  }>(null);
-  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [applyingUpdate, setApplyingUpdate] = useState(false);
 
-  const handleUpdateAndReopen = async () => {
-    if (!app) {
-      return;
-    }
-
-    try {
-      setApplyingUpdate(true);
-
-      const refreshedPreview = await invoke<SageAppUrlPreview | null>(
-        'check_app_update',
-        {
-          appId: app.id,
-        },
-      );
-
-      if (refreshedPreview) {
-        await invoke('download_app_update', { appId: app.id });
-      }
-
-      await invoke('apply_app_update', {
-        appId: app.id,
-        grantedPermissions: app.grantedPermissions,
-      });
-
-      window.location.reload();
-    } finally {
-      setApplyingUpdate(false);
-    }
-  };
+  const checkingUpdate = busyAppIds[appId] ?? false;
+  const updatePreview = updateAvailability[appId] ?? null;
 
   const entrySrc = useMemo(() => {
+    if (!app) {
+      return null;
+    }
+
+    return `sage-app://${app.id}/index.html`;
+  }, [app]);
+
+  const sourceDisplayUrl = useMemo(() => {
     if (!app) {
       return null;
     }
@@ -86,9 +69,62 @@ export function AppHost() {
       : `sage-app://${app.id}/index.html`;
   }, [app]);
 
+  const syncBounds = useCallback(async (installedAppId: string) => {
+    const webview = await getRuntimeWebview(installedAppId);
+    const container = containerRef.current;
+
+    if (!webview || !container) {
+      return;
+    }
+
+    const rect = container.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+    const x = Math.round(rect.left);
+    const y = Math.round(rect.top);
+
+    await webview.setPosition(new LogicalPosition(x, y));
+    await webview.setSize(new LogicalSize(width, height));
+  }, []);
+
+  const scheduleSyncBounds = useCallback(
+    (installedAppId: string) => {
+      requestAnimationFrame(() => {
+        void syncBounds(installedAppId).catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+
+          if (message.includes('webview not found')) {
+            return;
+          }
+
+          console.error('Failed to sync embedded app webview bounds:', err);
+        });
+      });
+    },
+    [syncBounds],
+  );
+
+  const handleUpdateAndReopen = useCallback(async () => {
+    if (!app) {
+      return;
+    }
+
+    try {
+      setApplyingUpdate(true);
+
+      await performAppUpdate(app.id, {
+        restartIfRunning: true,
+        visibleAfterRestart: true,
+      });
+
+      scheduleSyncBounds(app.id);
+    } finally {
+      setApplyingUpdate(false);
+    }
+  }, [app, performAppUpdate, scheduleSyncBounds]);
+
   useEffect(() => {
     if (!app || app.source?.kind !== 'url') {
-      setUpdatePreview(null);
       return;
     }
 
@@ -96,25 +132,9 @@ export function AppHost() {
 
     const check = async () => {
       try {
-        setCheckingUpdate(true);
-        const preview = await invoke<SageAppUrlPreview | null>(
-          'check_app_update',
-          {
-            appId: app.id,
-          },
-        );
-
-        if (!cancelled) {
-          setUpdatePreview(preview);
-        }
+        await checkForUpdate(app.id, false);
       } catch {
-        if (!cancelled) {
-          setUpdatePreview(null);
-        }
-      } finally {
-        if (!cancelled) {
-          setCheckingUpdate(false);
-        }
+        // keep quiet
       }
     };
 
@@ -122,7 +142,9 @@ export function AppHost() {
 
     const intervalId = window.setInterval(
       () => {
-        void check();
+        if (!cancelled) {
+          void check();
+        }
       },
       10 * 60 * 1000,
     );
@@ -131,7 +153,8 @@ export function AppHost() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [app]);
+  }, [app, checkForUpdate]);
+
   useEffect(() => {
     if (!app || !entrySrc || !containerRef.current) {
       return;
@@ -153,46 +176,24 @@ export function AppHost() {
       delayedSyncTimers = [];
     };
 
-    const syncBounds = async () => {
-      const webview = await getRuntimeWebview(installedApp.id);
-      const container = containerRef.current;
-
-      if (disposed || !webview || !container) {
-        return;
-      }
-
-      const rect = container.getBoundingClientRect();
-      const width = Math.max(1, Math.round(rect.width));
-      const height = Math.max(1, Math.round(rect.height));
-      const x = Math.round(rect.left);
-      const y = Math.round(rect.top);
-
-      await webview.setPosition(new LogicalPosition(x, y));
-      await webview.setSize(new LogicalSize(width, height));
-    };
-
-    const scheduleSyncBounds = () => {
-      requestAnimationFrame(() => {
-        void syncBounds().catch((err) => {
-          console.error('Failed to sync embedded app webview bounds:', err);
-        });
-      });
-    };
-
     const mount = async () => {
       await ensureInlineRuntime(installedApp);
       await markRuntimeVisible(installedApp.id, true);
 
-      scheduleSyncBounds();
+      scheduleSyncBounds(installedApp.id);
 
       delayedSyncTimers = [0, 50, 150, 300].map((delay) =>
         window.setTimeout(() => {
-          scheduleSyncBounds();
+          if (!disposed) {
+            scheduleSyncBounds(installedApp.id);
+          }
         }, delay),
       );
 
       resizeObserver = new ResizeObserver(() => {
-        scheduleSyncBounds();
+        if (!disposed) {
+          scheduleSyncBounds(installedApp.id);
+        }
       });
 
       const container = containerRef.current;
@@ -203,13 +204,16 @@ export function AppHost() {
       resizeObserver.observe(container);
 
       const handleWindowResize = () => {
-        scheduleSyncBounds();
+        if (!disposed) {
+          scheduleSyncBounds(installedApp.id);
+        }
       };
 
       window.addEventListener('resize', handleWindowResize);
       removeWindowResize = () => {
         window.removeEventListener('resize', handleWindowResize);
       };
+
       const expectedSourceLabel = `app-inline-${installedApp.id}`;
 
       unlistenBridge = await hostWebview.listen<SageBridgeEventPayload>(
@@ -259,7 +263,7 @@ export function AppHost() {
       removeWindowResize?.();
       clearDelayedSyncTimers();
     };
-  }, [app, entrySrc]);
+  }, [app, entrySrc, scheduleSyncBounds]);
 
   if (loading) {
     return (
@@ -287,6 +291,7 @@ export function AppHost() {
             </Link>
           </Button>
         </div>
+
         <div className='flex items-center gap-2'>
           <Button
             variant='destructive'
@@ -325,7 +330,7 @@ export function AppHost() {
         <div className='shrink-0 space-y-1'>
           <h1 className='text-2xl font-semibold tracking-tight'>{app.name}</h1>
           <p className='break-all text-xs text-muted-foreground'>
-            App URL: {entrySrc}
+            App URL: {sourceDisplayUrl}
           </p>
         </div>
 

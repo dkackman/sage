@@ -47,6 +47,24 @@ function emitChange() {
   }
 }
 
+async function emitRuntimeBeforeStop(appId: string) {
+  const runtimeId = runtimeByAppId.get(appId);
+  if (!runtimeId) {
+    return;
+  }
+
+  const record = runtimes.get(runtimeId);
+  if (!record) {
+    return;
+  }
+
+  await record.webview.emit('sage-lifecycle:before-stop', {
+    appId: record.appId,
+    runtimeId: record.runtimeId,
+    reason: 'restart',
+  });
+}
+
 function stripInternal(record: RuntimeInternalRecord): SageAppRuntimeRecord {
   return {
     runtimeId: record.runtimeId,
@@ -86,16 +104,60 @@ export function listAppRuntimes(): SageAppRuntimeRecord[] {
   return Array.from(runtimes.values()).map(stripInternal);
 }
 
-export function getRuntimeByAppId(
+export async function closeAppRuntime(
   appId: string,
-): SageAppRuntimeRecord | undefined {
+  options?: { timeoutMs?: number },
+): Promise<void> {
   const runtimeId = runtimeByAppId.get(appId);
   if (!runtimeId) {
-    return undefined;
+    return;
   }
 
   const record = runtimes.get(runtimeId);
-  return record ? stripInternal(record) : undefined;
+  if (!record) {
+    runtimeByAppId.delete(appId);
+    return;
+  }
+
+  const timeoutMs = options?.timeoutMs ?? 8000;
+  record.state = 'stopping';
+  emitChange();
+
+  try {
+    await emitRuntimeBeforeStop(appId);
+  } catch (err) {
+    console.warn('Failed to emit before-stop lifecycle event:', err);
+  }
+
+  try {
+    await record.webview.close();
+  } catch (err) {
+    console.warn('Failed to request webview close:', err);
+  }
+
+  const startedAt = Date.now();
+
+  let closed = false;
+
+  while (!closed) {
+    const existing = await Webview.getByLabel(record.webviewLabel).catch(
+      () => null,
+    );
+
+    if (!existing) {
+      runtimes.delete(runtimeId);
+      runtimeByAppId.delete(appId);
+      emitChange();
+      closed = true;
+      continue;
+    }
+
+    if (Date.now() - startedAt >= timeoutMs) {
+      throw new Error(`Timed out closing runtime for ${appId}`);
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+  }
 }
 
 export async function ensureInlineRuntime(
@@ -104,14 +166,28 @@ export async function ensureInlineRuntime(
   const existingRuntimeId = runtimeByAppId.get(app.id);
   if (existingRuntimeId) {
     const existing = runtimes.get(existingRuntimeId);
+
     if (existing) {
-      existing.lastActiveAt = Date.now();
-      existing.visible = true;
-      if (existing.state === 'hidden') {
-        existing.state = 'running';
+      const liveWebview = await Webview.getByLabel(existing.webviewLabel).catch(
+        () => null,
+      );
+
+      if (liveWebview) {
+        existing.webview = liveWebview;
+        existing.lastActiveAt = Date.now();
+        existing.visible = true;
+        if (existing.state === 'hidden') {
+          existing.state = 'running';
+        }
+        emitChange();
+        return stripInternal(existing);
       }
+
+      runtimes.delete(existingRuntimeId);
+      runtimeByAppId.delete(app.id);
       emitChange();
-      return stripInternal(existing);
+    } else {
+      runtimeByAppId.delete(app.id);
     }
   }
 
@@ -134,19 +210,47 @@ export async function ensureInlineRuntime(
     });
 
     await new Promise<void>((resolve, reject) => {
-      const createdPromise = createdWebview.once('tauri://created', () => {
-        resolve();
-      });
+      let unlistenCreated: (() => void) | null = null;
+      let unlistenError: (() => void) | null = null;
 
-      const errorPromise = createdWebview.once('tauri://error', (event) => {
-        const payload =
-          typeof event.payload === 'string'
-            ? event.payload
-            : JSON.stringify(event.payload);
-        reject(new Error(payload));
-      });
+      const cleanupListeners = () => {
+        try {
+          unlistenCreated?.();
+        } catch (err) {
+          console.warn('Failed to unlisten created:', err);
+        }
 
-      void Promise.all([createdPromise, errorPromise]);
+        try {
+          unlistenError?.();
+        } catch (err) {
+          console.warn('Failed to unlisten error:', err);
+        }
+      };
+
+      void (async () => {
+        try {
+          unlistenCreated = await createdWebview.once('tauri://created', () => {
+            cleanupListeners();
+            resolve();
+          });
+
+          unlistenError = await createdWebview.once(
+            'tauri://error',
+            (event) => {
+              cleanupListeners();
+
+              const payload =
+                typeof event.payload === 'string'
+                  ? event.payload
+                  : JSON.stringify(event.payload);
+              reject(new Error(payload));
+            },
+          );
+        } catch (err) {
+          cleanupListeners();
+          reject(err instanceof Error ? err : new Error(String(err)));
+        }
+      })();
     });
 
     webview = createdWebview;
@@ -222,32 +326,6 @@ export async function markRuntimeVisible(appId: string, visible: boolean) {
   emitChange();
 }
 
-export function patchRuntimeStats(
-  appId: string,
-  patch: Partial<
-    Pick<
-      SageAppRuntimeRecord,
-      | 'activeBatchCount'
-      | 'activeSocketCount'
-      | 'inFlightRequestCount'
-      | 'lastActiveAt'
-    >
-  >,
-) {
-  const runtimeId = runtimeByAppId.get(appId);
-  if (!runtimeId) {
-    return;
-  }
-
-  const record = runtimes.get(runtimeId);
-  if (!record) {
-    return;
-  }
-
-  Object.assign(record, patch);
-  emitChange();
-}
-
 export async function focusRuntime(appId: string) {
   const runtimeId = runtimeByAppId.get(appId);
   if (!runtimeId) {
@@ -284,11 +362,9 @@ export async function killRuntime(appId: string) {
 
   const record = runtimes.get(runtimeId);
   if (!record) {
+    runtimeByAppId.delete(appId);
     return;
   }
-
-  record.state = 'stopping';
-  emitChange();
 
   try {
     await record.webview.emit('sage-lifecycle:before-stop', {
@@ -296,21 +372,14 @@ export async function killRuntime(appId: string) {
       appId,
       runtimeId,
     });
-
-    await new Promise((resolve) => window.setTimeout(resolve, 1200));
   } catch {
     // ignore
   }
 
   try {
-    await record.webview.close();
+    await closeAppRuntime(appId, { timeoutMs: 8000 });
   } catch {
     // ignore
   }
-
-  record.state = 'stopped';
-  runtimes.delete(runtimeId);
-  runtimeByAppId.delete(appId);
-  emitChange();
 }
 

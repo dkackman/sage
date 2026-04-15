@@ -3,10 +3,10 @@ import { InstallAppForm } from '@/components/apps/InstallAppForm';
 import { InstalledAppCard } from '@/components/apps/InstalledAppCard';
 import { CorruptedAppCard } from '@/components/apps/CorruptedAppCard';
 import { Button } from '@/components/ui/button';
-import { useApps } from '@/hooks/useApps';
 import { Link } from 'react-router-dom';
 import { SageAppPackageManifest, SageAppUrlPreview } from '@/bindings.ts';
 import { invoke } from '@tauri-apps/api/core';
+import { useApps } from '@/contexts/AppsContext.tsx';
 
 export function Apps() {
   const {
@@ -18,7 +18,7 @@ export function Apps() {
     uninstallApp,
     checkForUpdate,
     downloadUpdate,
-    applyUpdate,
+    performAppUpdate,
     updateAvailability,
     busyAppIds,
   } = useApps();
@@ -45,7 +45,7 @@ export function Apps() {
         </div>
 
         <Button asChild variant='outline'>
-          <Link to='/task-manager'>Task Manager</Link>
+          <Link to='/apps/task-manager'>Task Manager</Link>
         </Button>
       </div>
 
@@ -99,7 +99,10 @@ export function Apps() {
                   await downloadUpdate(entry.id);
                 }}
                 onApplyUpdate={async () => {
-                  await applyUpdate(entry.id, entry.grantedPermissions);
+                  await performAppUpdate(entry.id, {
+                    restartIfRunning: true,
+                    visibleAfterRestart: false,
+                  });
                 }}
               />
             );

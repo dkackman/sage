@@ -9,7 +9,7 @@ import type {
 
 type UpdateAvailabilityMap = Record<string, SageAppUrlPreview | null>;
 
-export function useApps() {
+export function useAppsInternal() {
   const [apps, setApps] = useState<ListedSageApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -171,6 +171,51 @@ export function useApps() {
     [refresh, setBusy],
   );
 
+  const performAppUpdate = useCallback(
+    async (
+      appId: string,
+      options?: { restartIfRunning?: boolean; visibleAfterRestart?: boolean },
+    ) => {
+      const restartIfRunning = options?.restartIfRunning ?? false;
+      const visibleAfterRestart = options?.visibleAfterRestart ?? false;
+
+      const { getRuntimeWebview } = await import('@/lib/apps/runtimeRegistry');
+      const { restartAppRuntime } =
+        await import('@/lib/apps/restartAppRuntime');
+
+      const wasRunning = restartIfRunning
+        ? !!(await getRuntimeWebview(appId))
+        : false;
+
+      const preview = await checkForUpdate(appId, false);
+
+      if (preview) {
+        await downloadUpdate(appId);
+        await refresh();
+      }
+
+      const latestApp = getApp(appId);
+      if (!latestApp) {
+        throw new Error(`App ${appId} no longer exists after refresh`);
+      }
+
+      const updatedApp = await applyUpdate(
+        latestApp.id,
+        latestApp.grantedPermissions,
+      );
+
+      if (wasRunning) {
+        await restartAppRuntime(updatedApp, {
+          visible: visibleAfterRestart,
+        });
+      }
+
+      await refresh();
+      return updatedApp;
+    },
+    [applyUpdate, checkForUpdate, downloadUpdate, getApp, refresh],
+  );
+
   useEffect(() => {
     const urlApps = apps.filter(
       (entry) => entry.kind === 'installed' && entry.source?.kind === 'url',
@@ -221,6 +266,7 @@ export function useApps() {
     checkForUpdate,
     downloadUpdate,
     applyUpdate,
+    performAppUpdate,
     updateAvailability,
     busyAppIds,
   };

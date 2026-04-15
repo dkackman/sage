@@ -60,6 +60,7 @@ import Wallet from './pages/Wallet';
 import { Apps } from '@/pages/Apps.tsx';
 import { AppHost } from '@/pages/AppHost.tsx';
 import { TaskManager } from '@/pages/TaskManager.tsx';
+import { AppsProvider } from '@/contexts/AppsContext.tsx';
 
 // Theme-aware toast container component
 function ThemeAwareToastContainer() {
@@ -199,11 +200,13 @@ function AppInner() {
       <I18nProvider i18n={i18n}>
         <WalletProvider>
           <PeerProvider>
-            <WalletConnectProvider>
-              <PriceProvider>
-                <RouterProvider router={router} />
-              </PriceProvider>
-            </WalletConnectProvider>
+            <AppsProvider>
+              <WalletConnectProvider>
+                <PriceProvider>
+                  <RouterProvider router={router} />
+                </PriceProvider>
+              </WalletConnectProvider>
+            </AppsProvider>
           </PeerProvider>
         </WalletProvider>
       </I18nProvider>
