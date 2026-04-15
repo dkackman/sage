@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, Result as AnyResult, anyhow};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -24,14 +24,49 @@ pub struct SageAppPermissions {
     pub persistent_storage: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SageNetworkPermissionEntry {
+    pub scheme: String,
+    pub host: String,
+    #[serde(default)]
+    pub required: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SagePersistentStoragePermission {
+    #[serde(default)]
+    pub required: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+pub struct SageRequestedPermissions {
+    #[serde(default)]
+    pub network: Vec<SageNetworkPermissionEntry>,
+
+    #[serde(default)]
+    pub persistent_storage: Option<SagePersistentStoragePermission>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+pub struct SageGrantedPermissions {
+    #[serde(default)]
+    pub network: Vec<SageGrantedNetworkPermissionEntry>,
+
+    #[serde(rename = "persistentStorage", alias = "persistent_storage", default)]
+    pub persistent_storage: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SageGrantedNetworkPermissionEntry {
+    pub scheme: String,
+    pub host: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct SageAppPackageManifest {
     pub name: String,
     pub version: String,
-    pub permissions: SageAppPermissions,
-
-    #[serde(default)]
-    pub required_permissions: Vec<String>,
+    pub permissions: SageRequestedPermissions,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -49,7 +84,25 @@ pub struct InstalledSageApp {
     #[serde(rename = "iconFile", alias = "icon_file")]
     pub icon_file: String,
 
-    pub permissions: SageAppPermissions,
+    #[serde(rename = "requestedPermissions", alias = "requested_permissions")]
+    pub requested_permissions: SageRequestedPermissions,
+
+    #[serde(rename = "grantedPermissions", alias = "granted_permissions")]
+    pub granted_permissions: SageGrantedPermissions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct CorruptedInstalledSageApp {
+    pub id: String,
+    pub install_dir: String,
+    pub error: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ListedSageApp {
+    Installed(InstalledSageApp),
+    Corrupted(CorruptedInstalledSageApp),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -70,6 +123,13 @@ pub struct SageBridgeFetchResponse {
     pub status_text: String,
     pub headers: BTreeMap<String, String>,
     pub body_text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SageBridgeFetchBatchRequest {
+    pub requests: Vec<SageBridgeFetchRequest>,
+    #[serde(default)]
+    pub max_concurrency: Option<usize>,
 }
 
 fn apps_root(base_path: &Path) -> PathBuf {
@@ -217,7 +277,132 @@ fn read_manifest(package_root: &Path) -> AnyResult<SageAppPackageManifest> {
         return Err(anyhow!("manifest version cannot be empty"));
     }
 
+    validate_requested_permissions(&manifest.permissions)?;
+
     Ok(manifest)
+}
+
+fn normalize_scheme(scheme: &str) -> String {
+    scheme.trim().to_ascii_lowercase()
+}
+
+fn normalize_host(host: &str) -> String {
+    host.trim().to_ascii_lowercase()
+}
+
+fn validate_network_permission_entry(entry: &SageNetworkPermissionEntry) -> AnyResult<()> {
+    let scheme = normalize_scheme(&entry.scheme);
+    let host = normalize_host(&entry.host);
+
+    match scheme.as_str() {
+        "http" | "https" | "ws" | "wss" => {}
+        _ => return Err(anyhow!("unsupported network scheme: {}", entry.scheme)),
+    }
+
+    if host.is_empty() {
+        return Err(anyhow!("network host cannot be empty"));
+    }
+
+    if host == "*" {
+        return Ok(());
+    }
+
+    if host.starts_with("*.") {
+        if host.len() <= 2 || host[2..].contains('*') {
+            return Err(anyhow!("invalid wildcard host pattern: {}", entry.host));
+        }
+        return Ok(());
+    }
+
+    if host.contains('*') {
+        return Err(anyhow!("only leading wildcard hosts are supported: {}", entry.host));
+    }
+
+    Ok(())
+}
+
+fn validate_requested_permissions(permissions: &SageRequestedPermissions) -> AnyResult<()> {
+    let mut seen = BTreeSet::new();
+
+    for entry in &permissions.network {
+        validate_network_permission_entry(entry)?;
+
+        let key = (normalize_scheme(&entry.scheme), normalize_host(&entry.host));
+        if !seen.insert(key) {
+            return Err(anyhow!(
+                "duplicate network permission entry: {} {}",
+                entry.scheme,
+                entry.host
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_granted_permissions_against_requested(
+    requested: &SageRequestedPermissions,
+    granted: &SageGrantedPermissions,
+) -> AnyResult<()> {
+    let requested_set: BTreeSet<(String, String)> = requested
+        .network
+        .iter()
+        .map(|entry| (normalize_scheme(&entry.scheme), normalize_host(&entry.host)))
+        .collect();
+
+    let required_set: BTreeSet<(String, String)> = requested
+        .network
+        .iter()
+        .filter(|entry| entry.required)
+        .map(|entry| (normalize_scheme(&entry.scheme), normalize_host(&entry.host)))
+        .collect();
+
+    let granted_set: BTreeSet<(String, String)> = granted
+        .network
+        .iter()
+        .map(|entry| (normalize_scheme(&entry.scheme), normalize_host(&entry.host)))
+        .collect();
+
+    for key in &granted_set {
+        if !requested_set.contains(key) {
+            return Err(anyhow!(
+                "granted network permission not present in manifest request: {} {}",
+                key.0,
+                key.1
+            ));
+        }
+    }
+
+    for key in &required_set {
+        if !granted_set.contains(key) {
+            return Err(anyhow!(
+                "missing required network permission grant: {} {}",
+                key.0,
+                key.1
+            ));
+        }
+    }
+
+    let requested_storage = requested.persistent_storage.is_some();
+    let required_storage = requested
+        .persistent_storage
+        .as_ref()
+        .map(|p| p.required)
+        .unwrap_or(false);
+
+    if granted.persistent_storage && !requested_storage {
+        return Err(anyhow!(
+            "persistent storage granted but not requested by manifest"
+        ));
+    }
+
+    if required_storage && !granted.persistent_storage {
+        return Err(anyhow!(
+            "missing required persistent storage permission"
+        ));
+    }
+
+    Ok(())
 }
 
 fn validate_package_structure(package_root: &Path) -> AnyResult<()> {
@@ -256,7 +441,7 @@ fn write_installed_app_metadata(app: &InstalledSageApp, install_dir: &Path) -> A
     Ok(())
 }
 
-fn list_installed_apps_internal(root: &Path) -> AnyResult<Vec<InstalledSageApp>> {
+fn list_installed_apps_internal(root: &Path) -> AnyResult<Vec<ListedSageApp>> {
     if !root.exists() {
         return Ok(Vec::new());
     }
@@ -280,15 +465,43 @@ fn list_installed_apps_internal(root: &Path) -> AnyResult<Vec<InstalledSageApp>>
             continue;
         }
 
+        let Some(id) = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
+        else {
+            continue;
+        };
+
         let metadata_path = installed_metadata_path(&path);
         if !metadata_path.is_file() {
             continue;
         }
 
-        apps.push(read_installed_app_from_dir(&path)?);
+        match read_installed_app_from_dir(&path) {
+            Ok(app) => apps.push(ListedSageApp::Installed(app)),
+            Err(err) => apps.push(ListedSageApp::Corrupted(CorruptedInstalledSageApp {
+                id,
+                install_dir: path.to_string_lossy().to_string(),
+                error: err.to_string(),
+            })),
+        }
     }
 
-    apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    apps.sort_by(|a, b| {
+        let a_key = match a {
+            ListedSageApp::Installed(app) => app.name.to_lowercase(),
+            ListedSageApp::Corrupted(app) => app.id.to_lowercase(),
+        };
+
+        let b_key = match b {
+            ListedSageApp::Installed(app) => app.name.to_lowercase(),
+            ListedSageApp::Corrupted(app) => app.id.to_lowercase(),
+        };
+
+        a_key.cmp(&b_key)
+    });
+
     Ok(apps)
 }
 
@@ -316,7 +529,7 @@ pub async fn preview_app_zip(
 
 #[command]
 #[specta::specta]
-pub async fn list_installed_apps(state: State<'_, AppState>) -> Result<Vec<InstalledSageApp>> {
+pub async fn list_installed_apps(state: State<'_, AppState>) -> Result<Vec<ListedSageApp>> {
     let base_path = {
         let state = state.lock().await;
         state.path.clone()
@@ -341,7 +554,7 @@ pub async fn list_installed_apps(state: State<'_, AppState>) -> Result<Vec<Insta
 pub async fn install_app_zip(
     state: State<'_, AppState>,
     zip_path: String,
-    granted_permissions: SageAppPermissions,
+    granted_permissions: SageGrantedPermissions,
 ) -> Result<InstalledSageApp> {
     let base_path = {
         let state = state.lock().await;
@@ -370,12 +583,18 @@ pub async fn install_app_zip(
     let result = (|| -> AnyResult<InstalledSageApp> {
         unzip_to_dir(Path::new(&zip_path), &unpack_dir)?;
         let package_root = detect_package_root(&unpack_dir)?;
-        let manifest = read_manifest(&package_root)?;
         validate_package_structure(&package_root)?;
+        let manifest = read_manifest(&package_root)?;
+        validate_granted_permissions_against_requested(&manifest.permissions, &granted_permissions)?;
 
         let existing = list_installed_apps_internal(&root)?
             .into_iter()
-            .find(|app| app.name == manifest.name);
+            .find_map(|app| match app {
+                ListedSageApp::Installed(installed) if installed.name == manifest.name => {
+                    Some(installed)
+                }
+                _ => None,
+            });
 
         let app_id = existing
             .map(|app| app.id)
@@ -401,7 +620,8 @@ pub async fn install_app_zip(
                 .to_string_lossy()
                 .to_string(),
             icon_file: install_dir.join("icon.png").to_string_lossy().to_string(),
-            permissions: granted_permissions,
+            requested_permissions: manifest.permissions,
+            granted_permissions,
         };
 
         write_installed_app_metadata(&installed, &install_dir)?;
@@ -442,8 +662,19 @@ pub async fn uninstall_app(state: State<'_, AppState>, app_id: String) -> Result
 #[command]
 #[specta::specta]
 pub async fn bridge_fetch_http(
+    state: State<'_, AppState>,
+    app_id: String,
     req: SageBridgeFetchRequest,
 ) -> Result<SageBridgeFetchResponse> {
+    let base_path = {
+        let state = state.lock().await;
+        state.path.clone()
+    };
+
+    let app = read_installed_app_by_id(&base_path, &app_id).map_err(|err| {
+        io::Error::other(format!("failed to read installed app {app_id}: {err}"))
+    })?;
+
     let method = req
         .method
         .as_deref()
@@ -454,17 +685,30 @@ pub async fn bridge_fetch_http(
     let parsed_url = reqwest::Url::parse(&req.url)
         .map_err(|err| io::Error::other(format!("invalid URL: {err}")))?;
 
-    match parsed_url.scheme() {
-        "http" | "https" => {}
-        other => {
-            return Err(io::Error::other(format!(
-                "unsupported URL scheme: {other}"
-            ))
-                .into());
-        }
+    let scheme = parsed_url.scheme().to_string();
+    let host = parsed_url
+        .host_str()
+        .ok_or_else(|| io::Error::other("URL is missing host"))?
+        .to_string();
+
+    if !matches!(scheme.as_str(), "http" | "https") {
+        return Err(io::Error::other(format!(
+            "unsupported fetch scheme: {scheme}"
+        ))
+            .into());
     }
 
-    let client = reqwest::Client::new();
+    if !is_network_allowed_for_app(&app, &scheme, &host) {
+        return Err(io::Error::other(format!(
+            "network access denied for {scheme}://{host}"
+        ))
+            .into());
+    }
+
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()?;
+
     let mut request_builder = client.request(method, parsed_url);
 
     for (key, value) in req.headers {
@@ -499,6 +743,29 @@ pub async fn bridge_fetch_http(
         headers,
         body_text,
     })
+}
+
+#[command]
+#[specta::specta]
+pub async fn bridge_fetch_http_batch(
+    state: State<'_, AppState>,
+    app_id: String,
+    req: SageBridgeFetchBatchRequest,
+) -> Result<Vec<SageBridgeFetchResponse>> {
+    let mut results = Vec::with_capacity(req.requests.len());
+
+    for request in req.requests {
+        let response = bridge_fetch_http(
+            state.clone(),
+            app_id.clone(),
+            request,
+        )
+            .await?;
+
+        results.push(response);
+    }
+
+    Ok(results)
 }
 
 fn app_install_dir(base_path: &Path, app_id: &str) -> PathBuf {
@@ -619,8 +886,8 @@ fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
     let app_id = html_escape_json_string(&app.id);
     let app_name = html_escape_json_string(&app.name);
     let app_version = html_escape_json_string(&app.version);
-    let permissions =
-        serde_json::to_string(&app.permissions).unwrap_or_else(|_| "{}".to_string());
+    let permissions = serde_json::to_string(&app.granted_permissions)
+        .unwrap_or_else(|_| "{}".to_string());
 
     format!(
         r#"(function () {{
@@ -720,6 +987,13 @@ fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
       }};
       return callHost('network.fetch', params);
     }},
+    async fetchBatch(input) {{
+      const params = {{
+        requests: input?.requests ?? [],
+        max_concurrency: input?.max_concurrency ?? null,
+      }};
+      return callHost('network.fetchBatch', params);
+    }},
     appInfo: __sageAppInfo,
   }};
 }})();
@@ -763,10 +1037,16 @@ fn build_app_csp(app: &InstalledSageApp) -> String {
     let base_uri = csp_source_list(&["'none'"]);
     let form_action = csp_source_list(&["'none'"]);
 
-    let connect_src = if app.permissions.network {
-        csp_source_list(&["'self'", "https:", "wss:"])
+    let connect_src = if app.granted_permissions.network.is_empty() {
+        csp_source_list(&["'self'", "ipc:", "ipc://localhost", "http://ipc.localhost", "https://ipc.localhost"])
     } else {
-        csp_source_list(&["'none'"])
+        csp_source_list(&[
+            "'self'",
+            "ipc:",
+            "ipc://localhost",
+            "http://ipc.localhost",
+            "https://ipc.localhost",
+        ])
     };
 
     format!(
@@ -782,4 +1062,33 @@ fn build_app_csp(app: &InstalledSageApp) -> String {
          frame-ancestors {frame_ancestors}; \
          connect-src {connect_src}"
     )
+}
+
+fn host_matches_pattern(host: &str, pattern: &str) -> bool {
+    let host = normalize_host(host);
+    let pattern = normalize_host(pattern);
+
+    if pattern == "*" {
+        return true;
+    }
+
+    if let Some(suffix) = pattern.strip_prefix("*.") {
+        return host.ends_with(&format!(".{suffix}"));
+    }
+
+    host == pattern
+}
+
+fn is_network_allowed_for_app(
+    app: &InstalledSageApp,
+    scheme: &str,
+    host: &str,
+) -> bool {
+    let scheme = normalize_scheme(scheme);
+    let host = normalize_host(host);
+
+    app.granted_permissions.network.iter().any(|entry| {
+        normalize_scheme(&entry.scheme) == scheme
+            && host_matches_pattern(&host, &entry.host)
+    })
 }

@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   InstalledSageApp,
+  SageBridgeFetchBatchRequest,
   SageBridgeFetchRequest,
   SageBridgeFetchResponse,
 } from '@/bindings';
@@ -82,19 +83,6 @@ export function isBridgeRequest(value: unknown): value is SageBridgeRequest {
   );
 }
 
-export function isBridgeResponse(value: unknown): value is SageBridgeResponse {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-
-  const maybe = value as Partial<SageBridgeResponse>;
-  return (
-    maybe.channel === 'sage-bridge' &&
-    typeof maybe.id === 'string' &&
-    typeof maybe.ok === 'boolean'
-  );
-}
-
 export async function handleBridgeRequest(
   ctx: SageBridgeContext,
   request: SageBridgeRequest,
@@ -116,21 +104,31 @@ export async function handleBridgeRequest(
         });
 
       case 'sage.getPermissions':
-        return success(request.id, ctx.app.permissions);
+        return success(request.id, ctx.app.grantedPermissions);
 
       case 'network.fetch': {
-        if (!ctx.app.permissions.network) {
-          return failure(
-            request.id,
-            'forbidden',
-            'Network access denied by Sage',
-          );
-        }
-
         const params = request.params as SageBridgeFetchRequest;
+
         const response = await invoke<SageBridgeFetchResponse>(
           'bridge_fetch_http',
-          { req: params },
+          {
+            appId: ctx.app.id,
+            req: params,
+          },
+        );
+
+        return success(request.id, response);
+      }
+
+      case 'network.fetchBatch': {
+        const params = request.params as SageBridgeFetchBatchRequest;
+
+        const response = await invoke<SageBridgeFetchResponse[]>(
+          'bridge_fetch_http_batch',
+          {
+            appId: ctx.app.id,
+            req: params,
+          },
         );
 
         return success(request.id, response);

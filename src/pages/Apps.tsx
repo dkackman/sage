@@ -1,7 +1,8 @@
 import { InstallAppForm } from '@/components/apps/InstallAppForm';
 import { InstalledAppCard } from '@/components/apps/InstalledAppCard';
 import { useApps } from '@/hooks/useApps';
-import { SageAppPermissions } from '@/bindings.ts';
+import { CorruptedAppCard } from '@/components/apps/CorruptedAppCard.tsx';
+import { SageGrantedPermissions } from '@/bindings.ts';
 
 export function Apps() {
   const { apps, loading, error, installApp, uninstallApp } = useApps();
@@ -17,7 +18,7 @@ export function Apps() {
         </div>
 
         <InstallAppForm
-          onInstall={(zipPath: string, permissions: SageAppPermissions) =>
+          onInstall={(zipPath: string, permissions: SageGrantedPermissions) =>
             installApp(zipPath, permissions)
           }
         />
@@ -35,13 +36,21 @@ export function Apps() {
             </div>
           ) : apps.length > 0 ? (
             <div className='grid gap-4'>
-              {apps.map((app) => (
-                <InstalledAppCard
-                  key={app.id}
-                  app={app}
-                  onUninstall={() => uninstallApp(app.id)}
-                />
-              ))}
+              {apps.map((app) =>
+                app.kind === 'installed' ? (
+                  <InstalledAppCard
+                    key={app.id}
+                    app={app}
+                    onUninstall={() => uninstallApp(app.id)}
+                  />
+                ) : (
+                  <CorruptedAppCard
+                    key={app.id}
+                    app={app}
+                    onRemove={() => uninstallApp(app.id)}
+                  />
+                ),
+              )}
             </div>
           ) : (
             <div className='rounded-lg border p-6 text-sm text-muted-foreground'>

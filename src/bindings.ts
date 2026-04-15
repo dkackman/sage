@@ -359,20 +359,23 @@ async getLogs() : Promise<LogFile[]> {
 async isAssetOwned(req: IsAssetOwned) : Promise<IsAssetOwnedResponse> {
     return await TAURI_INVOKE("is_asset_owned", { req });
 },
-async listInstalledApps() : Promise<InstalledSageApp[]> {
+async listInstalledApps() : Promise<ListedSageApp[]> {
     return await TAURI_INVOKE("list_installed_apps");
 },
 async previewAppZip(zipPath: string) : Promise<SageAppPackageManifest> {
     return await TAURI_INVOKE("preview_app_zip", { zipPath });
 },
-async installAppZip(zipPath: string, grantedPermissions: SageAppPermissions) : Promise<InstalledSageApp> {
+async installAppZip(zipPath: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
     return await TAURI_INVOKE("install_app_zip", { zipPath, grantedPermissions });
 },
 async uninstallApp(appId: string) : Promise<null> {
     return await TAURI_INVOKE("uninstall_app", { appId });
 },
-async bridgeFetchHttp(req: SageBridgeFetchRequest) : Promise<SageBridgeFetchResponse> {
-    return await TAURI_INVOKE("bridge_fetch_http", { req });
+async bridgeFetchHttp(appId: string, req: SageBridgeFetchRequest) : Promise<SageBridgeFetchResponse> {
+    return await TAURI_INVOKE("bridge_fetch_http", { appId, req });
+},
+async bridgeFetchHttpBatch(appId: string, req: SageBridgeFetchBatchRequest) : Promise<SageBridgeFetchResponse[]> {
+    return await TAURI_INVOKE("bridge_fetch_http_batch", { appId, req });
 }
 }
 
@@ -737,6 +740,7 @@ export type CombineOffersResponse = {
  * Combined offer string
  */
 offer: string }
+export type CorruptedInstalledSageApp = { id: string; install_dir: string; error: string }
 /**
  * Create a new DID
  */
@@ -1709,7 +1713,7 @@ index: number }
  */
 export type IncreaseDerivationIndexResponse = Record<string, never>
 export type InheritedNetwork = "mainnet" | "testnet11"
-export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; permissions: SageAppPermissions }
+export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions }
 /**
  * Check if an asset is owned
  */
@@ -1768,6 +1772,7 @@ innerPuzzleHash: string | null;
  * Amount
  */
 amount: number | null }
+export type ListedSageApp = ({ kind: "installed" } & InstalledSageApp) | ({ kind: "corrupted" } & CorruptedInstalledSageApp)
 export type LogFile = { name: string; text: string }
 /**
  * Login to a wallet using a fingerprint
@@ -2171,10 +2176,15 @@ export type ResyncCatResponse = Record<string, never>
  * Response from resynchronizing the wallet
  */
 export type ResyncResponse = Record<string, never>
-export type SageAppPackageManifest = { name: string; version: string; permissions: SageAppPermissions; required_permissions?: string[] }
-export type SageAppPermissions = { network: boolean; persistentStorage: boolean }
+export type SageAppPackageManifest = { name: string; version: string; permissions: SageRequestedPermissions }
+export type SageBridgeFetchBatchRequest = { requests: SageBridgeFetchRequest[]; max_concurrency?: number | null }
 export type SageBridgeFetchRequest = { url: string; method?: string | null; headers?: Partial<{ [key in string]: string }>; body?: string | null }
 export type SageBridgeFetchResponse = { ok: boolean; status: number; status_text: string; headers: Partial<{ [key in string]: string }>; body_text: string }
+export type SageGrantedNetworkPermissionEntry = { scheme: string; host: string }
+export type SageGrantedPermissions = { network?: SageGrantedNetworkPermissionEntry[]; persistentStorage?: boolean }
+export type SageNetworkPermissionEntry = { scheme: string; host: string; required?: boolean }
+export type SagePersistentStoragePermission = { required?: boolean }
+export type SageRequestedPermissions = { network?: SageNetworkPermissionEntry[]; persistent_storage?: SagePersistentStoragePermission | null }
 /**
  * Save a theme NFT to the wallet
  */
