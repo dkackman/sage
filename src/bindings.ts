@@ -374,6 +374,9 @@ async installAppZip(zipPath: string, grantedPermissions: SageGrantedPermissions)
 async installAppUrl(appUrl: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
     return await TAURI_INVOKE("install_app_url", { appUrl, grantedPermissions });
 },
+async uninstallApp(appId: string) : Promise<null> {
+    return await TAURI_INVOKE("uninstall_app", { appId });
+},
 async checkAppUpdate(appId: string) : Promise<SageAppUrlPreview | null> {
     return await TAURI_INVOKE("check_app_update", { appId });
 },
@@ -382,9 +385,6 @@ async downloadAppUpdate(appId: string) : Promise<InstalledSageApp> {
 },
 async applyAppUpdate(appId: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
     return await TAURI_INVOKE("apply_app_update", { appId, grantedPermissions });
-},
-async uninstallApp(appId: string) : Promise<null> {
-    return await TAURI_INVOKE("uninstall_app", { appId });
 },
 async bridgeFetchHttp(appId: string, req: SageBridgeFetchRequest) : Promise<SageBridgeFetchResponse> {
     return await TAURI_INVOKE("bridge_fetch_http", { appId, req });
@@ -794,7 +794,7 @@ export type CombineOffersResponse = {
  * Combined offer string
  */
 offer: string }
-export type CorruptedInstalledSageApp = { id: string; install_dir: string; error: string }
+export type CorruptedInstalledSageApp = { id: string; installDir: string; error: string }
 /**
  * Create a new DID
  */

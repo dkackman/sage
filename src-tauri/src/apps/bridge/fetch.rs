@@ -6,12 +6,12 @@ use tauri::{command, State};
 use crate::{
     app_state::AppState,
     apps::{
-        install::read_installed_app_by_id,
         permissions::is_network_allowed_for_app,
         types::{SageBridgeFetchRequest, SageBridgeFetchResponse},
     },
     error::Result,
 };
+use crate::apps::registry::read_installed_app_by_id;
 
 pub async fn bridge_fetch_http_inner(
     app_state: AppState,

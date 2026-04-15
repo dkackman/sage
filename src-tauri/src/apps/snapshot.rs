@@ -145,7 +145,7 @@ pub async fn download_url_snapshot(
 
         for file in &manifest.files {
             let file_url = build_file_url(app_url, &file.path)?;
-            let bytes = fetch_url_bytes(&file_url, MAX_APP_TOTAL_SIZE_BYTES).await?;
+            let bytes = fetch_url_bytes(&file_url, file.size).await?;
 
             let actual_size = bytes.len() as u64;
             if actual_size != file.size {
@@ -186,7 +186,7 @@ pub async fn download_url_snapshot(
             fs::write(&out_path, &bytes)?;
         }
 
-        if temp_dir.join("index.html").is_file() == false {
+        if !temp_dir.join("index.html").is_file() {
             return Err(anyhow!("snapshot is missing root index.html"));
         }
 

@@ -5,10 +5,9 @@ use tauri::{State, command};
 
 use crate::{
     app_state::AppState,
-    apps::install::read_installed_app_by_id,
     error::Result,
 };
-
+use crate::apps::registry::read_installed_app_by_id;
 use super::{
     db::{
         database_path, ensure_store_exists, get_current_version, open_connection,

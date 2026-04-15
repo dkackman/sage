@@ -5,9 +5,9 @@ use tauri::http::{Response, StatusCode};
 
 use crate::apps::{
     csp::build_app_csp,
-    install::read_installed_app_by_id,
     snapshot::read_snapshot_file,
 };
+use crate::apps::registry::read_installed_app_by_id;
 
 pub fn handle_app_protocol_request(
     base_path: &Path,
