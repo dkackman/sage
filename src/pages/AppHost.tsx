@@ -9,13 +9,14 @@ import {
 import {
   ensureInlineRuntime,
   getRuntimeWebview,
+  killRuntime,
   markRuntimeVisible,
 } from '@/lib/apps/runtimeRegistry';
 import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 function AppNotFound() {
   return (
@@ -32,6 +33,7 @@ export function AppHost() {
   const { appId = '' } = useParams();
   const { getApp, loading } = useApps();
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const navigate = useNavigate();
 
   const app = getApp(appId);
 
@@ -195,6 +197,18 @@ export function AppHost() {
               <ArrowLeft className='mr-2 h-4 w-4' />
               Back to Apps
             </Link>
+          </Button>
+        </div>
+        <div className='flex items-center gap-2'>
+          <Button
+            variant='destructive'
+            onClick={() => {
+              void killRuntime(app.id).then(() => {
+                navigate('/apps');
+              });
+            }}
+          >
+            Exit App
           </Button>
         </div>
 
