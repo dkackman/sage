@@ -83,7 +83,6 @@ export interface SageBridgeContext {
 
 export interface SageBridgeEventPayload {
   sourceLabel: string;
-  appId: string;
   request: SageBridgeRequest;
 }
 

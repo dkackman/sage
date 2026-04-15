@@ -13,20 +13,6 @@ use crate::{
     error::Result,
 };
 
-pub fn bootstrap_js() -> &'static str {
-    r#"
-  window.__SAGE__.fetch = async function (input) {
-    const params = {
-      url: input?.url,
-      method: input?.method ?? 'GET',
-      headers: input?.headers ?? {},
-      body: input?.body ?? null,
-    };
-    return callHost('network.fetch', params);
-  };
-"#
-}
-
 pub async fn bridge_fetch_http_inner(
     app_state: AppState,
     app_id: String,

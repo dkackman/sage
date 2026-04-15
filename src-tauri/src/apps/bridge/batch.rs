@@ -14,69 +14,6 @@ use crate::{
     error::Result,
 };
 
-pub fn bootstrap_js() -> &'static str {
-    r#"
-  window.__SAGE__.fetchBatch = async function (input) {
-    const params = {
-      requests: input?.requests ?? [],
-      max_concurrency: input?.max_concurrency ?? null,
-    };
-    return callHost('network.fetchBatch', params);
-  };
-
-  window.__SAGE__.fetchBatchStream = async function (input) {
-    const params = {
-      requests: input?.requests ?? [],
-      max_concurrency: input?.max_concurrency ?? null,
-    };
-
-    const batchId = await callHost('network.fetchBatchStream', params);
-
-    const listeners = {
-      result: [],
-      done: [],
-    };
-
-    let closed = false;
-
-    const unlistenResult = await currentWebview.listen('sage-bridge:batch:result', (event) => {
-      const data = event.payload;
-      if (!data || data.batchId !== batchId) return;
-      listeners.result.forEach((fn) => fn(data));
-    });
-
-    const unlistenDone = await currentWebview.listen('sage-bridge:batch:done', (event) => {
-      const data = event.payload;
-      if (!data || data.batchId !== batchId) return;
-      listeners.done.forEach((fn) => fn());
-      cleanup();
-    });
-
-    function cleanup() {
-      if (closed) return;
-      closed = true;
-      unlistenResult();
-      unlistenDone();
-    }
-
-    return {
-      batchId,
-      onResult(fn) {
-        listeners.result.push(fn);
-        return this;
-      },
-      onDone(fn) {
-        listeners.done.push(fn);
-        return this;
-      },
-      dispose() {
-        cleanup();
-      },
-    };
-  };
-"#
-}
-
 #[command]
 #[specta::specta]
 pub async fn bridge_fetch_http_batch(

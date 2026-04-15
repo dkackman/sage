@@ -1,4 +1,3 @@
-pub mod bootstrap;
 pub mod csp;
 pub mod install;
 pub mod permissions;

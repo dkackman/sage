@@ -125,13 +125,14 @@ export function AppHost() {
       removeWindowResize = () => {
         window.removeEventListener('resize', handleWindowResize);
       };
+      const expectedSourceLabel = `app-inline-${installedApp.id}`;
 
       unlistenBridge = await hostWebview.listen<SageBridgeEventPayload>(
         'sage-bridge:request',
         ({ payload }) => {
           if (
             !payload ||
-            payload.appId !== installedApp.id ||
+            payload.sourceLabel !== expectedSourceLabel ||
             !isBridgeRequest(payload.request)
           ) {
             return;
