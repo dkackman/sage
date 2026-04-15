@@ -31,7 +31,7 @@ pub fn validate_manifest_file_path(path: &str) -> AnyResult<()> {
         return Err(anyhow!("manifest file path must use forward slashes: {}", path));
     }
 
-    if path.split('/').any(|part| part == ".." || part.is_empty()) {
+    if path.split('/').any(|part| part == "." || part == ".." || part.is_empty()) {
         return Err(anyhow!("manifest file path is invalid: {}", path));
     }
 
