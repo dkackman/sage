@@ -28,6 +28,9 @@ pub struct SageAppPackageManifest {
     pub name: String,
     pub version: String,
     pub permissions: SageAppPermissions,
+
+    #[serde(default)]
+    pub required_permissions: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -270,6 +273,28 @@ fn list_installed_apps_internal(root: &Path) -> AnyResult<Vec<InstalledSageApp>>
 
 #[command]
 #[specta::specta]
+pub async fn preview_app_zip(
+    zip_path: String,
+) -> Result<SageAppPackageManifest> {
+    let unpack_dir = std::env::temp_dir().join(format!(".sage-preview-{}", current_millis()));
+
+    let result = (|| -> AnyResult<SageAppPackageManifest> {
+        unzip_to_dir(Path::new(&zip_path), &unpack_dir)?;
+        let package_root = detect_package_root(&unpack_dir)?;
+        let manifest = read_manifest(&package_root)?;
+        validate_package_structure(&package_root)?;
+        Ok(manifest)
+    })();
+
+    let _ = fs::remove_dir_all(&unpack_dir);
+
+    result.map_err(|err| {
+        io::Error::other(format!("failed to preview app zip {}: {err}", zip_path)).into()
+    })
+}
+
+#[command]
+#[specta::specta]
 pub async fn list_installed_apps(state: State<'_, AppState>) -> Result<Vec<InstalledSageApp>> {
     let base_path = {
         let state = state.lock().await;
@@ -295,6 +320,7 @@ pub async fn list_installed_apps(state: State<'_, AppState>) -> Result<Vec<Insta
 pub async fn install_app_zip(
     state: State<'_, AppState>,
     zip_path: String,
+    granted_permissions: SageAppPermissions,
 ) -> Result<InstalledSageApp> {
     let base_path = {
         let state = state.lock().await;
@@ -354,7 +380,7 @@ pub async fn install_app_zip(
                 .to_string_lossy()
                 .to_string(),
             icon_file: install_dir.join("icon.png").to_string_lossy().to_string(),
-            permissions: manifest.permissions,
+            permissions: granted_permissions,
         };
 
         write_installed_app_metadata(&installed, &install_dir)?;

@@ -1,6 +1,7 @@
 import { InstallAppForm } from '@/components/apps/InstallAppForm';
 import { InstalledAppCard } from '@/components/apps/InstalledAppCard';
 import { useApps } from '@/hooks/useApps';
+import { SageAppPermissions } from '@/bindings.ts';
 
 export function Apps() {
   const { apps, loading, error, installApp, uninstallApp } = useApps();
@@ -15,7 +16,11 @@ export function Apps() {
           </p>
         </div>
 
-        <InstallAppForm onInstall={installApp} />
+        <InstallAppForm
+          onInstall={(zipPath: string, permissions: SageAppPermissions) =>
+            installApp(zipPath, permissions)
+          }
+        />
 
         <section className='space-y-4'>
           <h2 className='text-lg font-semibold'>Installed</h2>

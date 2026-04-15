@@ -144,6 +144,7 @@ pub fn run() {
             commands::get_logs,
             commands::is_asset_owned,
             apps::list_installed_apps,
+            apps::preview_app_zip,
             apps::install_app_zip,
             apps::uninstall_app,
         ])

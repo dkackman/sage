@@ -1,4 +1,4 @@
-import { InstalledSageApp } from './types';
+import { InstalledSageApp } from '@/bindings.ts';
 
 export const BUILTIN_APPS: InstalledSageApp[] = [];
 

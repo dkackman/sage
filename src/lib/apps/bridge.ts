@@ -1,4 +1,4 @@
-import { InstalledSageApp } from '@/lib/apps/types';
+import { InstalledSageApp } from '@/bindings.ts';
 
 export interface SageBridgeRequest {
   channel: 'sage-bridge';

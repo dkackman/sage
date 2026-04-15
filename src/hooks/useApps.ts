@@ -1,6 +1,6 @@
-import { InstalledSageApp } from '@/lib/apps/types';
 import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { InstalledSageApp, SageAppPermissions } from '@/bindings.ts';
 
 export function useApps() {
   const [apps, setApps] = useState<InstalledSageApp[]>([]);
@@ -25,8 +25,11 @@ export function useApps() {
   }, [refresh]);
 
   const installApp = useCallback(
-    async (zipPath: string) => {
-      await invoke<InstalledSageApp>('install_app_zip', { zipPath });
+    async (zipPath: string, permissions: SageAppPermissions) => {
+      await invoke<InstalledSageApp>('install_app_zip', {
+        zipPath,
+        grantedPermissions: permissions,
+      });
       await refresh();
     },
     [refresh],

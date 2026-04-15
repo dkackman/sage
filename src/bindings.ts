@@ -362,8 +362,11 @@ async isAssetOwned(req: IsAssetOwned) : Promise<IsAssetOwnedResponse> {
 async listInstalledApps() : Promise<InstalledSageApp[]> {
     return await TAURI_INVOKE("list_installed_apps");
 },
-async installAppZip(zipPath: string) : Promise<InstalledSageApp> {
-    return await TAURI_INVOKE("install_app_zip", { zipPath });
+async previewAppZip(zipPath: string) : Promise<SageAppPackageManifest> {
+    return await TAURI_INVOKE("preview_app_zip", { zipPath });
+},
+async installAppZip(zipPath: string, grantedPermissions: SageAppPermissions) : Promise<InstalledSageApp> {
+    return await TAURI_INVOKE("install_app_zip", { zipPath, grantedPermissions });
 },
 async uninstallApp(appId: string) : Promise<null> {
     return await TAURI_INVOKE("uninstall_app", { appId });
@@ -2165,6 +2168,7 @@ export type ResyncCatResponse = Record<string, never>
  * Response from resynchronizing the wallet
  */
 export type ResyncResponse = Record<string, never>
+export type SageAppPackageManifest = { name: string; version: string; permissions: SageAppPermissions; required_permissions?: string[] }
 export type SageAppPermissions = { network: boolean; persistentStorage: boolean }
 /**
  * Save a theme NFT to the wallet

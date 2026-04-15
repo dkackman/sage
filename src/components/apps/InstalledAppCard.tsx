@@ -1,10 +1,10 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { InstalledSageApp } from '@/lib/apps/types';
 import { Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { InstalledSageApp } from '@/bindings.ts';
 
 interface Props {
   app: InstalledSageApp;
@@ -15,7 +15,7 @@ function permissionLabel(key: keyof InstalledSageApp['permissions']) {
   switch (key) {
     case 'network':
       return 'Network';
-    case 'persistent_storage':
+    case 'persistentStorage':
       return 'Persistent storage';
     default:
       return key;
@@ -62,9 +62,10 @@ export function InstalledAppCard({ app, onUninstall }: Props) {
       <CardContent className='space-y-3'>
         <div className='flex flex-wrap gap-2'>
           {(
-            Object.entries(app.permissions) as Array<
-              [keyof InstalledSageApp['permissions'], boolean]
-            >
+            Object.entries(app.permissions) as [
+              keyof InstalledSageApp['permissions'],
+              boolean,
+            ][]
           )
             .filter(([, allowed]) => allowed)
             .map(([permission]) => (
