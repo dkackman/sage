@@ -164,13 +164,11 @@ pub async fn bridge_fetch_http_batch_stream(
                         "error": err.to_string()
                     }),
                 };
-
                 let _ = app_handle.emit_to(&source_label, "sage-bridge:batch:result", payload);
             });
         }
 
         while futures.next().await.is_some() {}
-
         let _ = app_handle.emit_to(
             &source_label,
             "sage-bridge:batch:done",

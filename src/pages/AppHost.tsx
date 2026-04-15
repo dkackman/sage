@@ -172,6 +172,7 @@ export function AppHost() {
           void handleBridgeRequest(
             {
               app: installedApp,
+              sourceLabel: payload.sourceLabel,
               emitEvent: async (event) => {
                 await hostWebview.emitTo(
                   payload.sourceLabel,

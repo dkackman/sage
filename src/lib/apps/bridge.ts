@@ -77,6 +77,7 @@ export interface SageBridgeEventEnvelope {
 
 export interface SageBridgeContext {
   app: InstalledSageApp;
+  sourceLabel: string;
   emitEvent?: (event: SageBridgeEventEnvelope) => Promise<void> | void;
 }
 
@@ -528,11 +529,11 @@ export async function handleBridgeRequest(
 
         const batchId = await invoke<string>('bridge_fetch_http_batch_stream', {
           appId: ctx.app.id,
-          sourceLabel: request.id,
+          sourceLabel: ctx.sourceLabel,
           req: params,
         });
 
-        return success(request.id, { batchId });
+        return success(request.id, batchId);
       }
 
       case 'network.wsOpen':
