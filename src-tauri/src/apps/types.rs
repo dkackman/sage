@@ -1,13 +1,6 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SageAppPermissions {
-    pub network: bool,
-    #[serde(rename = "persistentStorage", alias = "persistent_storage")]
-    pub persistent_storage: bool,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SageNetworkPermissionEntry {
     pub scheme: String,
@@ -154,6 +147,8 @@ pub struct InstalledSageApp {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct CorruptedInstalledSageApp {
     pub id: String,
+
+    #[serde(rename = "installDir", alias = "install_dir")]
     pub install_dir: String,
     pub error: String,
 }
