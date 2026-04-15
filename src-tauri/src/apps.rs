@@ -906,6 +906,24 @@ fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
 
   const currentWebview = tauri.webview.getCurrentWebview();
   const sourceLabel = currentWebview.label;
+  const bridgeListeners = new Set();
+
+  currentWebview.listen('sage-bridge:event', (event) => {{
+    const data = event.payload;
+    if (!data || data.channel !== 'sage-bridge') {{
+      return;
+    }}
+
+    for (const listener of bridgeListeners) {{
+      try {{
+        listener(data);
+      }} catch (error) {{
+        console.error('Sage bridge event listener failed:', error);
+      }}
+    }}
+  }}).catch((error) => {{
+    console.error('Failed to subscribe to sage-bridge:event:', error);
+  }});
 
   async function callHost(method, params) {{
     const id = `sage-${{Date.now()}}-${{Math.random().toString(36).slice(2)}}`;
@@ -994,6 +1012,38 @@ fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
       }};
       return callHost('network.fetchBatch', params);
     }},
+    async openWebSocket(input) {{
+      const params = {{
+        url: input?.url,
+        protocols: Array.isArray(input?.protocols) ? input.protocols : [],
+      }};
+      return callHost('network.wsOpen', params);
+    }},
+    async sendWebSocket(input) {{
+      const params = {{
+        socketId: input?.socketId,
+        text: input?.text,
+        base64: input?.base64,
+      }};
+      return callHost('network.wsSend', params);
+    }},
+    async closeWebSocket(input) {{
+      const params = {{
+        socketId: input?.socketId,
+        code: input?.code,
+        reason: input?.reason,
+      }};
+      return callHost('network.wsClose', params);
+    }},
+    addEventListener(listener) {{
+      bridgeListeners.add(listener);
+      return () => {{
+        bridgeListeners.delete(listener);
+      }};
+    }},
+    removeEventListener(listener) {{
+      bridgeListeners.delete(listener);
+    }},
     appInfo: __sageAppInfo,
   }};
 }})();
@@ -1025,7 +1075,7 @@ fn csp_source_list(items: &[&str]) -> String {
     items.join(" ")
 }
 
-fn build_app_csp(app: &InstalledSageApp) -> String {
+fn build_app_csp(_app: &InstalledSageApp) -> String {
     let default_src = csp_source_list(&["'self'"]);
     let script_src = csp_source_list(&["'self'", "'wasm-unsafe-eval'"]);
     let style_src = csp_source_list(&["'self'", "'unsafe-inline'"]);
@@ -1037,17 +1087,13 @@ fn build_app_csp(app: &InstalledSageApp) -> String {
     let base_uri = csp_source_list(&["'none'"]);
     let form_action = csp_source_list(&["'none'"]);
 
-    let connect_src = if app.granted_permissions.network.is_empty() {
-        csp_source_list(&["'self'", "ipc:", "ipc://localhost", "http://ipc.localhost", "https://ipc.localhost"])
-    } else {
-        csp_source_list(&[
-            "'self'",
-            "ipc:",
-            "ipc://localhost",
-            "http://ipc.localhost",
-            "https://ipc.localhost",
-        ])
-    };
+    let connect_src = csp_source_list(&[
+        "'self'",
+        "ipc:",
+        "ipc://localhost",
+        "http://ipc.localhost",
+        "https://ipc.localhost",
+    ]);
 
     format!(
         "default-src {default_src}; \

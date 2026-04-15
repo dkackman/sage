@@ -2,6 +2,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useApps } from '@/hooks/useApps';
 import {
+  cleanupBridgeResources,
   handleBridgeRequest,
   isBridgeRequest,
   type SageBridgeEventPayload,
@@ -168,15 +169,25 @@ export function AppHost() {
             return;
           }
 
-          void handleBridgeRequest({ app: installedApp }, payload.request).then(
-            (response) => {
-              void hostWebview.emitTo(
-                payload.sourceLabel,
-                'sage-bridge:response',
-                response,
-              );
+          void handleBridgeRequest(
+            {
+              app: installedApp,
+              emitEvent: async (event) => {
+                await hostWebview.emitTo(
+                  payload.sourceLabel,
+                  'sage-bridge:event',
+                  event,
+                );
+              },
             },
-          );
+            payload.request,
+          ).then((response) => {
+            void hostWebview.emitTo(
+              payload.sourceLabel,
+              'sage-bridge:response',
+              response,
+            );
+          });
         },
       );
     };
@@ -192,6 +203,7 @@ export function AppHost() {
       unlistenBridge?.();
       removeWindowResize?.();
       clearDelayedSyncTimers();
+      cleanupBridgeResources(installedApp.id);
 
       if (embeddedWebview) {
         void embeddedWebview.close().catch((err) => {
@@ -256,4 +268,3 @@ export function AppHost() {
     </div>
   );
 }
-
