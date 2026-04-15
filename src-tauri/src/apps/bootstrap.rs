@@ -109,6 +109,19 @@ pub fn build_sage_bootstrap(app: &InstalledSageApp) -> String {
     }});
   }}
 
+  currentWebview.listen('sage-lifecycle:before-stop', async (event) => {{
+    try {{
+      window.dispatchEvent(
+        new CustomEvent('sage:lifecycle:before-stop', {{
+          detail: event.payload,
+        }})
+      );
+    }} catch (error) {{
+      console.error('Failed to dispatch before-stop lifecycle event', error);
+    }}
+  }}).catch((error) => {{
+    console.error('Failed to subscribe to sage-lifecycle:before-stop:', error);
+  }});
   window.__SAGE__ = {{
     appInfo: __sageAppInfo,
     addEventListener(listener) {{

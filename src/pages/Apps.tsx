@@ -3,9 +3,13 @@ import { InstalledAppCard } from '@/components/apps/InstalledAppCard';
 import { useApps } from '@/hooks/useApps';
 import { CorruptedAppCard } from '@/components/apps/CorruptedAppCard.tsx';
 import { SageGrantedPermissions } from '@/bindings.ts';
+import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
+import { Button } from '@/components/ui/button.tsx';
+import { Link } from 'react-router-dom';
 
 export function Apps() {
   const { apps, loading, error, installApp, uninstallApp } = useApps();
+  const runtimes = useAppRuntimes();
 
   return (
     <div className='flex-1 overflow-auto'>
@@ -15,6 +19,9 @@ export function Apps() {
           <p className='text-muted-foreground'>
             Install and manage Sage app packages.
           </p>
+          <Button asChild variant='outline'>
+            <Link to='/apps/task-manager'>Task Manager ({runtimes.length})</Link>
+          </Button>
         </div>
 
         <InstallAppForm

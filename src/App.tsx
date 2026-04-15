@@ -59,6 +59,7 @@ import { Transactions } from './pages/Transactions';
 import Wallet from './pages/Wallet';
 import { Apps } from '@/pages/Apps.tsx';
 import { AppHost } from '@/pages/AppHost.tsx';
+import { TaskManager } from '@/pages/TaskManager.tsx';
 
 // Theme-aware toast container component
 function ThemeAwareToastContainer() {
@@ -140,6 +141,7 @@ const router = createHashRouter(
       </Route>
       <Route path='/apps' element={<Wallet />}>
         <Route path='' element={<Apps />} />
+        <Route path='task-manager' element={<TaskManager />} />
         <Route path=':appId' element={<AppHost />} />
       </Route>
       <Route path='/settings' element={<Settings />} />

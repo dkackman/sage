@@ -2,15 +2,17 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useApps } from '@/hooks/useApps';
 import {
-  cleanupBridgeResources,
   handleBridgeRequest,
   isBridgeRequest,
   type SageBridgeEventPayload,
 } from '@/lib/apps/bridge';
-import { openAppWindow } from '@/lib/apps/openAppWindow';
+import {
+  ensureInlineRuntime,
+  getRuntimeWebview,
+  markRuntimeVisible,
+} from '@/lib/apps/runtimeRegistry';
 import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
-import { getCurrentWebview, Webview } from '@tauri-apps/api/webview';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -47,12 +49,9 @@ export function AppHost() {
     }
 
     const installedApp = app;
-    const inlineLabel = `app-inline-${installedApp.id}`;
-    const hostWindow = getCurrentWindow();
     const hostWebview = getCurrentWebview();
 
     let disposed = false;
-    let embeddedWebview: Webview | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let unlistenBridge: (() => void) | null = null;
     let removeWindowResize: (() => void) | null = null;
@@ -66,22 +65,21 @@ export function AppHost() {
     };
 
     const syncBounds = async () => {
-      const currentWebview = embeddedWebview;
+      const webview = await getRuntimeWebview(installedApp.id);
       const container = containerRef.current;
 
-      if (disposed || !currentWebview || !container) {
+      if (disposed || !webview || !container) {
         return;
       }
 
       const rect = container.getBoundingClientRect();
-
       const width = Math.max(1, Math.round(rect.width));
       const height = Math.max(1, Math.round(rect.height));
       const x = Math.round(rect.left);
       const y = Math.round(rect.top);
 
-      await currentWebview.setPosition(new LogicalPosition(x, y));
-      await currentWebview.setSize(new LogicalSize(width, height));
+      await webview.setPosition(new LogicalPosition(x, y));
+      await webview.setSize(new LogicalSize(width, height));
     };
 
     const scheduleSyncBounds = () => {
@@ -93,42 +91,8 @@ export function AppHost() {
     };
 
     const mount = async () => {
-      const existing = await Webview.getByLabel(inlineLabel);
-
-      if (disposed) {
-        return;
-      }
-
-      if (existing) {
-        embeddedWebview = existing;
-      } else {
-        embeddedWebview = new Webview(hostWindow, inlineLabel, {
-          url: entrySrc,
-          x: 0,
-          y: 0,
-          width: 1,
-          height: 1,
-          focus: true,
-        });
-
-        const createdWebview = embeddedWebview;
-
-        await new Promise<void>((resolve, reject) => {
-          const createdPromise = createdWebview.once('tauri://created', () => {
-            resolve();
-          });
-
-          const errorPromise = createdWebview.once('tauri://error', (event) => {
-            const payload =
-              typeof event.payload === 'string'
-                ? event.payload
-                : JSON.stringify(event.payload);
-            reject(new Error(payload));
-          });
-
-          void Promise.all([createdPromise, errorPromise]);
-        });
-      }
+      const runtime = await ensureInlineRuntime(installedApp);
+      await markRuntimeVisible(installedApp.id, true);
 
       scheduleSyncBounds();
 
@@ -194,23 +158,16 @@ export function AppHost() {
     };
 
     void mount().catch((err) => {
-      console.error('Failed to mount embedded app webview:', err);
+      console.error('Failed to attach app runtime:', err);
     });
 
     return () => {
       disposed = true;
-
+      void markRuntimeVisible(installedApp.id, false);
       resizeObserver?.disconnect();
       unlistenBridge?.();
       removeWindowResize?.();
       clearDelayedSyncTimers();
-      cleanupBridgeResources(installedApp.id);
-
-      if (embeddedWebview) {
-        void embeddedWebview.close().catch((err) => {
-          console.error('Failed to close embedded app webview:', err);
-        });
-      }
     };
   }, [app, entrySrc]);
 
@@ -238,17 +195,6 @@ export function AppHost() {
               <ArrowLeft className='mr-2 h-4 w-4' />
               Back to Apps
             </Link>
-          </Button>
-
-          <Button
-            variant='outline'
-            onClick={() => {
-              void openAppWindow(app.id, app.name).catch((err) => {
-                console.error('Failed to open app window:', err);
-              });
-            }}
-          >
-            Open in window
           </Button>
         </div>
 
