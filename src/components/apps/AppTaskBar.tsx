@@ -25,6 +25,9 @@ interface DragState {
   overlayLeftPx: number;
 }
 
+const MAX_TAB_WIDTH_PX = 200;
+const MIN_TAB_WIDTH_PX = 120;
+
 function reorderIds(
   ids: string[],
   fromIndex: number,
@@ -55,6 +58,7 @@ export function AppTaskBar({
 
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [previewOrder, setPreviewOrder] = useState<string[] | null>(null);
+  const [tabsContainerWidthPx, setTabsContainerWidthPx] = useState(0);
 
   const baseOrder = useMemo(() => tabs.map((tab) => tab.appId), [tabs]);
   const activeOrder = previewOrder ?? baseOrder;
@@ -69,9 +73,43 @@ export function AppTaskBar({
       .filter((tab): tab is AppTaskBarTab => tab != null);
   }, [activeOrder, tabsById]);
 
-  const draggedIndex = dragState
-    ? activeOrder.indexOf(dragState.draggedAppId)
-    : -1;
+  const tabWidthPx = useMemo(() => {
+    const count = Math.max(1, tabs.length);
+
+    if (tabsContainerWidthPx <= 0) {
+      return MAX_TAB_WIDTH_PX;
+    }
+
+    return Math.max(
+      MIN_TAB_WIDTH_PX,
+      Math.min(MAX_TAB_WIDTH_PX, Math.floor(tabsContainerWidthPx / count)),
+    );
+  }, [tabs.length, tabsContainerWidthPx]);
+
+  useEffect(() => {
+    const container = tabsContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const updateWidth = () => {
+      setTabsContainerWidthPx(container.getBoundingClientRect().width);
+    };
+
+    updateWidth();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateWidth();
+    });
+
+    resizeObserver.observe(container);
+    window.addEventListener('resize', updateWidth);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, []);
 
   useEffect(() => {
     if (!dragState) {
@@ -134,25 +172,25 @@ export function AppTaskBar({
     }
 
     const containerRect = containerEl.getBoundingClientRect();
-    const slotWidth = containerRect.width / tabCount;
+    const slotWidthPx = tabWidthPx;
 
-    const minOverlayLeft = 0;
-    const maxOverlayLeft = Math.max(0, containerRect.width - slotWidth);
+    const minOverlayLeftPx = 0;
+    const maxOverlayLeftPx = Math.max(0, tabCount * slotWidthPx - slotWidthPx);
 
-    const rawOverlayLeft =
+    const rawOverlayLeftPx =
       dragState.currentPointerX -
       containerRect.left -
       dragState.pointerOffsetWithinTab;
 
-    const clampedOverlayLeft = clamp(
-      rawOverlayLeft,
-      minOverlayLeft,
-      maxOverlayLeft,
+    const clampedOverlayLeftPx = clamp(
+      rawOverlayLeftPx,
+      minOverlayLeftPx,
+      maxOverlayLeftPx,
     );
 
-    const draggedCenterX = clampedOverlayLeft + slotWidth / 2;
+    const draggedCenterX = clampedOverlayLeftPx + slotWidthPx / 2;
     const nextIndex = clamp(
-      Math.floor(draggedCenterX / slotWidth),
+      Math.floor(draggedCenterX / slotWidthPx),
       0,
       tabCount - 1,
     );
@@ -161,7 +199,7 @@ export function AppTaskBar({
       prev
         ? {
             ...prev,
-            overlayLeftPx: clampedOverlayLeft,
+            overlayLeftPx: clampedOverlayLeftPx,
           }
         : null,
     );
@@ -172,7 +210,7 @@ export function AppTaskBar({
     }
 
     setPreviewOrder(reorderIds(activeOrder, currentIndex, nextIndex));
-  }, [dragState, activeOrder]);
+  }, [dragState, activeOrder, tabWidthPx]);
 
   return (
     <div className='flex h-12 shrink-0 items-end gap-2 border-b bg-muted/30 px-3 pt-2'>
@@ -187,7 +225,7 @@ export function AppTaskBar({
 
       <div
         ref={tabsContainerRef}
-        className='relative flex min-w-0 flex-1 items-end gap-1 overflow-hidden'
+        className='relative flex min-w-0 flex-1 items-end justify-start gap-1 overflow-hidden'
       >
         {orderedTabs.map((tab) => {
           const isDragged = dragState?.draggedAppId === tab.appId;
@@ -195,7 +233,8 @@ export function AppTaskBar({
           return (
             <div
               key={tab.appId}
-              className={clsx('min-w-0 flex-1', isDragged && 'opacity-0')}
+              className={clsx('shrink-0', isDragged && 'opacity-0')}
+              style={{ width: `${tabWidthPx}px` }}
             >
               <button
                 type='button'
@@ -215,28 +254,23 @@ export function AppTaskBar({
                   }
 
                   const containerRect = containerEl.getBoundingClientRect();
-                  const tabCount = baseOrder.length;
-                  if (tabCount === 0) {
-                    return;
-                  }
-
-                  const slotWidth = containerRect.width / tabCount;
+                  const slotWidthPx = tabWidthPx;
                   const currentIndex = activeOrder.indexOf(tab.appId);
-                  const slotLeft = currentIndex * slotWidth;
-                  const pointerXWithinContainer =
+                  const slotLeftPx = currentIndex * slotWidthPx;
+                  const pointerXWithinContainerPx =
                     event.clientX - containerRect.left;
-                  const pointerOffsetWithinTab = clamp(
-                    pointerXWithinContainer - slotLeft,
+                  const pointerOffsetWithinTabPx = clamp(
+                    pointerXWithinContainerPx - slotLeftPx,
                     0,
-                    slotWidth,
+                    slotWidthPx,
                   );
 
                   setPreviewOrder((prev) => prev ?? baseOrder);
                   setDragState({
                     draggedAppId: tab.appId,
-                    pointerOffsetWithinTab,
+                    pointerOffsetWithinTab: pointerOffsetWithinTabPx,
                     currentPointerX: event.clientX,
-                    overlayLeftPx: slotLeft,
+                    overlayLeftPx: slotLeftPx,
                   });
                 }}
                 className={clsx(
@@ -288,7 +322,7 @@ export function AppTaskBar({
           );
         })}
 
-        {dragState && draggedIndex !== -1
+        {dragState
           ? (() => {
               const draggedTab = tabsById.get(dragState.draggedAppId);
               if (!draggedTab) {
@@ -300,7 +334,7 @@ export function AppTaskBar({
                   className='pointer-events-none absolute bottom-0 z-20'
                   style={{
                     left: `${dragState.overlayLeftPx}px`,
-                    width: `${100 / activeOrder.length}%`,
+                    width: `${tabWidthPx}px`,
                   }}
                 >
                   <div
