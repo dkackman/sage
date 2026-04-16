@@ -1,3 +1,4 @@
+use std::io;
 use std::sync::Arc;
 
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -13,6 +14,7 @@ use crate::{
     },
     error::Result,
 };
+use crate::apps::limits::MAX_BRIDGE_BATCH_REQUESTS;
 
 #[command]
 #[specta::specta]
@@ -21,6 +23,13 @@ pub async fn bridge_fetch_http_batch(
     app_id: String,
     req: SageBridgeFetchBatchRequest,
 ) -> Result<Vec<SageBridgeFetchResponse>> {
+    if req.requests.len() > MAX_BRIDGE_BATCH_REQUESTS {
+        return Err(io::Error::other(format!(
+            "batch request count {} exceeds limit {}",
+            req.requests.len(),
+            MAX_BRIDGE_BATCH_REQUESTS
+        )).into());
+    }
     let app_state = state.inner().clone();
     let max = req.max_concurrency.unwrap_or(8).max(1);
     let semaphore = Arc::new(Semaphore::new(max));
@@ -28,7 +37,11 @@ pub async fn bridge_fetch_http_batch(
     let mut futures = FuturesUnordered::new();
 
     for (index, request) in req.requests.into_iter().enumerate() {
-        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        let permit = semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|err| io::Error::other(format!("failed to acquire batch semaphore: {err}")))?;
         let app_state = app_state.clone();
         let app_id = app_id.clone();
 
@@ -45,10 +58,12 @@ pub async fn bridge_fetch_http_batch(
         ordered[index] = Some(result?);
     }
 
-    Ok(ordered
-        .into_iter()
-        .map(|item| item.expect("missing batch result"))
-        .collect())
+    let mut out = Vec::with_capacity(request_count);
+    for item in ordered {
+        let value = item.ok_or_else(|| io::Error::other("missing batch result"))?;
+        out.push(value);
+    }
+    Ok(out)
 }
 
 #[command]
@@ -60,6 +75,13 @@ pub async fn bridge_fetch_http_batch_stream(
     source_label: String,
     req: SageBridgeFetchBatchRequest,
 ) -> Result<String> {
+    if req.requests.len() > MAX_BRIDGE_BATCH_REQUESTS {
+        return Err(io::Error::other(format!(
+            "batch request count {} exceeds limit {}",
+            req.requests.len(),
+            MAX_BRIDGE_BATCH_REQUESTS
+        )).into());
+    }
     let batch_id = format!("batch-{}", Uuid::new_v4());
     let batch_id_for_spawn = batch_id.clone();
     let batch_id_done = batch_id.clone();
