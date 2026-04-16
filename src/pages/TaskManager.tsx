@@ -6,8 +6,7 @@ import {
   hideRuntime,
   killRuntime,
 } from '@/lib/apps/runtimeRegistry';
-import { ArrowLeft } from 'lucide-react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 function formatDuration(ms: number) {
   const s = Math.floor(ms / 1000);
@@ -25,17 +24,8 @@ export function TaskManager() {
   return (
     <div className='mx-auto w-full max-w-6xl p-4 md:p-6'>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between gap-4 space-y-0'>
-          <div>
-            <CardTitle>Task Manager</CardTitle>
-          </div>
-
-          <Button asChild variant='ghost' className='pl-0'>
-            <Link to='/apps'>
-              <ArrowLeft className='mr-2 h-4 w-4' />
-              Back to Apps
-            </Link>
-          </Button>
+        <CardHeader>
+          <CardTitle>Task Manager</CardTitle>
         </CardHeader>
 
         <CardContent className='space-y-4'>

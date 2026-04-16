@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button.tsx';
 export type PendingApproval = {
   kind: 'send_xch';
   appId: string;
+  appName: string;
   requestId: string;
   summary: {
     address: string;
@@ -13,19 +14,25 @@ export type PendingApproval = {
   };
 } | null;
 
-export function AppApprovalStrip({
-  approval,
-  expanded,
-  onToggleExpanded,
-  onApprove,
-  onReject,
-}: {
+interface Props {
   approval: PendingApproval;
   expanded: boolean;
+  queuedApprovalCount: number;
+  secondsLeft: number;
   onToggleExpanded: () => void;
   onApprove: () => void;
   onReject: () => void;
-}) {
+}
+
+export function AppApprovalStrip({
+  approval,
+  expanded,
+  queuedApprovalCount,
+  secondsLeft,
+  onToggleExpanded,
+  onApprove,
+  onReject,
+}: Props) {
   if (!approval) {
     return null;
   }
@@ -38,7 +45,14 @@ export function AppApprovalStrip({
             Transaction approval required
           </div>
           <div className='truncate text-xs text-muted-foreground'>
-            Send {approval.summary.amount} to {approval.summary.address}
+            {approval.appName}: send {approval.summary.amount} to{' '}
+            {approval.summary.address}
+          </div>
+          <div className='text-xs text-muted-foreground'>
+            Expires in {secondsLeft}s
+            {queuedApprovalCount > 0
+              ? ` · ${queuedApprovalCount} more approval${queuedApprovalCount === 1 ? '' : 's'} pending`
+              : ''}
           </div>
         </div>
 

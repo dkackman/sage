@@ -61,6 +61,7 @@ import { Apps } from '@/pages/Apps.tsx';
 import { AppHost } from '@/pages/AppHost.tsx';
 import { TaskManager } from '@/pages/TaskManager.tsx';
 import { AppsProvider } from '@/contexts/AppsContext.tsx';
+import { AppsWorkspace } from '@/pages/AppsWorkspace.tsx';
 
 // Theme-aware toast container component
 function ThemeAwareToastContainer() {
@@ -141,9 +142,11 @@ const router = createHashRouter(
         <Route path='' element={<Swap />} />
       </Route>
       <Route path='/apps' element={<Wallet />}>
-        <Route path='' element={<Apps />} />
-        <Route path='task-manager' element={<TaskManager />} />
-        <Route path=':appId' element={<AppHost />} />
+        <Route element={<AppsWorkspace />}>
+          <Route path='' element={<Apps />} />
+          <Route path='task-manager' element={<TaskManager />} />
+          <Route path=':appId' element={<AppHost />} />
+        </Route>
       </Route>
       <Route path='/settings' element={<Settings />} />
       <Route path='/scan' element={<QRScanner />} />
