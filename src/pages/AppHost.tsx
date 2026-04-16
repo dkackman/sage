@@ -1,14 +1,17 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { killRuntime } from '@/lib/apps/runtimeRegistry';
-import { ArrowLeft } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAppRuntimePresence } from '@/hooks/useAppRuntimePresence';
 import { useApps } from '@/contexts/AppsContext';
 import { useAppPendingApprovals } from '@/hooks/useAppPendingApprovals.ts';
 import { useAppEmbeddedRuntime } from '@/hooks/useAppEmbeddedRuntime.ts';
-import { AppApprovalBanner } from '@/components/apps/AppApprovalBanner.tsx';
+import { AppTaskBar } from '@/components/apps/AppTaskBar.tsx';
+import {
+  AppApprovalStrip,
+  type PendingApproval,
+} from '@/components/apps/AppApprovalStrip.tsx';
 
 function AppNotFound() {
   return (
@@ -38,6 +41,7 @@ export function AppHost() {
   const app = getApp(appId);
   const isRunning = useAppRuntimePresence(appId);
   const [applyingUpdate, setApplyingUpdate] = useState(false);
+  const [approvalExpanded, setApprovalExpanded] = useState(false);
 
   const {
     currentApproval,
@@ -51,15 +55,32 @@ export function AppHost() {
   const checkingUpdate = busyAppIds[appId] ?? false;
   const updatePreview = updateAvailability[appId] ?? null;
 
-  const sourceDisplayUrl = useMemo(() => {
-    if (!app) {
+  const approvalStripData = useMemo<PendingApproval>(() => {
+    if (!currentApproval) {
       return null;
     }
 
-    return app.source.kind === 'url'
-      ? app.source.appUrl
-      : `sage-app://${app.id}`;
-  }, [app]);
+    if (currentApproval.request.kind === 'send_xch') {
+      return {
+        kind: 'send_xch',
+        appId: currentApproval.request.app.id,
+        requestId: currentApproval.request.requestId,
+        summary: {
+          address: currentApproval.request.params.address,
+          amount: String(currentApproval.request.params.amount),
+          fee: String(currentApproval.request.params.fee),
+          memos: currentApproval.request.params.memos ?? [],
+          autoSubmit: false,
+        },
+      };
+    }
+
+    return null;
+  }, [currentApproval]);
+
+  useEffect(() => {
+    setApprovalExpanded(false);
+  }, [currentApproval?.id]);
 
   const { scheduleSyncBounds } = useAppEmbeddedRuntime({
     app,
@@ -136,32 +157,21 @@ export function AppHost() {
   return (
     <div className='flex h-full min-h-0 flex-col'>
       <div className='flex h-full min-h-0 w-full flex-col'>
-        <div className='flex items-center justify-between gap-4'>
-          <Button asChild variant='ghost' className='pl-0'>
-            <Link to='/apps'>
-              <ArrowLeft className='mr-2 h-4 w-4' />
-              Back to Apps
-            </Link>
-          </Button>
-        </div>
+        <AppTaskBar
+          appName={app.name}
+          onExit={() => {
+            void killRuntime(app.id).then(() => {
+              navigate('/apps');
+            });
+          }}
+        />
 
-        <div className='flex items-center gap-2'>
-          <Button
-            variant='destructive'
-            onClick={() => {
-              void killRuntime(app.id).then(() => {
-                navigate('/apps');
-              });
-            }}
-          >
-            Exit App
-          </Button>
-        </div>
-
-        <AppApprovalBanner
-          currentApproval={currentApproval}
-          queuedApprovalCount={queuedApprovalCount}
-          currentApprovalSecondsLeft={currentApprovalSecondsLeft}
+        <AppApprovalStrip
+          approval={approvalStripData}
+          expanded={approvalExpanded}
+          onToggleExpanded={() => {
+            setApprovalExpanded((prev) => !prev);
+          }}
           onApprove={approveCurrentApproval}
           onReject={rejectCurrentApproval}
         />
@@ -188,17 +198,10 @@ export function AppHost() {
           </Alert>
         ) : null}
 
-        <div className='shrink-0 space-y-1'>
-          <h1 className='text-2xl font-semibold tracking-tight'>{app.name}</h1>
-          <p className='break-all text-xs text-muted-foreground'>
-            App URL: {sourceDisplayUrl}
-          </p>
-        </div>
-
         <div className='flex-1 min-h-0'>
           <div
             ref={containerRef}
-            className='h-full w-full overflow-hidden rounded-xl bg-background'
+            className='h-full w-full overflow-hidden bg-background'
           />
         </div>
       </div>
