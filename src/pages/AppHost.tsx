@@ -1,23 +1,14 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  handleBridgeRequest,
-  isBridgeRequest,
-  type SageBridgeEventPayload,
-} from '@/lib/apps/bridge';
-import {
-  ensureInlineRuntime,
-  getRuntimeWebview,
-  killRuntime,
-  markRuntimeVisible,
-} from '@/lib/apps/runtimeRegistry';
-import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
-import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { killRuntime } from '@/lib/apps/runtimeRegistry';
 import { ArrowLeft } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppRuntimePresence } from '@/hooks/useAppRuntimePresence';
 import { useApps } from '@/contexts/AppsContext';
+import { useAppPendingApprovals } from '@/hooks/useAppPendingApprovals.ts';
+import { useAppEmbeddedRuntime } from '@/hooks/useAppEmbeddedRuntime.ts';
+import { AppApprovalBanner } from '@/components/apps/AppApprovalBanner.tsx';
 
 function AppNotFound() {
   return (
@@ -48,16 +39,17 @@ export function AppHost() {
   const isRunning = useAppRuntimePresence(appId);
   const [applyingUpdate, setApplyingUpdate] = useState(false);
 
+  const {
+    currentApproval,
+    queuedApprovalCount,
+    currentApprovalSecondsLeft,
+    requestApproval,
+    approveCurrentApproval,
+    rejectCurrentApproval,
+  } = useAppPendingApprovals();
+
   const checkingUpdate = busyAppIds[appId] ?? false;
   const updatePreview = updateAvailability[appId] ?? null;
-
-  const entrySrc = useMemo(() => {
-    if (!app) {
-      return null;
-    }
-
-    return `sage-app://${app.id}/index.html`;
-  }, [app]);
 
   const sourceDisplayUrl = useMemo(() => {
     if (!app) {
@@ -66,43 +58,14 @@ export function AppHost() {
 
     return app.source.kind === 'url'
       ? app.source.appUrl
-      : `sage-app://${app.id}/index.html`;
+      : `sage-app://${app.id}`;
   }, [app]);
 
-  const syncBounds = useCallback(async (installedAppId: string) => {
-    const webview = await getRuntimeWebview(installedAppId);
-    const container = containerRef.current;
-
-    if (!webview || !container) {
-      return;
-    }
-
-    const rect = container.getBoundingClientRect();
-    const width = Math.max(1, Math.round(rect.width));
-    const height = Math.max(1, Math.round(rect.height));
-    const x = Math.round(rect.left);
-    const y = Math.round(rect.top);
-
-    await webview.setPosition(new LogicalPosition(x, y));
-    await webview.setSize(new LogicalSize(width, height));
-  }, []);
-
-  const scheduleSyncBounds = useCallback(
-    (installedAppId: string) => {
-      requestAnimationFrame(() => {
-        void syncBounds(installedAppId).catch((err) => {
-          const message = err instanceof Error ? err.message : String(err);
-
-          if (message.includes('webview not found')) {
-            return;
-          }
-
-          console.error('Failed to sync embedded app webview bounds:', err);
-        });
-      });
-    },
-    [syncBounds],
-  );
+  const { scheduleSyncBounds } = useAppEmbeddedRuntime({
+    app,
+    containerRef,
+    requestApproval,
+  });
 
   const handleUpdateAndReopen = useCallback(async () => {
     if (!app) {
@@ -155,109 +118,6 @@ export function AppHost() {
     };
   }, [app, checkForUpdate]);
 
-  useEffect(() => {
-    if (!app || !entrySrc || !containerRef.current) {
-      return;
-    }
-
-    const installedApp = app;
-    const hostWebview = getCurrentWebview();
-
-    let disposed = false;
-    let resizeObserver: ResizeObserver | null = null;
-    let unlistenBridge: (() => void) | null = null;
-    let removeWindowResize: (() => void) | null = null;
-    let delayedSyncTimers: number[] = [];
-
-    const clearDelayedSyncTimers = () => {
-      delayedSyncTimers.forEach((id) => {
-        window.clearTimeout(id);
-      });
-      delayedSyncTimers = [];
-    };
-
-    const mount = async () => {
-      await ensureInlineRuntime(installedApp);
-      await markRuntimeVisible(installedApp.id, true);
-
-      scheduleSyncBounds(installedApp.id);
-
-      delayedSyncTimers = [0, 50, 150, 300].map((delay) =>
-        window.setTimeout(() => {
-          if (!disposed) {
-            scheduleSyncBounds(installedApp.id);
-          }
-        }, delay),
-      );
-
-      resizeObserver = new ResizeObserver(() => {
-        if (!disposed) {
-          scheduleSyncBounds(installedApp.id);
-        }
-      });
-
-      const container = containerRef.current;
-      if (!container) {
-        return;
-      }
-
-      resizeObserver.observe(container);
-
-      const handleWindowResize = () => {
-        if (!disposed) {
-          scheduleSyncBounds(installedApp.id);
-        }
-      };
-
-      window.addEventListener('resize', handleWindowResize);
-      removeWindowResize = () => {
-        window.removeEventListener('resize', handleWindowResize);
-      };
-
-      const expectedSourceLabel = `app-inline-${installedApp.id}`;
-
-      unlistenBridge = await hostWebview.listen<SageBridgeEventPayload>(
-        'sage-bridge:request',
-        ({ payload }) => {
-          if (
-            !payload ||
-            payload.sourceLabel !== expectedSourceLabel ||
-            !isBridgeRequest(payload.request)
-          ) {
-            return;
-          }
-
-          void handleBridgeRequest(
-            {
-              app: installedApp,
-              sourceLabel: payload.sourceLabel,
-            },
-            payload.request,
-          ).then((response) => {
-            void hostWebview.emitTo(
-              payload.sourceLabel,
-              'sage-bridge:response',
-              response,
-            );
-          });
-        },
-      );
-    };
-
-    void mount().catch((err) => {
-      console.error('Failed to attach app runtime:', err);
-    });
-
-    return () => {
-      disposed = true;
-      void markRuntimeVisible(installedApp.id, false);
-      resizeObserver?.disconnect();
-      unlistenBridge?.();
-      removeWindowResize?.();
-      clearDelayedSyncTimers();
-    };
-  }, [app, entrySrc, scheduleSyncBounds]);
-
   if (loading) {
     return (
       <div className='mx-auto w-full max-w-4xl p-4 md:p-6'>
@@ -275,7 +135,7 @@ export function AppHost() {
 
   return (
     <div className='flex h-full min-h-0 flex-col'>
-      <div className='mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-4 p-4 md:p-6'>
+      <div className='flex h-full min-h-0 w-full flex-col'>
         <div className='flex items-center justify-between gap-4'>
           <Button asChild variant='ghost' className='pl-0'>
             <Link to='/apps'>
@@ -297,6 +157,14 @@ export function AppHost() {
             Exit App
           </Button>
         </div>
+
+        <AppApprovalBanner
+          currentApproval={currentApproval}
+          queuedApprovalCount={queuedApprovalCount}
+          currentApprovalSecondsLeft={currentApprovalSecondsLeft}
+          onApprove={approveCurrentApproval}
+          onReject={rejectCurrentApproval}
+        />
 
         {app.source?.kind === 'url' && updatePreview ? (
           <Alert>
