@@ -71,8 +71,6 @@ pub fn build_app_csp(app: &InstalledSageApp) -> String {
     let mut connect_sources = BTreeSet::from([
         "'self'".to_string(),
         "ipc:".to_string(),
-        "ipc://localhost".to_string(),
-        "http://ipc.localhost".to_string(),
     ]);
 
     for permission in &app.granted_permissions.network {
