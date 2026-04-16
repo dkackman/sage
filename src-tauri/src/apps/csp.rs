@@ -5,8 +5,9 @@ fn csp_source_list(items: &[&str]) -> String {
 }
 
 pub fn build_app_csp(_app: &InstalledSageApp) -> String {
-    // Installed apps are intentionally blocked from direct browser-level network access.
-    // Network access must go through the Sage bridge, where permission enforcement lives.
+    // Installed apps are intentionally blocked from direct external browser-level
+    // network access. External network access must go through the Sage bridge,
+    // where permission enforcement lives. Local app-origin access remains allowed.
     let default_src = csp_source_list(&["'self'"]);
     let script_src = csp_source_list(&["'self'", "'wasm-unsafe-eval'"]);
     let style_src = csp_source_list(&["'self'", "'unsafe-inline'"]);
@@ -18,7 +19,8 @@ pub fn build_app_csp(_app: &InstalledSageApp) -> String {
     let base_uri = csp_source_list(&["'none'"]);
     let form_action = csp_source_list(&["'none'"]);
 
-    let connect_src = csp_source_list(&["'none'"]);
+    let connect_src = csp_source_list(&["'self'", "sage-app:"]);
+    let worker_src = csp_source_list(&["'self'"]);
 
     format!(
         "default-src {default_src}; \
@@ -31,6 +33,7 @@ pub fn build_app_csp(_app: &InstalledSageApp) -> String {
          base-uri {base_uri}; \
          form-action {form_action}; \
          frame-ancestors {frame_ancestors}; \
-         connect-src {connect_src}"
+         connect-src {connect_src}; \
+         worker-src {worker_src};"
     )
 }

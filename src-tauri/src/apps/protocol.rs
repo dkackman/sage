@@ -25,14 +25,16 @@ pub fn handle_app_protocol_request(
     let snapshot_dir = Path::new(&app.active_snapshot.snapshot_dir);
     let file_path = read_snapshot_file(snapshot_dir, request_path)?;
 
+    let csp = build_app_csp(&app);
+
     if request_path.is_empty() || request_path == "/" || request_path == "/index.html" {
         let html = fs::read_to_string(&file_path)?;
-        let csp = build_app_csp(&app);
 
         return Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "text/html; charset=utf-8")
-            .header("Content-Security-Policy", csp)
+            .header("Content-Security-Policy", &csp)
+            .header("X-Content-Type-Options", "nosniff")
             .body(html.into_bytes())
             .map_err(|err| anyhow!("failed to build protocol response: {err}"));
     }
@@ -46,6 +48,8 @@ pub fn handle_app_protocol_request(
     Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", mime)
+        .header("Content-Security-Policy", csp)
+        .header("X-Content-Type-Options", "nosniff")
         .body(bytes)
         .map_err(|err| anyhow!("failed to build protocol response: {err}"))
 }
