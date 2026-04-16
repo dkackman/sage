@@ -47,6 +47,18 @@ export function AppsWorkspace() {
 
   const [approvalExpanded, setApprovalExpanded] = useState(false);
   const [applyingUpdate, setApplyingUpdate] = useState(false);
+  const [tabOrder, setTabOrder] = useState<string[]>([]);
+
+  useEffect(() => {
+    setTabOrder((prev) => {
+      const runtimeIds = runtimes.map((runtime) => runtime.appId);
+
+      const kept = prev.filter((appId) => runtimeIds.includes(appId));
+      const added = runtimeIds.filter((appId) => !kept.includes(appId));
+
+      return [...kept, ...added];
+    });
+  }, [runtimes]);
 
   const activeApp = appId ? getApp(appId) : null;
   const activeUpdatePreview = activeApp
@@ -59,19 +71,30 @@ export function AppsWorkspace() {
   }, [currentApproval?.id]);
 
   const tabs = useMemo<AppTaskBarTab[]>(() => {
-    return runtimes.map((runtime) => {
-      const installedApp = getApp(runtime.appId);
+    const runtimeByAppId = new Map(
+      runtimes.map((runtime) => [runtime.appId, runtime]),
+    );
 
-      return {
-        appId: runtime.appId,
-        name: installedApp?.name ?? runtime.appName,
-        iconSrc: installedApp
-          ? `sage-app://${installedApp.id}/${installedApp.iconFile}`
-          : null,
-        isActive: runtime.appId === activeApp?.id,
-      };
-    });
-  }, [runtimes, getApp, activeApp?.id]);
+    return tabOrder
+      .map((appId) => {
+        const runtime = runtimeByAppId.get(appId);
+        if (!runtime) {
+          return null;
+        }
+
+        const installedApp = getApp(runtime.appId);
+
+        return {
+          appId: runtime.appId,
+          name: installedApp?.name ?? runtime.appName,
+          iconSrc: installedApp
+            ? `sage-app://${installedApp.id}/${installedApp.iconFile}`
+            : null,
+          isActive: runtime.appId === activeApp?.id,
+        };
+      })
+      .filter((tab): tab is AppTaskBarTab => tab !== null);
+  }, [runtimes, tabOrder, getApp, activeApp?.id]);
 
   const approvalStripData = useMemo<PendingApproval>(() => {
     if (!currentApproval) {
@@ -133,6 +156,7 @@ export function AppsWorkspace() {
             }
           });
         }}
+        onReorderTabs={setTabOrder}
       />
 
       {activeApp ? (
