@@ -57,6 +57,7 @@ fn merge_granted_permissions_for_update(
         network: merged_network,
         persistent_storage: new_requested.persistent_storage.is_some()
             && (old_granted.persistent_storage || user_selected.persistent_storage),
+        wallet: old_granted.wallet.clone(),
     }
 }
 

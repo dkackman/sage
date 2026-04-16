@@ -10,9 +10,18 @@ pub struct SageNetworkPermissionEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SagePersistentStoragePermission {
+pub struct SagePermissionRequired {
     #[serde(default)]
     pub required: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SageWalletPermissions {
+    #[serde(rename = "sendXch", alias = "send_xch")]
+    pub send_xch: Option<SagePermissionRequired>,
+
+    #[serde(rename = "sendXchAutoSubmit", alias = "send_xch_auto_submit")]
+    pub send_xch_auto_submit: Option<SagePermissionRequired>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -35,16 +44,28 @@ pub struct SageRequestedPermissions {
     pub network: Vec<SageNetworkPermissionEntry>,
 
     #[serde(default)]
-    pub persistent_storage: Option<SagePersistentStoragePermission>,
+    pub persistent_storage: Option<SagePermissionRequired>,
+
+    pub wallet: Option<SageWalletPermissions>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+pub struct SageGrantedWalletPermissions {
+    #[serde(rename = "sendXch", alias = "send_xch")]
+    pub send_xch: bool,
+
+    #[serde(rename = "sendXchAutoSubmit", alias = "send_xch_auto_submit")]
+    pub send_xch_auto_submit: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
 pub struct SageGrantedPermissions {
-    #[serde(default)]
     pub network: Vec<SageGrantedNetworkPermissionEntry>,
 
-    #[serde(rename = "persistentStorage", alias = "persistent_storage", default)]
+    #[serde(rename = "persistentStorage", alias = "persistent_storage")]
     pub persistent_storage: bool,
+
+    pub wallet: SageGrantedWalletPermissions,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]

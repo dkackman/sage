@@ -1,16 +1,20 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   InstalledSageApp,
+  SageStorageClearRequest,
+  SageStorageCountRequest,
+  SageStorageCreateIndexRequest,
+  SageStorageCreateObjectStoreRequest,
   SageStorageDatabaseDescription,
+  SageStorageDeleteRequest,
+  SageStorageGetAllFromIndexRequest,
+  SageStorageGetAllRequest,
+  SageStorageGetRequest,
+  SageStorageOpenDatabaseRequest,
+  SageStoragePutRequest,
   SageStorageValueRecord,
+  SendXch,
 } from '@/bindings';
-
-export interface SageBridgeRequest {
-  channel: 'sage-bridge';
-  id: string;
-  method: string;
-  params?: unknown;
-}
 
 export interface SageBridgeSuccessResponse {
   channel: 'sage-bridge';
@@ -42,6 +46,45 @@ export interface SageBridgeEventPayload {
   sourceLabel: string;
   request: SageBridgeRequest;
 }
+
+interface SageBridgeRequestParamsMap {
+  'bridge.ping': undefined;
+  'app.getInfo': undefined;
+  'sage.getPermissions': undefined;
+  'storage.openDatabase': SageStorageOpenDatabaseRequest;
+  'storage.deleteDatabase': string;
+  'storage.describeDatabase': string;
+  'storage.createObjectStore': SageStorageCreateObjectStoreRequest;
+  'storage.createIndex': SageStorageCreateIndexRequest;
+  'storage.get': SageStorageGetRequest;
+  'storage.put': SageStoragePutRequest;
+  'storage.delete': SageStorageDeleteRequest;
+  'storage.clear': SageStorageClearRequest;
+  'storage.count': SageStorageCountRequest;
+  'storage.getAll': SageStorageGetAllRequest;
+  'storage.getAllFromIndex': SageStorageGetAllFromIndexRequest;
+  'wallet.sendXch': SendXch;
+}
+
+type SageBridgeMethod = keyof SageBridgeRequestParamsMap;
+
+type SageBridgeRequestForMethod<M extends SageBridgeMethod> =
+  SageBridgeRequestParamsMap[M] extends undefined
+    ? {
+        channel: 'sage-bridge';
+        id: string;
+        method: M;
+      }
+    : {
+        channel: 'sage-bridge';
+        id: string;
+        method: M;
+        params: SageBridgeRequestParamsMap[M];
+      };
+
+export type SageBridgeRequest = {
+  [M in SageBridgeMethod]: SageBridgeRequestForMethod<M>;
+}[SageBridgeMethod];
 
 function success(id: string, result: unknown): SageBridgeSuccessResponse {
   return {
@@ -119,24 +162,20 @@ export async function handleBridgeRequest(
       }
 
       case 'storage.deleteDatabase': {
-        const dbName = request.params as string;
-
-        await invoke('storage_delete_database', {
+        const response = await invoke('storage_delete_database', {
           appId: ctx.app.id,
-          dbName,
+          dbName: request.params,
         });
 
-        return success(request.id, undefined);
+        return success(request.id, response);
       }
 
       case 'storage.describeDatabase': {
-        const dbName = request.params as string;
-
         const response = await invoke<SageStorageDatabaseDescription>(
           'storage_describe_database',
           {
             appId: ctx.app.id,
-            dbName,
+            dbName: request.params,
           },
         );
 
@@ -230,12 +269,24 @@ export async function handleBridgeRequest(
         return success(request.id, response);
       }
 
-      default:
-        return failure(
-          request.id,
-          'method_not_found',
-          `Unknown bridge method: ${request.method}`,
-        );
+      case 'wallet.sendXch': {
+        const effectiveParams: SendXch = {
+          ...request.params,
+          auto_submit: ctx.app.grantedPermissions.wallet?.sendXchAutoSubmit
+            ? request.params.auto_submit
+            : false,
+        };
+
+        const response = await invoke<unknown>('send_xch', {
+          req: effectiveParams,
+        });
+
+        return success(request.id, response);
+      }
+
+      default: {
+        throw new Error(`Unhandled bridge request: ${String(request)}`);
+      }
     }
   } catch (error) {
     const message =

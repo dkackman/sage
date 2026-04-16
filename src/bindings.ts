@@ -2228,10 +2228,11 @@ export type SageAppManifestFile = { path: string; sha256: string; size: number }
 export type SageAppPackageManifest = { name: string; version: string; permissions?: SageRequestedPermissions; files?: SageAppManifestFile[] }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageGrantedNetworkPermissionEntry = { scheme: string; host: string }
-export type SageGrantedPermissions = { network?: SageGrantedNetworkPermissionEntry[]; persistentStorage?: boolean }
+export type SageGrantedPermissions = { network: SageGrantedNetworkPermissionEntry[]; persistentStorage: boolean; wallet: SageGrantedWalletPermissions }
+export type SageGrantedWalletPermissions = { sendXch: boolean; sendXchAutoSubmit: boolean }
 export type SageNetworkPermissionEntry = { scheme: string; host: string; required?: boolean }
-export type SagePersistentStoragePermission = { required?: boolean }
-export type SageRequestedPermissions = { network?: SageNetworkPermissionEntry[]; persistent_storage?: SagePersistentStoragePermission | null }
+export type SagePermissionRequired = { required?: boolean }
+export type SageRequestedPermissions = { network?: SageNetworkPermissionEntry[]; persistent_storage?: SagePermissionRequired | null; wallet: SageWalletPermissions | null }
 export type SageStorageClearRequest = { dbName: string; storeName: string }
 export type SageStorageCountRequest = { dbName: string; storeName: string }
 export type SageStorageCreateIndexRequest = { dbName: string; storeName: string; indexName: string }
@@ -2248,6 +2249,7 @@ export type SageStorageObjectStoreInfo = { name: string }
 export type SageStorageOpenDatabaseRequest = { name: string; version: number }
 export type SageStoragePutRequest = { dbName: string; storeName: string; keyBase64: string; valueBase64: string; indexValues?: SageStorageIndexValue[] }
 export type SageStorageValueRecord = { keyBase64: string; valueBase64: string }
+export type SageWalletPermissions = { sendXch: SagePermissionRequired | null; sendXchAutoSubmit: SagePermissionRequired | null }
 /**
  * Save a theme NFT to the wallet
  */
