@@ -44,7 +44,10 @@ export function useAppEmbeddedRuntime({
 
       const rect = container.getBoundingClientRect();
       const width = Math.max(1, Math.round(rect.width));
-      const height = Math.max(1, Math.round(rect.height));
+      const height = Math.max(
+        1,
+        Math.round(rect.height - (await getMacWindowedTopInsetPx())),
+      );
       const x = Math.round(rect.left);
       const y = Math.round(rect.top + await getMacWindowedTopInsetPx());
 
