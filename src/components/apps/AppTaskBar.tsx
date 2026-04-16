@@ -26,7 +26,8 @@ interface DragState {
 }
 
 const MAX_TAB_WIDTH_PX = 200;
-const MIN_TAB_WIDTH_PX = 120;
+const MIN_TAB_WIDTH_PX = 80;
+const TAB_GAP_PX = 4; // tailwind gap-1
 
 function reorderIds(
   ids: string[],
@@ -54,11 +55,12 @@ export function AppTaskBar({
   onCloseApp,
   onReorderTabs,
 }: Props) {
-  const tabsContainerRef = useRef<HTMLDivElement | null>(null);
+  const tabsViewportRef = useRef<HTMLDivElement | null>(null);
+  const tabsStripRef = useRef<HTMLDivElement | null>(null);
 
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [previewOrder, setPreviewOrder] = useState<string[] | null>(null);
-  const [tabsContainerWidthPx, setTabsContainerWidthPx] = useState(0);
+  const [tabsViewportWidthPx, setTabsViewportWidthPx] = useState(0);
 
   const baseOrder = useMemo(() => tabs.map((tab) => tab.appId), [tabs]);
   const activeOrder = previewOrder ?? baseOrder;
@@ -76,24 +78,38 @@ export function AppTaskBar({
   const tabWidthPx = useMemo(() => {
     const count = Math.max(1, tabs.length);
 
-    if (tabsContainerWidthPx <= 0) {
+    if (tabsViewportWidthPx <= 0) {
       return MAX_TAB_WIDTH_PX;
     }
 
+    const totalGapPx = Math.max(0, count - 1) * TAB_GAP_PX;
+    const availableForTabsPx = Math.max(0, tabsViewportWidthPx - totalGapPx);
+    const fittedWidthPx = Math.floor(availableForTabsPx / count);
+
     return Math.max(
       MIN_TAB_WIDTH_PX,
-      Math.min(MAX_TAB_WIDTH_PX, Math.floor(tabsContainerWidthPx / count)),
+      Math.min(MAX_TAB_WIDTH_PX, fittedWidthPx),
     );
-  }, [tabs.length, tabsContainerWidthPx]);
+  }, [tabs.length, tabsViewportWidthPx]);
+
+  const totalStripWidthPx = useMemo(() => {
+    if (tabs.length === 0) {
+      return 0;
+    }
+
+    return tabs.length * tabWidthPx + (tabs.length - 1) * TAB_GAP_PX;
+  }, [tabs.length, tabWidthPx]);
+
+  const slotSpanPx = tabWidthPx + TAB_GAP_PX;
 
   useEffect(() => {
-    const container = tabsContainerRef.current;
-    if (!container) {
+    const viewport = tabsViewportRef.current;
+    if (!viewport) {
       return;
     }
 
     const updateWidth = () => {
-      setTabsContainerWidthPx(container.getBoundingClientRect().width);
+      setTabsViewportWidthPx(viewport.getBoundingClientRect().width);
     };
 
     updateWidth();
@@ -102,7 +118,7 @@ export function AppTaskBar({
       updateWidth();
     });
 
-    resizeObserver.observe(container);
+    resizeObserver.observe(viewport);
     window.addEventListener('resize', updateWidth);
 
     return () => {
@@ -161,8 +177,8 @@ export function AppTaskBar({
       return;
     }
 
-    const containerEl = tabsContainerRef.current;
-    if (!containerEl) {
+    const viewportEl = tabsViewportRef.current;
+    if (!viewportEl) {
       return;
     }
 
@@ -171,15 +187,15 @@ export function AppTaskBar({
       return;
     }
 
-    const containerRect = containerEl.getBoundingClientRect();
-    const slotWidthPx = tabWidthPx;
+    const viewportRect = viewportEl.getBoundingClientRect();
 
     const minOverlayLeftPx = 0;
-    const maxOverlayLeftPx = Math.max(0, tabCount * slotWidthPx - slotWidthPx);
+    const maxOverlayLeftPx = Math.max(0, totalStripWidthPx - tabWidthPx);
 
     const rawOverlayLeftPx =
       dragState.currentPointerX -
-      containerRect.left -
+      viewportRect.left +
+      viewportEl.scrollLeft -
       dragState.pointerOffsetWithinTab;
 
     const clampedOverlayLeftPx = clamp(
@@ -188,9 +204,9 @@ export function AppTaskBar({
       maxOverlayLeftPx,
     );
 
-    const draggedCenterX = clampedOverlayLeftPx + slotWidthPx / 2;
+    const draggedCenterX = clampedOverlayLeftPx + tabWidthPx / 2;
     const nextIndex = clamp(
-      Math.floor(draggedCenterX / slotWidthPx),
+      Math.floor((draggedCenterX + TAB_GAP_PX / 2) / slotSpanPx),
       0,
       tabCount - 1,
     );
@@ -210,7 +226,7 @@ export function AppTaskBar({
     }
 
     setPreviewOrder(reorderIds(activeOrder, currentIndex, nextIndex));
-  }, [dragState, activeOrder, tabWidthPx]);
+  }, [dragState, activeOrder, tabWidthPx, slotSpanPx, totalStripWidthPx]);
 
   return (
     <div className='flex h-12 shrink-0 items-end gap-2 border-b bg-muted/30 px-3 pt-2'>
@@ -224,151 +240,158 @@ export function AppTaskBar({
       </Button>
 
       <div
-        ref={tabsContainerRef}
-        className='relative flex min-w-0 flex-1 items-end justify-start gap-1 overflow-hidden'
+        ref={tabsViewportRef}
+        className='min-w-0 flex-1 overflow-x-auto overflow-y-hidden'
       >
-        {orderedTabs.map((tab) => {
-          const isDragged = dragState?.draggedAppId === tab.appId;
+        <div
+          ref={tabsStripRef}
+          className='relative flex h-full items-end gap-1'
+          style={{
+            width: `${Math.max(totalStripWidthPx, tabsViewportWidthPx)}px`,
+          }}
+        >
+          {orderedTabs.map((tab) => {
+            const isDragged = dragState?.draggedAppId === tab.appId;
 
-          return (
-            <div
-              key={tab.appId}
-              className={clsx('shrink-0', isDragged && 'opacity-0')}
-              style={{ width: `${tabWidthPx}px` }}
-            >
-              <button
-                type='button'
-                onClick={() => {
-                  if (!dragState) {
-                    onSelectApp(tab.appId);
-                  }
-                }}
-                onPointerDown={(event) => {
-                  if (event.button !== 0) {
-                    return;
-                  }
-
-                  const containerEl = tabsContainerRef.current;
-                  if (!containerEl) {
-                    return;
-                  }
-
-                  const containerRect = containerEl.getBoundingClientRect();
-                  const slotWidthPx = tabWidthPx;
-                  const currentIndex = activeOrder.indexOf(tab.appId);
-                  const slotLeftPx = currentIndex * slotWidthPx;
-                  const pointerXWithinContainerPx =
-                    event.clientX - containerRect.left;
-                  const pointerOffsetWithinTabPx = clamp(
-                    pointerXWithinContainerPx - slotLeftPx,
-                    0,
-                    slotWidthPx,
-                  );
-
-                  setPreviewOrder((prev) => prev ?? baseOrder);
-                  setDragState({
-                    draggedAppId: tab.appId,
-                    pointerOffsetWithinTab: pointerOffsetWithinTabPx,
-                    currentPointerX: event.clientX,
-                    overlayLeftPx: slotLeftPx,
-                  });
-                }}
-                className={clsx(
-                  'group flex h-9 w-full items-center gap-2 rounded-t-md border border-b-0 px-3 text-left transition-[background-color,color] duration-150 select-none',
-                  tab.isActive
-                    ? 'bg-background'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80',
-                )}
+            return (
+              <div
+                key={tab.appId}
+                className={clsx('shrink-0', isDragged && 'opacity-0')}
+                style={{ width: `${tabWidthPx}px` }}
               >
-                {tab.iconSrc ? (
-                  <img
-                    src={tab.iconSrc}
-                    alt=''
-                    className='h-4 w-4 shrink-0 rounded-sm'
-                  />
-                ) : (
-                  <div className='flex h-4 w-4 shrink-0 items-center justify-center rounded-sm bg-border text-[10px] font-semibold'>
-                    {tab.name.slice(0, 1).toUpperCase()}
-                  </div>
-                )}
+                <button
+                  type='button'
+                  onClick={() => {
+                    if (!dragState) {
+                      onSelectApp(tab.appId);
+                    }
+                  }}
+                  onPointerDown={(event) => {
+                    if (event.button !== 0) {
+                      return;
+                    }
 
-                <span className='min-w-0 flex-1 truncate text-sm font-medium'>
-                  {tab.name}
-                </span>
+                    const viewportEl = tabsViewportRef.current;
+                    if (!viewportEl) {
+                      return;
+                    }
 
-                <span
+                    const viewportRect = viewportEl.getBoundingClientRect();
+                    const currentIndex = activeOrder.indexOf(tab.appId);
+                    const slotLeftPx = currentIndex * slotSpanPx;
+                    const pointerXWithinStripPx =
+                      event.clientX - viewportRect.left + viewportEl.scrollLeft;
+                    const pointerOffsetWithinTabPx = clamp(
+                      pointerXWithinStripPx - slotLeftPx,
+                      0,
+                      tabWidthPx,
+                    );
+
+                    setPreviewOrder((prev) => prev ?? baseOrder);
+                    setDragState({
+                      draggedAppId: tab.appId,
+                      pointerOffsetWithinTab: pointerOffsetWithinTabPx,
+                      currentPointerX: event.clientX,
+                      overlayLeftPx: slotLeftPx,
+                    });
+                  }}
                   className={clsx(
-                    'shrink-0',
+                    'group flex h-9 w-full items-center gap-2 rounded-t-md border border-b-0 px-3 text-left transition-[background-color,color] duration-150 select-none',
                     tab.isActive
-                      ? 'opacity-100'
-                      : 'opacity-0 transition-opacity group-hover:opacity-100',
+                      ? 'bg-background'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80',
                   )}
                 >
-                  <Button
-                    type='button'
-                    variant='ghost'
-                    size='icon'
-                    className='h-6 w-6'
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onCloseApp(tab.appId);
+                  {tab.iconSrc ? (
+                    <img
+                      src={tab.iconSrc}
+                      alt=''
+                      className='h-4 w-4 shrink-0 rounded-sm'
+                    />
+                  ) : (
+                    <div className='flex h-4 w-4 shrink-0 items-center justify-center rounded-sm bg-border text-[10px] font-semibold'>
+                      {tab.name.slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+
+                  <span className='min-w-0 flex-1 truncate text-sm font-medium'>
+                    {tab.name}
+                  </span>
+
+                  <span
+                    className={clsx(
+                      'shrink-0',
+                      tab.isActive
+                        ? 'opacity-100'
+                        : 'opacity-0 transition-opacity group-hover:opacity-100',
+                    )}
+                  >
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='icon'
+                      className='h-6 w-6'
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onCloseApp(tab.appId);
+                      }}
+                    >
+                      <X className='h-3.5 w-3.5' />
+                    </Button>
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+
+          {dragState
+            ? (() => {
+                const draggedTab = tabsById.get(dragState.draggedAppId);
+                if (!draggedTab) {
+                  return null;
+                }
+
+                return (
+                  <div
+                    className='pointer-events-none absolute bottom-0 z-20'
+                    style={{
+                      left: `${dragState.overlayLeftPx}px`,
+                      width: `${tabWidthPx}px`,
                     }}
                   >
-                    <X className='h-3.5 w-3.5' />
-                  </Button>
-                </span>
-              </button>
-            </div>
-          );
-        })}
+                    <div
+                      className={clsx(
+                        'flex h-9 w-full items-center gap-2 rounded-t-md border border-b-0 px-3 text-left shadow-sm',
+                        draggedTab.isActive
+                          ? 'bg-background'
+                          : 'bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {draggedTab.iconSrc ? (
+                        <img
+                          src={draggedTab.iconSrc}
+                          alt=''
+                          className='h-4 w-4 shrink-0 rounded-sm'
+                        />
+                      ) : (
+                        <div className='flex h-4 w-4 shrink-0 items-center justify-center rounded-sm bg-border text-[10px] font-semibold'>
+                          {draggedTab.name.slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
 
-        {dragState
-          ? (() => {
-              const draggedTab = tabsById.get(dragState.draggedAppId);
-              if (!draggedTab) {
-                return null;
-              }
+                      <span className='min-w-0 flex-1 truncate text-sm font-medium'>
+                        {draggedTab.name}
+                      </span>
 
-              return (
-                <div
-                  className='pointer-events-none absolute bottom-0 z-20'
-                  style={{
-                    left: `${dragState.overlayLeftPx}px`,
-                    width: `${tabWidthPx}px`,
-                  }}
-                >
-                  <div
-                    className={clsx(
-                      'flex h-9 w-full items-center gap-2 rounded-t-md border border-b-0 px-3 text-left shadow-sm',
-                      draggedTab.isActive
-                        ? 'bg-background'
-                        : 'bg-muted text-muted-foreground',
-                    )}
-                  >
-                    {draggedTab.iconSrc ? (
-                      <img
-                        src={draggedTab.iconSrc}
-                        alt=''
-                        className='h-4 w-4 shrink-0 rounded-sm'
-                      />
-                    ) : (
-                      <div className='flex h-4 w-4 shrink-0 items-center justify-center rounded-sm bg-border text-[10px] font-semibold'>
-                        {draggedTab.name.slice(0, 1).toUpperCase()}
-                      </div>
-                    )}
-
-                    <span className='min-w-0 flex-1 truncate text-sm font-medium'>
-                      {draggedTab.name}
-                    </span>
-
-                    <span className='shrink-0 opacity-100'>
-                      <div className='h-6 w-6' />
-                    </span>
+                      <span className='shrink-0 opacity-100'>
+                        <div className='h-6 w-6' />
+                      </span>
+                    </div>
                   </div>
-                </div>
-              );
-            })()
-          : null}
+                );
+              })()
+            : null}
+        </div>
       </div>
     </div>
   );
