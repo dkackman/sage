@@ -262,7 +262,7 @@ export function AppTaskBar({
                 <button
                   type='button'
                   onClick={() => {
-                    if (!dragState) {
+                    if (!dragState && !tab.isActive) {
                       onSelectApp(tab.appId);
                     }
                   }}
@@ -270,6 +270,8 @@ export function AppTaskBar({
                     if (event.button !== 0) {
                       return;
                     }
+
+                    onSelectApp(tab.appId);
 
                     const viewportEl = tabsViewportRef.current;
                     if (!viewportEl) {
