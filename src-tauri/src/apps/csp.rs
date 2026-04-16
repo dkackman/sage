@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-
+use crate::apps::permissions::is_allowed_scheme;
 use crate::apps::types::{
     InstalledSageApp, SageGrantedNetworkPermissionEntry,
 };
@@ -18,10 +18,8 @@ fn network_permission_to_csp_source(
         return None;
     }
 
-    // Keep this strict. Expand only if you intentionally support more.
-    match scheme.as_str() {
-        "https" | "wss" => {}
-        _ => return None,
+    if !is_allowed_scheme(scheme.as_str()) {
+        return None;
     }
 
     // CSP source expressions should be origins / host-source patterns, not paths.

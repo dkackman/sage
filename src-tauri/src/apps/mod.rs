@@ -1,4 +1,3 @@
-pub mod bridge;
 pub mod csp;
 pub mod install;
 pub mod limits;

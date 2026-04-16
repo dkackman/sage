@@ -231,13 +231,6 @@ export function AppHost() {
             {
               app: installedApp,
               sourceLabel: payload.sourceLabel,
-              emitEvent: async (event) => {
-                await hostWebview.emitTo(
-                  payload.sourceLabel,
-                  'sage-bridge:event',
-                  event,
-                );
-              },
             },
             payload.request,
           ).then((response) => {

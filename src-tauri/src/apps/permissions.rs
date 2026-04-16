@@ -3,8 +3,15 @@ use std::collections::BTreeSet;
 use anyhow::{anyhow, Result as AnyResult};
 
 use crate::apps::types::{
-    InstalledSageApp, SageGrantedPermissions, SageRequestedPermissions, SageNetworkPermissionEntry,
+    SageGrantedPermissions, SageRequestedPermissions, SageNetworkPermissionEntry,
 };
+
+pub fn is_allowed_scheme(scheme: &str) -> bool {
+    match scheme {
+        "https" | "wss" => true,
+        _ => false,
+    }
+}
 
 pub fn normalize_scheme(scheme: &str) -> String {
     scheme.trim().to_ascii_lowercase()
@@ -18,9 +25,8 @@ pub fn validate_network_permission_entry(entry: &SageNetworkPermissionEntry) -> 
     let scheme = normalize_scheme(&entry.scheme);
     let host = normalize_host(&entry.host);
 
-    match scheme.as_str() {
-        "http" | "https" | "ws" | "wss" => {}
-        _ => return Err(anyhow!("unsupported network scheme: {}", entry.scheme)),
+    if !is_allowed_scheme(scheme.as_str()) {
+        return Err(anyhow!("unsupported network scheme: {}", scheme));
     }
 
     if host.is_empty() {
@@ -130,28 +136,4 @@ pub fn validate_granted_permissions_against_requested(
     }
 
     Ok(())
-}
-
-pub fn host_matches_pattern(host: &str, pattern: &str) -> bool {
-    let host = normalize_host(host);
-    let pattern = normalize_host(pattern);
-
-    if pattern == "*" {
-        return true;
-    }
-
-    if let Some(suffix) = pattern.strip_prefix("*.") {
-        return host.ends_with(&format!(".{suffix}"));
-    }
-
-    host == pattern
-}
-
-pub fn is_network_allowed_for_app(app: &InstalledSageApp, scheme: &str, host: &str) -> bool {
-    let scheme = normalize_scheme(scheme);
-    let host = normalize_host(host);
-
-    app.granted_permissions.network.iter().any(|entry| {
-        normalize_scheme(&entry.scheme) == scheme && host_matches_pattern(&host, &entry.host)
-    })
 }

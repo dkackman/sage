@@ -386,15 +386,6 @@ async downloadAppUpdate(appId: string) : Promise<InstalledSageApp> {
 async applyAppUpdate(appId: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
     return await TAURI_INVOKE("apply_app_update", { appId, grantedPermissions });
 },
-async bridgeFetchHttp(appId: string, req: SageBridgeFetchRequest) : Promise<SageBridgeFetchResponse> {
-    return await TAURI_INVOKE("bridge_fetch_http", { appId, req });
-},
-async bridgeFetchHttpBatch(appId: string, req: SageBridgeFetchBatchRequest) : Promise<SageBridgeFetchResponse[]> {
-    return await TAURI_INVOKE("bridge_fetch_http_batch", { appId, req });
-},
-async bridgeFetchHttpBatchStream(appId: string, sourceLabel: string, req: SageBridgeFetchBatchRequest) : Promise<string> {
-    return await TAURI_INVOKE("bridge_fetch_http_batch_stream", { appId, sourceLabel, req });
-},
 async storageOpenDatabase(appId: string, req: SageStorageOpenDatabaseRequest) : Promise<SageStorageDatabaseInfo> {
     return await TAURI_INVOKE("storage_open_database", { appId, req });
 },
@@ -2236,9 +2227,6 @@ export type ResyncResponse = Record<string, never>
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
 export type SageAppPackageManifest = { name: string; version: string; permissions?: SageRequestedPermissions; files?: SageAppManifestFile[] }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
-export type SageBridgeFetchBatchRequest = { requests: SageBridgeFetchRequest[]; max_concurrency?: number | null }
-export type SageBridgeFetchRequest = { url: string; method?: string | null; headers?: Partial<{ [key in string]: string }>; body?: string | null }
-export type SageBridgeFetchResponse = { ok: boolean; status: number; status_text: string; headers: Partial<{ [key in string]: string }>; body_text: string }
 export type SageGrantedNetworkPermissionEntry = { scheme: string; host: string }
 export type SageGrantedPermissions = { network?: SageGrantedNetworkPermissionEntry[]; persistentStorage?: boolean }
 export type SageNetworkPermissionEntry = { scheme: string; host: string; required?: boolean }
