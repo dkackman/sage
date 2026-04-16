@@ -1,6 +1,5 @@
 import { getCurrentWebview, Webview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
 import { InstalledSageApp } from '@/bindings.ts';
 
 export type SageAppRuntimeState =
@@ -313,11 +312,9 @@ export async function markRuntimeVisible(appId: string, visible: boolean) {
 
   try {
     if (visible) {
-      // AppHost will place it correctly right after this.
-      await record.webview.setSize(new LogicalSize(1, 1));
+      await record.webview.show();
     } else {
-      await record.webview.setPosition(new LogicalPosition(-10000, -10000));
-      await record.webview.setSize(new LogicalSize(1, 1));
+      await record.webview.hide();
     }
   } catch (err) {
     console.error('Failed to update runtime visibility:', err);
@@ -342,6 +339,7 @@ export async function focusRuntime(appId: string) {
   record.lastActiveAt = Date.now();
 
   try {
+    await record.webview.show();
     await record.webview.setFocus();
   } catch (err) {
     console.error('Failed to focus runtime:', err);
