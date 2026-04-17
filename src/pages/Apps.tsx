@@ -20,7 +20,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEditor.tsx';
 import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy.ts';
-import { useSandbox } from '@/contexts/SandboxContext.tsx';
 
 type InstalledEntry = ReturnType<typeof useApps>['apps'][number] & {
   kind: 'installed';
@@ -84,6 +83,8 @@ export function Apps() {
     performAppUpdate,
     updateAvailability,
     busyAppIds,
+    sandboxState,
+    rerunSandboxTests,
   } = useApps();
 
   const runningAppIds = useMemo(() => {
@@ -102,7 +103,6 @@ export function Apps() {
     () => apps.filter((entry) => entry.kind === 'corrupted'),
     [apps],
   );
-  const { sandboxState, rerunSandboxTests } = useSandbox();
 
   const contextMenuPreview = contextMenu
     ? updateAvailability[contextMenu.app.id]

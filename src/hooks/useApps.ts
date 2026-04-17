@@ -6,6 +6,7 @@ import type {
   SageAppUrlPreview,
 } from '@/bindings.ts';
 import {
+  buildCompletedSandboxState,
   buildInitialSandboxState,
   buildRunningSandboxState,
   evaluateAppLaunchGate,
@@ -53,8 +54,43 @@ export function useAppsInternal() {
 
   const rerunSandboxTests = useCallback(async () => {
     setSandboxState(buildRunningSandboxState());
-    const next = await runSandboxTests();
-    setSandboxState(next);
+
+    try {
+      const next = await runSandboxTests();
+      setSandboxState(next);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : (() => {
+              try {
+                return JSON.stringify(err, null, 2);
+              } catch {
+                return String(err);
+              }
+            })();
+
+      setSandboxState(
+        buildCompletedSandboxState({
+          isolation: {
+            passed: false,
+            details: message,
+          },
+          persistenceNormal: {
+            passed: false,
+            details: 'Skipped because sandbox run failed before completion.',
+          },
+          persistenceIncognito: {
+            passed: false,
+            details: 'Skipped because sandbox run failed before completion.',
+          },
+          network: {
+            passed: false,
+            details: 'Skipped because sandbox run failed before completion.',
+          },
+        }),
+      );
+    }
   }, []);
 
   useEffect(() => {

@@ -19,7 +19,6 @@ async function getMacWindowedTopInsetPx(): Promise<number> {
 interface Args {
   app: InstalledSageApp | null | undefined;
   containerRef: React.RefObject<HTMLDivElement | null>;
-  requestApproval: unknown;
 }
 
 export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
@@ -139,4 +138,3 @@ export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
     scheduleSyncBounds,
   };
 }
-

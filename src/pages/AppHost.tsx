@@ -3,8 +3,6 @@ import { useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApps } from '@/contexts/AppsContext';
 import { useAppEmbeddedRuntime } from '@/hooks/useAppEmbeddedRuntime.ts';
-import { useAppsWorkspaceOutletContext } from '@/pages/AppsWorkspace.tsx';
-import { useSandbox } from '@/contexts/SandboxContext';
 import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
 
 function AppNotFound() {
@@ -21,9 +19,7 @@ function AppNotFound() {
 export function AppHost() {
   const { appId = '' } = useParams();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { getApp, loading } = useApps();
-  const { requestApproval } = useAppsWorkspaceOutletContext();
-  const { sandboxState } = useSandbox();
+  const { getApp, loading, sandboxState } = useApps();
 
   const app = getApp(appId);
   const launchDecision = app
@@ -36,7 +32,6 @@ export function AppHost() {
   useAppEmbeddedRuntime({
     app: app && launchDecision?.allowed ? app : null,
     containerRef,
-    requestApproval,
   });
 
   if (loading) {
