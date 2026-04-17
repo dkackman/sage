@@ -17,6 +17,19 @@ interface Props {
   onApplyUpdate: () => Promise<void>;
 }
 
+function formatPermissionLabel(key: string): string {
+  return key
+    .split('.')
+    .map((segment) =>
+      segment
+        .split('_')
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' '),
+    )
+    .join(' / ');
+}
+
 export function InstalledAppCard({
   app,
   updatePreview,
@@ -34,15 +47,19 @@ export function InstalledAppCard({
     return `sage-app://${app.id}/icon.png`;
   }, [app.id]);
 
-  const networkBadges = useMemo(() => {
-    return [...(app.grantedPermissions.network ?? [])].sort((a, b) => {
-      const aKey = `${a.scheme}://${a.host}`;
-      const bKey = `${b.scheme}://${b.host}`;
-      return aKey.localeCompare(bKey);
-    });
-  }, [app.grantedPermissions.network]);
+  const grantedPermissionBadges = useMemo(() => {
+    return [...(app.grantedPermissions ?? [])].sort((a, b) =>
+      a.localeCompare(b),
+    );
+  }, [app.grantedPermissions]);
 
-  const hasPersistentStorage = app.grantedPermissions.persistentStorage;
+  const networkBadges = useMemo(() => {
+    return [...(app.activeSnapshot.manifest.network?.whitelist ?? [])].sort(
+      (a, b) =>
+        `${a.scheme}://${a.host}`.localeCompare(`${b.scheme}://${b.host}`),
+    );
+  }, [app.activeSnapshot.manifest.network]);
+
   const isUrlApp = app.source?.kind === 'url';
   const hasPendingUpdate = !!app.pendingUpdate;
   const showUpdateButton = hasPendingUpdate || !!updatePreview;
@@ -143,9 +160,11 @@ export function InstalledAppCard({
 
       <CardContent className='space-y-3'>
         <div className='flex flex-wrap gap-2'>
-          {hasPersistentStorage ? (
-            <Badge variant='outline'>Persistent storage</Badge>
-          ) : null}
+          {grantedPermissionBadges.map((key) => (
+            <Badge key={key} variant='outline'>
+              {formatPermissionLabel(key)}
+            </Badge>
+          ))}
 
           {networkBadges.map((entry) => (
             <Badge
@@ -157,7 +176,8 @@ export function InstalledAppCard({
             </Badge>
           ))}
 
-          {!hasPersistentStorage && networkBadges.length === 0 ? (
+          {grantedPermissionBadges.length === 0 &&
+          networkBadges.length === 0 ? (
             <Badge variant='outline'>No permissions</Badge>
           ) : null}
         </div>

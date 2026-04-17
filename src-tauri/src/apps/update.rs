@@ -1,64 +1,47 @@
 use std::{io, path::{Path, PathBuf}};
 
 use tauri::{command, State};
+use crate::apps::install::preview_app_url_internal;
 
 use crate::{
     app_state::AppState,
     apps::{
-        permissions::validate_granted_permissions_against_requested,
         registry::{read_installed_app_by_id, write_installed_app_metadata},
         snapshot::download_url_snapshot,
         types::{
             InstalledSageApp, InstalledSageAppPendingUpdate, InstalledSageAppSource,
-            SageAppUrlPreview, SageGrantedPermissions, SageGrantedNetworkPermissionEntry,
-            SageRequestedPermissions,
+            SageAppUrlPreview,
         },
     },
     error::Result,
 };
-
-use super::install::preview_app_url;
+use crate::apps::permissions::validate_granted_permissions;
 
 fn merge_granted_permissions_for_update(
-    old_granted: &SageGrantedPermissions,
-    new_requested: &SageRequestedPermissions,
-    user_selected: &SageGrantedPermissions,
-) -> SageGrantedPermissions {
-    let requested_network: std::collections::BTreeSet<(String, String)> = new_requested
-        .network
-        .iter()
-        .map(|entry| (entry.scheme.to_ascii_lowercase(), entry.host.to_ascii_lowercase()))
-        .collect();
+    old_granted: &[String],
+    new_permissions: &crate::apps::types::SageAppPermissions,
+) -> Vec<String> {
+    let old_granted_set: std::collections::BTreeSet<_> =
+        old_granted.iter().cloned().collect();
 
-    let old_network: Vec<SageGrantedNetworkPermissionEntry> = old_granted
-        .network
-        .iter()
-        .filter(|entry| {
-            requested_network.contains(&(entry.scheme.to_ascii_lowercase(), entry.host.to_ascii_lowercase()))
-        })
-        .cloned()
-        .collect();
+    let optional_set: std::collections::BTreeSet<_> =
+        new_permissions.optional.iter().cloned().collect();
 
-    let mut merged_network = old_network;
+    let mut result = Vec::new();
 
-    for entry in &user_selected.network {
-        let key = (entry.scheme.to_ascii_lowercase(), entry.host.to_ascii_lowercase());
-        let already = merged_network.iter().any(|existing| {
-            existing.scheme.eq_ignore_ascii_case(&entry.scheme)
-                && existing.host.eq_ignore_ascii_case(&entry.host)
-        });
+    for key in &new_permissions.required {
+        result.push(key.clone());
+    }
 
-        if requested_network.contains(&key) && !already {
-            merged_network.push(entry.clone());
+    for key in old_granted_set {
+        if optional_set.contains(&key) {
+            result.push(key);
         }
     }
 
-    SageGrantedPermissions {
-        network: merged_network,
-        persistent_storage: new_requested.persistent_storage.is_some()
-            && (old_granted.persistent_storage || user_selected.persistent_storage),
-        wallet: old_granted.wallet.clone(),
-    }
+    result.sort();
+    result.dedup();
+    result
 }
 
 #[command]
@@ -82,7 +65,8 @@ pub async fn check_app_update(
         InstalledSageAppSource::Zip => return Ok(None),
     };
 
-    let preview = preview_app_url(app_url).await?;
+    let preview = preview_app_url_internal(app_url).await
+        .map_err(|err| io::Error::other(format!("failed to preview app URL: {err}")))?;
 
     if preview.manifest_hash == app.active_snapshot.manifest_hash {
         return Ok(None);
@@ -155,7 +139,7 @@ pub async fn download_app_update(
 pub async fn apply_app_update(
     state: State<'_, AppState>,
     app_id: String,
-    granted_permissions: SageGrantedPermissions,
+    granted_permissions: Vec<String>,
 ) -> Result<InstalledSageApp> {
     let base_path = {
         let state = state.lock().await;
@@ -172,10 +156,9 @@ pub async fn apply_app_update(
     let merged_permissions = merge_granted_permissions_for_update(
         &app.granted_permissions,
         &pending.manifest.permissions,
-        &granted_permissions,
     );
 
-    validate_granted_permissions_against_requested(
+    validate_granted_permissions(
         &pending.manifest.permissions,
         &merged_permissions,
     )

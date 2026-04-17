@@ -1,6 +1,41 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use sage_api::Amount;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+pub struct SageAppPermissions {
+    pub required: Vec<String>,
+    pub optional: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SageNetworkWhitelistEntry {
+    pub scheme: String,
+    pub host: String,
+
+    #[serde(default)]
+    pub required: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+pub struct SageNetworkPermissions {
+    #[serde(default)]
+    pub whitelist: Vec<SageNetworkWhitelistEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SageAppPackageManifest {
+    pub name: String,
+    pub version: String,
+
+    #[serde(default)]
+    pub permissions: SageAppPermissions,
+
+    #[serde(default)]
+    pub network: Option<SageNetworkPermissions>,
+
+    #[serde(default)]
+    pub files: Vec<SageAppManifestFile>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SageNetworkPermissionEntry {
@@ -44,7 +79,7 @@ pub struct SageRequestedPermissions {
     #[serde(default)]
     pub network: Vec<SageNetworkPermissionEntry>,
 
-    #[serde(default)]
+    #[serde(default, rename = "persistentStorage", alias = "persistent_storage")]
     pub persistent_storage: Option<SagePermissionRequired>,
 
     pub wallet: Option<SageWalletPermissions>,
@@ -80,18 +115,6 @@ pub struct SageAppManifestFile {
     pub path: String,
     pub sha256: String,
     pub size: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SageAppPackageManifest {
-    pub name: String,
-    pub version: String,
-
-    #[serde(default)]
-    pub permissions: SageRequestedPermissions,
-
-    #[serde(default)]
-    pub files: Vec<SageAppManifestFile>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -152,10 +175,10 @@ pub struct InstalledSageApp {
     pub icon_file: String,
 
     #[serde(rename = "requestedPermissions", alias = "requested_permissions")]
-    pub requested_permissions: SageRequestedPermissions,
+    pub requested_permissions: SageAppPermissions,
 
     #[serde(rename = "grantedPermissions", alias = "granted_permissions")]
-    pub granted_permissions: SageGrantedPermissions,
+    pub granted_permissions: Vec<String>,
 
     pub source: InstalledSageAppSource,
 
@@ -180,31 +203,4 @@ pub struct CorruptedInstalledSageApp {
 pub enum ListedSageApp {
     Installed(InstalledSageApp),
     Corrupted(CorruptedInstalledSageApp),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SageBridgeFetchRequest {
-    pub url: String,
-    #[serde(default)]
-    pub method: Option<String>,
-    #[serde(default)]
-    pub headers: std::collections::BTreeMap<String, String>,
-    #[serde(default)]
-    pub body: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SageBridgeFetchResponse {
-    pub ok: bool,
-    pub status: u16,
-    pub status_text: String,
-    pub headers: std::collections::BTreeMap<String, String>,
-    pub body_text: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SageBridgeFetchBatchRequest {
-    pub requests: Vec<SageBridgeFetchRequest>,
-    #[serde(default)]
-    pub max_concurrency: Option<usize>,
 }

@@ -12,47 +12,24 @@ export class BridgePermissionError extends Error {
   }
 }
 
-function getNestedValue(obj: unknown, path: string[]): unknown {
-  let current: unknown = obj;
+function permissionKeyForMethod(method: SageBridgeMethod): string {
+  switch (method) {
+    case 'wallet.sendXch':
+      return 'wallet.send_xch';
 
-  for (const segment of path) {
-    if (!current || typeof current !== 'object') {
-      return undefined;
-    }
-
-    current = (current as Record<string, unknown>)[segment];
+    default:
+      return method;
   }
-
-  return current;
 }
 
-function methodToPermissionPath(method: SageBridgeMethod): string[] {
-  const [group, action] = method.split('.');
-
-  if (!group || !action) {
-    throw new BridgePermissionError(
-      `Cannot derive permission path from method: ${method}`,
-    );
-  }
-
-  return [group, action];
-}
-
-async function enforceBooleanPermissionByMethod(
+async function enforcePermissionByMethod(
   ctx: SageBridgeContext,
   method: SageBridgeMethod,
 ): Promise<void> {
-  const path = methodToPermissionPath(method);
-  const value = getNestedValue(ctx.app.grantedPermissions, path);
+  const permissionKey = permissionKeyForMethod(method);
 
-  if (typeof value !== 'boolean') {
-    throw new BridgePermissionError(
-      `Permission ${path.join('.')} is not a boolean granted permission`,
-    );
-  }
-
-  if (!value) {
-    throw new BridgePermissionError(`Permission denied for ${path.join('.')}`);
+  if (!ctx.app.grantedPermissions.includes(permissionKey)) {
+    throw new BridgePermissionError(`Permission denied for ${permissionKey}`);
   }
 }
 
@@ -64,7 +41,7 @@ export async function enforcePermissionPolicy(args: {
   const { ctx, request, policy } = args;
 
   if (!policy) {
-    await enforceBooleanPermissionByMethod(ctx, request.method);
+    await enforcePermissionByMethod(ctx, request.method);
     return;
   }
 

@@ -15,14 +15,14 @@ use crate::{
             detect_package_root, prepare_zip_snapshot, read_manifest, unzip_to_dir,
             validate_package_structure,
         },
-        permissions::validate_granted_permissions_against_requested,
+        permissions::validate_granted_permissions,
         registry::{
             apps_root, list_installed_apps_internal, write_installed_app_metadata,
         },
         snapshot::{derive_manifest_url, download_url_snapshot, fetch_url_manifest},
         types::{
             InstalledSageApp, InstalledSageAppSource, ListedSageApp,
-            SageAppPackageManifest, SageAppUrlPreview, SageGrantedPermissions,
+            SageAppPackageManifest, SageAppUrlPreview,
         },
     },
     error::Result,
@@ -99,6 +99,21 @@ pub fn hash_string(input: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
+pub async fn preview_app_url_internal(app_url: String) -> AnyResult<SageAppUrlPreview> {
+    let app_url = normalize_app_url(&app_url)?;
+
+    let manifest_url = derive_manifest_url(&app_url)?;
+
+    let (manifest, manifest_hash) = fetch_url_manifest(&manifest_url).await?;
+
+    Ok(SageAppUrlPreview {
+        app_url,
+        manifest_url,
+        manifest_hash,
+        manifest,
+    })
+}
+
 #[command]
 #[specta::specta]
 pub async fn preview_app_zip(zip_path: String) -> Result<SageAppPackageManifest> {
@@ -122,23 +137,8 @@ pub async fn preview_app_zip(zip_path: String) -> Result<SageAppPackageManifest>
 #[command]
 #[specta::specta]
 pub async fn preview_app_url(app_url: String) -> Result<SageAppUrlPreview> {
-    let app_url = normalize_app_url(&app_url).map_err(|err| {
-        io::Error::other(format!("failed to normalize app URL {}: {err}", app_url))
-    })?;
-
-    let manifest_url = derive_manifest_url(&app_url).map_err(|err| {
-        io::Error::other(format!("failed to derive manifest URL for {}: {err}", app_url))
-    })?;
-
-    let (manifest, manifest_hash) = fetch_url_manifest(&manifest_url)
-        .await
-        .map_err(|err| io::Error::other(format!("failed to preview app URL {}: {err}", app_url)))?;
-
-    Ok(SageAppUrlPreview {
-        app_url,
-        manifest_url,
-        manifest_hash,
-        manifest,
+    preview_app_url_internal(app_url).await.map_err(|err| {
+        io::Error::other(format!("failed to preview app URL: {err}")).into()
     })
 }
 
@@ -169,7 +169,7 @@ pub async fn list_installed_apps(state: State<'_, AppState>) -> Result<Vec<Liste
 pub async fn install_app_zip(
     state: State<'_, AppState>,
     zip_path: String,
-    granted_permissions: SageGrantedPermissions,
+    granted_permissions: Vec<String>,
 ) -> Result<InstalledSageApp> {
     let base_path = {
         let state = state.lock().await;
@@ -200,10 +200,7 @@ pub async fn install_app_zip(
         let package_root = detect_package_root(&unpack_dir)?;
         validate_package_structure(&package_root)?;
         let manifest = read_manifest(&package_root)?;
-        validate_granted_permissions_against_requested(
-            &manifest.permissions,
-            &granted_permissions,
-        )?;
+        validate_granted_permissions(&manifest.permissions, &granted_permissions)?;
 
         let existing = list_installed_apps_internal(&root)?
             .into_iter()
@@ -270,7 +267,7 @@ pub async fn install_app_zip(
 pub async fn install_app_url(
     state: State<'_, AppState>,
     app_url: String,
-    granted_permissions: SageGrantedPermissions,
+    granted_permissions: Vec<String>,
 ) -> Result<InstalledSageApp> {
     let base_path = {
         let state = state.lock().await;
@@ -288,7 +285,7 @@ pub async fn install_app_url(
 
     let preview = preview_app_url(app_url.clone()).await?;
 
-    validate_granted_permissions_against_requested(
+    validate_granted_permissions(
         &preview.manifest.permissions,
         &granted_permissions,
     )

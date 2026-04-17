@@ -4,7 +4,6 @@ import type {
   InstalledSageApp,
   ListedSageApp,
   SageAppUrlPreview,
-  SageGrantedPermissions,
 } from '@/bindings.ts';
 
 type UpdateAvailabilityMap = Record<string, SageAppUrlPreview | null>;
@@ -47,7 +46,7 @@ export function useAppsInternal() {
   }, [refresh]);
 
   const installApp = useCallback(
-    async (zipPath: string, permissions: SageGrantedPermissions) => {
+    async (zipPath: string, permissions: string[]) => {
       await invoke<InstalledSageApp>('install_app_zip', {
         zipPath,
         grantedPermissions: permissions,
@@ -149,7 +148,7 @@ export function useAppsInternal() {
   );
 
   const applyUpdate = useCallback(
-    async (appId: string, grantedPermissions: SageGrantedPermissions) => {
+    async (appId: string, grantedPermissions: string[]) => {
       try {
         setBusy(appId, true);
         const installed = await invoke<InstalledSageApp>('apply_app_update', {

@@ -1,27 +1,18 @@
 import { useState } from 'react';
-import type {
-  SageAppPackageManifest,
-  SageAppUrlPreview,
-  SageGrantedPermissions,
-} from '@/bindings';
+import type { SageAppPackageManifest, SageAppUrlPreview } from '@/bindings';
 import { formatAppError } from '@/lib/apps/formatAppError.ts';
 import { InstallSourceCard } from './InstallSourceCard';
 import {
-  buildFullyForbiddenPermissions, buildInitialGrantedPermissions,
+  buildFullyForbiddenPermissions,
+  buildInitialGrantedPermissions,
 } from '@/components/apps/permissions/permissionUtils.ts';
 import { InstallPermissionsDialog } from '@/components/apps/permissions/InstallDialog.tsx';
 
 interface Props {
   onPreviewZip: (zipPath: string) => Promise<SageAppPackageManifest>;
   onPreviewUrl: (appUrl: string) => Promise<SageAppUrlPreview>;
-  onInstallZip: (
-    zipPath: string,
-    permissions: SageGrantedPermissions,
-  ) => Promise<void>;
-  onInstallUrl: (
-    appUrl: string,
-    permissions: SageGrantedPermissions,
-  ) => Promise<void>;
+  onInstallZip: (zipPath: string, permissions: string[]) => Promise<void>;
+  onInstallUrl: (appUrl: string, permissions: string[]) => Promise<void>;
 }
 
 type InstallSource =
@@ -46,7 +37,9 @@ export function InstallAppForm({
   const [error, setError] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState('');
   const [source, setSource] = useState<InstallSource | null>(null);
-  const [grantedPermissions, setGrantedPermissions] = useState<SageGrantedPermissions>(buildFullyForbiddenPermissions());
+  const [grantedPermissions, setGrantedPermissions] = useState<string[]>(
+    buildFullyForbiddenPermissions(),
+  );
 
   async function handleSelectZipPath(zipPath: string) {
     try {

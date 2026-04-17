@@ -6,19 +6,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type {
-  SageAppPackageManifest,
-  SageAppUrlPreview,
-  SageGrantedPermissions,
-} from '@/bindings';
-import {
-  NetworkPermissionsSection,
-} from '@/components/apps/permissions/NetworkPermissionsSection.tsx';
-import {
-  PersistentStoragePermissionSection
-} from '@/components/apps/permissions/PersistentStoragePermissionSection.tsx';
+import type { SageAppPackageManifest, SageAppUrlPreview } from '@/bindings';
 import React from 'react';
-import { WalletPermissionSection } from '@/components/apps/permissions/WalletPermissionSection.tsx';
+import { AppPermissions } from '@/components/apps/permissions/AppPermissions';
 
 type InstallSource =
   | {
@@ -36,10 +26,8 @@ interface Props {
   source: InstallSource | null;
   error: string | null;
   installing: boolean;
-  grantedPermissions: SageGrantedPermissions;
-  onGrantedPermissionsChange: React.Dispatch<
-    React.SetStateAction<SageGrantedPermissions>
-  >;
+  grantedPermissions: string[];
+  onGrantedPermissionsChange: React.Dispatch<React.SetStateAction<string[]>>;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -58,6 +46,8 @@ export function InstallPermissionsDialog({
       ? source.manifest
       : (source?.preview.manifest ?? null);
 
+  const networkEntries = manifest?.network?.whitelist ?? [];
+
   return (
     <Dialog open={!!manifest} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent>
@@ -69,6 +59,7 @@ export function InstallPermissionsDialog({
           <div className='space-y-5'>
             <div className='space-y-1 text-sm text-muted-foreground'>
               <div>v{manifest.version}</div>
+
               {source?.kind === 'url' ? (
                 <>
                   <div className='break-all'>URL: {source.preview.appUrl}</div>
@@ -82,38 +73,31 @@ export function InstallPermissionsDialog({
             <div className='space-y-3'>
               <h3 className='text-sm font-medium'>Permissions</h3>
 
-              {manifest.permissions ? (
-                <>
-                  {manifest.permissions.network && (
-                    <NetworkPermissionsSection
-                      wanted={manifest.permissions.network}
-                      granted={grantedPermissions.network}
-                      onGrantedPermissionsChange={onGrantedPermissionsChange}
-                    />
-                  )}
-
-                  {manifest.permissions.persistent_storage && (
-                    <PersistentStoragePermissionSection
-                      wanted={manifest.permissions.persistent_storage}
-                      granted={grantedPermissions.persistentStorage}
-                      onGrantedPermissionsChange={onGrantedPermissionsChange}
-                    />
-                  )}
-
-                  {manifest.permissions.wallet && (
-                    <WalletPermissionSection
-                      wanted={manifest.permissions.wallet}
-                      granted={grantedPermissions.wallet}
-                      onGrantedPermissionsChange={onGrantedPermissionsChange}
-                    />
-                  )}
-                </>
-              ) : (
-                <div className='text-sm text-muted-foreground'>
-                  This app does not request any permissions.
-                </div>
-              )}
+              <AppPermissions
+                permissions={manifest.permissions}
+                grantedPermissions={grantedPermissions}
+                editable
+                onGrantedPermissionsChange={onGrantedPermissionsChange}
+              />
             </div>
+
+            {networkEntries.length > 0 ? (
+              <div className='space-y-2'>
+                <div className='text-sm font-medium'>Network allowlist</div>
+
+                <div className='space-y-2 rounded-md border p-3'>
+                  {networkEntries.map((entry) => (
+                    <div
+                      key={`${entry.scheme}://${entry.host}`}
+                      className='text-xs font-mono'
+                    >
+                      {entry.scheme}://{entry.host}
+                      {entry.required ? ' (required)' : ''}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             {error ? (
               <div className='text-sm text-destructive'>{error}</div>

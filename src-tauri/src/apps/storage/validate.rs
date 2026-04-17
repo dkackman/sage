@@ -5,7 +5,7 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use crate::apps::types::InstalledSageApp;
 
 pub fn ensure_storage_permission(app: &InstalledSageApp) -> AnyResult<()> {
-    if !app.granted_permissions.persistent_storage {
+    if !app.granted_permissions.contains(&"persistent_storage".to_string()) {
         return Err(anyhow!("persistent storage permission is not granted"));
     }
 

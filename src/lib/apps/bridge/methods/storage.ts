@@ -9,11 +9,11 @@ import type { BridgeMethodRegistry } from '../types';
 async function ensureStoragePermission({
   ctx,
 }: {
-  ctx: { app: { grantedPermissions: { persistentStorage: boolean } } };
+  ctx: { app: { grantedPermissions: string[] } };
 }) {
-  if (!ctx.app.grantedPermissions.persistentStorage) {
+  if (!ctx.app.grantedPermissions.includes('persistent_storage')) {
     throw new BridgePermissionError(
-      'App does not have persistentStorage permission',
+      'App does not have persistent_storage permission',
     );
   }
 }

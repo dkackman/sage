@@ -8,7 +8,7 @@ use crate::apps::{
     },
     types::{SageAppManifestFile, SageAppPackageManifest},
 };
-use crate::apps::permissions::validate_requested_permissions;
+use crate::apps::permissions::validate_permissions;
 
 pub fn validate_manifest_file_path(path: &str) -> AnyResult<()> {
     if path.is_empty() {
@@ -95,6 +95,6 @@ pub fn validate_package_manifest(manifest: &SageAppPackageManifest) -> AnyResult
         return Err(anyhow!("manifest version cannot be empty"));
     }
 
-    validate_requested_permissions(&manifest.permissions)?;
+    validate_permissions(&manifest.permissions)?;
     validate_manifest_files(&manifest.files)
 }

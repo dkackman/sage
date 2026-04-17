@@ -5,7 +5,7 @@ import type { BridgeMethodRegistry } from '../types';
 export const walletBridgeMethods = {
   'wallet.sendXch': {
     approval: async ({ ctx, request }) => {
-      if (ctx.app.grantedPermissions.wallet.sendXchAutoSubmit) {
+      if (ctx.app.grantedPermissions.includes('wallet.send_xch_auto_submit')) {
         return null;
       }
 
