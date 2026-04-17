@@ -91,6 +91,17 @@ function inlineLabelFor(appId: string) {
   return `app-inline-${appId}`;
 }
 
+function dataStoreIdFor(appId: string): number[] {
+  const bytes = new TextEncoder().encode(appId);
+  const out = new Uint8Array(16);
+
+  for (let i = 0; i < bytes.length; i += 1) {
+    out[i % 16] = (out[i % 16] + bytes[i] + i) & 0xff;
+  }
+
+  return Array.from(out);
+}
+
 function shouldUseIncognito(app: InstalledSageApp): boolean {
   return !app.grantedPermissions.includes('persistent_storage');
 }
@@ -254,16 +265,19 @@ export async function ensureInlineRuntime(
     }
     await waitForWebviewClosed(webviewLabel, 8000);
   }
+  const isIncognito = shouldUseIncognito(app);
 
-  const webview = new Webview(hostWindow, webviewLabel, {
+  const webviewOptions = {
     url: entrySrc,
     x: 0,
     y: 0,
     width: 1,
     height: 1,
     focus: true,
-    incognito: shouldUseIncognito(app),
-  });
+    incognito: isIncognito,
+    dataStoreIdentifier: dataStoreIdFor(app.id),
+  };
+  const webview = new Webview(hostWindow, webviewLabel, webviewOptions);
 
   await waitForWebviewCreated(webview);
 
@@ -325,6 +339,7 @@ export async function clearAppRuntimeBrowsingData(
     height: 1,
     focus: false,
     incognito: false,
+    dataStoreIdentifier: dataStoreIdFor(app.id),
   });
 
   let created = false;
