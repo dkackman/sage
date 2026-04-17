@@ -9,52 +9,14 @@ use crate::apps::{
 };
 use crate::apps::registry::read_installed_app_by_id;
 
-const CLEAR_STUB_PATH: &str = "/__sage_clear__.html";
-
-fn build_clear_stub_html() -> String {
-    r#"<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Sage Clear</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      html, body {
-        margin: 0;
-        padding: 0;
-        background: #0a0a0a;
-        color: #cfcfcf;
-        font: 12px system-ui, sans-serif;
-      }
-      body {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 100vh;
-      }
-    </style>
-  </head>
-  <body>
-    Clearing app browsing data…
-  </body>
-</html>
-"#.to_string()
-}
-
-fn build_clear_stub_csp() -> &'static str {
-    "default-src 'none'; \
-     script-src 'none'; \
-     style-src 'unsafe-inline'; \
-     img-src 'none'; \
-     font-src 'none'; \
-     media-src 'none'; \
-     connect-src 'none'; \
-     frame-src 'none'; \
-     child-src 'none'; \
-     worker-src 'none'; \
-     object-src 'none'; \
-     base-uri 'none'; \
-     form-action 'none';"
+fn build_blank_internal_response() -> AnyResult<Response<Vec<u8>>> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "text/html; charset=utf-8")
+        .header("Cache-Control", "no-store")
+        .header("X-Content-Type-Options", "nosniff")
+        .body(b"<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>".to_vec())
+        .map_err(|err| anyhow!("failed to build blank internal response: {err}"))
 }
 
 pub fn handle_app_protocol_request(
@@ -70,16 +32,8 @@ pub fn handle_app_protocol_request(
     let request_path = uri.path();
     let app = read_installed_app_by_id(base_path, app_id)?;
 
-    if request_path == CLEAR_STUB_PATH {
-        let html = build_clear_stub_html();
-
-        return Response::builder()
-            .status(StatusCode::OK)
-            .header("Content-Type", "text/html; charset=utf-8")
-            .header("Content-Security-Policy", build_clear_stub_csp())
-            .header("X-Content-Type-Options", "nosniff")
-            .body(html.into_bytes())
-            .map_err(|err| anyhow!("failed to build clear stub response: {err}"));
+    if request_path == "/__sage/blank" {
+        return build_blank_internal_response();
     }
 
     let snapshot_dir = Path::new(&app.active_snapshot.snapshot_dir);

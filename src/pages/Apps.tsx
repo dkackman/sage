@@ -2,7 +2,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { InstallAppForm } from '@/components/apps/InstallAppForm';
 import { CorruptedAppCard } from '@/components/apps/CorruptedAppCard';
 import { AppsLaunchpadContextMenu } from '@/components/apps/AppsLaunchpadContextMenu';
-import { PermissionsDialog } from '@/components/apps/permissions/PermissionsDialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,9 +13,9 @@ import { SageAppPackageManifest, SageAppUrlPreview } from '@/bindings.ts';
 import { invoke } from '@tauri-apps/api/core';
 import { useApps } from '@/contexts/AppsContext.tsx';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
-import { formatAppError } from '@/lib/apps/formatAppError.ts';
+import { clearAppRuntimeBrowsingData } from '@/lib/apps/runtimeRegistry';
 import { LayoutGrid, Plus } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 type InstalledEntry = ReturnType<typeof useApps>['apps'][number] & {
@@ -35,8 +34,8 @@ function clampContextMenuPosition(args: {
   containerWidth: number;
   containerHeight: number;
 }) {
-  const menuWidth = 220;
-  const menuHeight = 220;
+  const menuWidth = 260;
+  const menuHeight = 260;
   const padding = 8;
 
   return {
@@ -54,25 +53,17 @@ function clampContextMenuPosition(args: {
 export function Apps() {
   const navigate = useNavigate();
   const [installOpen, setInstallOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState<AppContextMenuState | null>(
-    null,
-  );
-  const [permissionsDialogAppId, setPermissionsDialogAppId] = useState<
-    string | null
-  >(null);
-  const [permissionsDialogError, setPermissionsDialogError] = useState<
-    string | null
-  >(null);
-  const [permissionsDialogSubmitting, setPermissionsDialogSubmitting] =
-    useState(false);
-  const [
-    permissionsDialogGrantedPermissions,
-    setPermissionsDialogGrantedPermissions,
-  ] = useState<string[]>([]);
+  const [contextMenu, setContextMenu] = useState<AppContextMenuState>(null);
   const pageRef = useRef<HTMLDivElement | null>(null);
   const runtimes = useAppRuntimes();
   const [updateCheckStateByAppId, setUpdateCheckStateByAppId] = useState<
     Record<string, 'idle' | 'checking' | 'up_to_date'>
+  >({});
+  const [clearingDataByAppId, setClearingDataByAppId] = useState<
+    Record<string, boolean>
+  >({});
+  const [clearDataErrorByAppId, setClearDataErrorByAppId] = useState<
+    Record<string, string | null>
   >({});
 
   const {
@@ -81,14 +72,11 @@ export function Apps() {
     error,
     refresh,
     installApp,
-    installUrlApp,
     uninstallApp,
     checkForUpdate,
     performAppUpdate,
-    clearAppStorage,
     updateAvailability,
     busyAppIds,
-    getApp,
   } = useApps();
 
   const runningAppIds = useMemo(() => {
@@ -120,9 +108,11 @@ export function Apps() {
   const contextMenuAppIsRunning = contextMenu
     ? runningAppIds.has(contextMenu.app.id)
     : false;
-
-  const permissionsDialogApp = permissionsDialogAppId
-    ? (getApp(permissionsDialogAppId) ?? null)
+  const contextMenuClearDataBusy = contextMenu
+    ? (clearingDataByAppId[contextMenu.app.id] ?? false)
+    : false;
+  const contextMenuClearDataError = contextMenu
+    ? (clearDataErrorByAppId[contextMenu.app.id] ?? null)
     : null;
 
   function closeContextMenu() {
@@ -144,24 +134,6 @@ export function Apps() {
     setContextMenu(null);
   }
 
-  function openPermissionsDialog(appId: string) {
-    const app = getApp(appId);
-    if (!app) {
-      return;
-    }
-
-    setPermissionsDialogAppId(appId);
-    setPermissionsDialogError(null);
-    setPermissionsDialogGrantedPermissions(app.grantedPermissions ?? []);
-  }
-
-  function closePermissionsDialog() {
-    setPermissionsDialogAppId(null);
-    setPermissionsDialogError(null);
-    setPermissionsDialogSubmitting(false);
-    setPermissionsDialogGrantedPermissions([]);
-  }
-
   async function handleCheckForUpdate(appId: string) {
     setUpdateCheckStateByAppId((prev) => ({
       ...prev,
@@ -178,56 +150,51 @@ export function Apps() {
     }
   }
 
-  async function handleSavePermissions() {
-    if (!permissionsDialogApp) {
-      return;
-    }
+  const handleClearData = useCallback(
+    async (app: InstalledEntry, reopen: boolean) => {
+      setClearingDataByAppId((prev) => ({
+        ...prev,
+        [app.id]: true,
+      }));
+      setClearDataErrorByAppId((prev) => ({
+        ...prev,
+        [app.id]: null,
+      }));
 
-    try {
-      setPermissionsDialogSubmitting(true);
-      setPermissionsDialogError(null);
+      try {
+        await clearAppRuntimeBrowsingData(app);
 
-      await performAppUpdate(
-        permissionsDialogApp.id,
-        permissionsDialogGrantedPermissions,
-        {
-          restartIfRunning: true,
-          visibleAfterRestart: runningAppIds.has(permissionsDialogApp.id),
-        },
-      );
+        if (reopen) {
+          closeContextMenu();
 
-      closePermissionsDialog();
-    } catch (err) {
-      const message = formatAppError(err);
-      if (
-        message.includes('clear storage') ||
-        message.includes('cached secrets')
-      ) {
-        try {
-          await clearAppStorage(permissionsDialogApp.id);
+          const { restartAppRuntime } =
+            await import('@/lib/apps/restartAppRuntime');
 
-          await performAppUpdate(
-            permissionsDialogApp.id,
-            permissionsDialogGrantedPermissions,
-            {
-              restartIfRunning: true,
-              visibleAfterRestart: runningAppIds.has(permissionsDialogApp.id),
-            },
-          );
+          await restartAppRuntime(app, {
+            visible: true,
+          });
 
-          closePermissionsDialog();
-          return;
-        } catch (retryErr) {
-          setPermissionsDialogError(formatAppError(retryErr));
-          return;
+          navigate(`/apps/${app.id}`);
         }
-      }
 
-      setPermissionsDialogError(message);
-    } finally {
-      setPermissionsDialogSubmitting(false);
-    }
-  }
+        await refresh();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+
+        setClearDataErrorByAppId((prev) => ({
+          ...prev,
+          [app.id]: message,
+        }));
+      } finally {
+        setClearingDataByAppId((prev) =>
+          Object.fromEntries(
+            Object.entries(prev).filter(([key]) => key !== app.id),
+          ),
+        );
+      }
+    },
+    [navigate, refresh],
+  );
 
   useEffect(() => {
     if (!contextMenu || contextMenuCheckState !== 'up_to_date') {
@@ -258,11 +225,19 @@ export function Apps() {
     }
 
     const handleClose = () => {
+      if (clearingDataByAppId[contextMenu.app.id]) {
+        return;
+      }
+
       closeContextMenu();
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (clearingDataByAppId[contextMenu.app.id]) {
+          return;
+        }
+
         closeContextMenu();
       }
     };
@@ -278,7 +253,7 @@ export function Apps() {
       window.removeEventListener('scroll', handleClose, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [contextMenu]);
+  }, [contextMenu, clearingDataByAppId]);
 
   if (loading) {
     return (
@@ -377,6 +352,11 @@ export function Apps() {
                         containerHeight: pageRect.height,
                       });
 
+                      setClearDataErrorByAppId((prev) => ({
+                        ...prev,
+                        [app.id]: null,
+                      }));
+
                       setContextMenu({
                         app,
                         x: position.x,
@@ -439,6 +419,8 @@ export function Apps() {
           hasUpdate={!!contextMenuPreview}
           isRunning={contextMenuAppIsRunning}
           updateCheckState={contextMenuCheckState}
+          clearDataBusy={contextMenuClearDataBusy}
+          clearDataError={contextMenuClearDataError}
           onClose={closeContextMenu}
           onOpen={() => {
             if (!contextMenu) {
@@ -464,16 +446,25 @@ export function Apps() {
               return;
             }
 
-            openPermissionsDialog(contextMenu.app.id);
-            closeContextMenu();
+            void performAppUpdate(
+              contextMenu.app.id,
+              contextMenu.app.grantedPermissions,
+              {
+                restartIfRunning: true,
+                visibleAfterRestart: contextMenuAppIsRunning,
+              },
+            );
           }}
-          onChangePermissions={() => {
+          onChangePermissions={() => {}}
+          onClearData={() => {
             if (!contextMenu) {
               return;
             }
 
-            openPermissionsDialog(contextMenu.app.id);
-            closeContextMenu();
+            const targetApp = contextMenu.app;
+            const shouldReopen = runningAppIds.has(targetApp.id);
+
+            void handleClearData(targetApp, shouldReopen);
           }}
           onUninstall={() => {
             if (!contextMenu) {
@@ -515,27 +506,16 @@ export function Apps() {
               setInstallOpen(false);
             }}
             onInstallUrl={async (appUrl, permissions) => {
-              await installUrlApp(appUrl, permissions);
+              await invoke('install_app_url', {
+                appUrl,
+                grantedPermissions: permissions,
+              });
+              await refresh();
               setInstallOpen(false);
             }}
           />
         </DialogContent>
       </Dialog>
-
-      <PermissionsDialog
-        app={permissionsDialogApp}
-        open={!!permissionsDialogApp}
-        title='Change permissions'
-        description='Review and update the currently granted permissions for this app.'
-        error={permissionsDialogError}
-        submitting={permissionsDialogSubmitting}
-        grantedPermissions={permissionsDialogGrantedPermissions}
-        onGrantedPermissionsChange={setPermissionsDialogGrantedPermissions}
-        onCancel={closePermissionsDialog}
-        onConfirm={() => {
-          void handleSavePermissions();
-        }}
-      />
     </>
   );
 }

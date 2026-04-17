@@ -1,3 +1,10 @@
+import { Button } from '@/components/ui/button';
+
+export type AppsLaunchpadContextMenuUpdateState =
+  | 'idle'
+  | 'checking'
+  | 'up_to_date';
+
 interface Props {
   open: boolean;
   x: number;
@@ -5,12 +12,15 @@ interface Props {
   busy: boolean;
   hasUpdate: boolean;
   isRunning: boolean;
-  updateCheckState: 'idle' | 'checking' | 'up_to_date';
+  updateCheckState: AppsLaunchpadContextMenuUpdateState;
+  clearDataBusy?: boolean;
+  clearDataError?: string | null;
   onClose: () => void;
   onOpen: () => void;
   onCheckForUpdate: () => void;
   onUpdate: () => void;
   onChangePermissions: () => void;
+  onClearData: () => void;
   onUninstall: () => void;
 }
 
@@ -22,11 +32,14 @@ export function AppsLaunchpadContextMenu({
   hasUpdate,
   isRunning,
   updateCheckState,
+  clearDataBusy = false,
+  clearDataError = null,
   onClose,
   onOpen,
   onCheckForUpdate,
   onUpdate,
   onChangePermissions,
+  onClearData,
   onUninstall,
 }: Props) {
   if (!open) {
@@ -38,7 +51,7 @@ export function AppsLaunchpadContextMenu({
       <div className='absolute inset-0 z-40' onClick={onClose} />
 
       <div
-        className='absolute z-50 w-[220px] rounded-xl border bg-popover p-1 shadow-lg'
+        className='absolute z-50 w-[260px] rounded-xl border bg-popover p-1 shadow-lg'
         style={{
           left: `${x}px`,
           top: `${y}px`,
@@ -61,6 +74,7 @@ export function AppsLaunchpadContextMenu({
             className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
             disabled={
               busy ||
+              clearDataBusy ||
               updateCheckState === 'checking' ||
               updateCheckState === 'up_to_date'
             }
@@ -76,7 +90,7 @@ export function AppsLaunchpadContextMenu({
           <button
             type='button'
             className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
-            disabled={busy}
+            disabled={busy || clearDataBusy}
             onClick={onUpdate}
           >
             {isRunning ? 'Update and reopen' : 'Update'}
@@ -85,18 +99,40 @@ export function AppsLaunchpadContextMenu({
 
         <div className='my-1 h-px bg-border' />
 
-        <button
-          type='button'
-          className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
-          disabled={busy}
+        <Button
+          variant='ghost'
+          className='h-auto w-full justify-start rounded-lg px-3 py-2 text-sm text-muted-foreground opacity-60'
+          disabled
           onClick={onChangePermissions}
         >
           Change permissions
-        </button>
+        </Button>
 
         <button
           type='button'
-          className='flex w-full rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-muted'
+          className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
+          disabled={busy || clearDataBusy}
+          onClick={onClearData}
+        >
+          {clearDataBusy
+            ? isRunning
+              ? 'Clearing data and reopening...'
+              : 'Clearing data...'
+            : isRunning
+              ? 'Clear data and reopen'
+              : 'Clear data'}
+        </button>
+
+        {clearDataError ? (
+          <div className='px-3 py-2 text-xs text-destructive break-words'>
+            {clearDataError}
+          </div>
+        ) : null}
+
+        <button
+          type='button'
+          className='flex w-full rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-muted disabled:opacity-50'
+          disabled={busy || clearDataBusy}
           onClick={onUninstall}
         >
           Uninstall

@@ -39,8 +39,6 @@ const runtimes = new Map<string, RuntimeInternalRecord>();
 const runtimeByAppId = new Map<string, string>();
 const listeners = new Set<RuntimeListener>();
 
-const CLEAR_STUB_PATH = '/__sage_clear__.html';
-
 function emitChange() {
   const snapshot = Array.from(runtimes.values()).map(stripInternal);
   for (const listener of listeners) {
@@ -93,20 +91,8 @@ function inlineLabelFor(appId: string) {
   return `app-inline-${appId}`;
 }
 
-function clearLabelFor(appId: string) {
-  return `app-clear-${appId}`;
-}
-
 function shouldUseIncognito(app: InstalledSageApp): boolean {
   return !app.grantedPermissions.includes('persistent_storage');
-}
-
-function appEntrySrc(appId: string): string {
-  return `sage-app://${appId}/index.html`;
-}
-
-function clearStubSrc(appId: string): string {
-  return `sage-app://${appId}${CLEAR_STUB_PATH}`;
 }
 
 async function waitForWebviewCreated(webview: Webview): Promise<void> {
@@ -142,7 +128,6 @@ async function waitForWebviewCreated(webview: Webview): Promise<void> {
             typeof event.payload === 'string'
               ? event.payload
               : JSON.stringify(event.payload);
-
           reject(new Error(payload));
         });
       } catch (err) {
@@ -160,9 +145,8 @@ async function waitForWebviewClosed(
   const startedAt = Date.now();
 
   while (true) {
-    const existing = await Webview.getByLabel(label).catch(() => null);
-
-    if (!existing) {
+    const live = await Webview.getByLabel(label).catch(() => null);
+    if (!live) {
       return;
     }
 
@@ -172,24 +156,6 @@ async function waitForWebviewClosed(
 
     await new Promise((resolve) => window.setTimeout(resolve, 100));
   }
-}
-
-async function closeLooseWebviewByLabel(
-  label: string,
-  timeoutMs = 8000,
-): Promise<void> {
-  const webview = await Webview.getByLabel(label).catch(() => null);
-  if (!webview) {
-    return;
-  }
-
-  try {
-    await webview.close();
-  } catch (err) {
-    console.warn(`Failed to request close for webview ${label}:`, err);
-  }
-
-  await waitForWebviewClosed(label, timeoutMs);
 }
 
 export function subscribeAppRuntimes(listener: RuntimeListener): () => void {
@@ -235,73 +201,11 @@ export async function closeAppRuntime(
     console.warn('Failed to request webview close:', err);
   }
 
-  const startedAt = Date.now();
+  await waitForWebviewClosed(record.webviewLabel, timeoutMs);
 
-  let closed = false;
-
-  while (!closed) {
-    const existing = await Webview.getByLabel(record.webviewLabel).catch(
-      () => null,
-    );
-
-    if (!existing) {
-      runtimes.delete(runtimeId);
-      runtimeByAppId.delete(appId);
-      emitChange();
-      closed = true;
-      continue;
-    }
-
-    if (Date.now() - startedAt >= timeoutMs) {
-      throw new Error(`Timed out closing runtime for ${appId}`);
-    }
-
-    await new Promise((resolve) => window.setTimeout(resolve, 100));
-  }
-}
-
-export async function clearBrowsingDataWithStub(
-  app: InstalledSageApp,
-): Promise<void> {
-  const runtimeId = runtimeByAppId.get(app.id);
-  if (runtimeId) {
-    await closeAppRuntime(app.id, { timeoutMs: 8000 });
-  }
-
-  await closeLooseWebviewByLabel(clearLabelFor(app.id), 8000);
-
-  const hostWindow = getCurrentWindow();
-  const clearLabel = clearLabelFor(app.id);
-
-  const clearWebview = new Webview(hostWindow, clearLabel, {
-    url: clearStubSrc(app.id),
-    x: 0,
-    y: 0,
-    width: 1,
-    height: 1,
-    focus: false,
-    incognito: false,
-  });
-
-  await waitForWebviewCreated(clearWebview);
-
-  try {
-    await clearWebview.hide();
-  } catch {
-    // ignore
-  }
-
-  await new Promise((resolve) => window.setTimeout(resolve, 50));
-
-  await clearWebview.clearAllBrowsingData();
-
-  try {
-    await clearWebview.close();
-  } catch (err) {
-    console.warn('Failed to request clear stub webview close:', err);
-  }
-
-  await waitForWebviewClosed(clearLabel, 8000);
+  runtimes.delete(runtimeId);
+  runtimeByAppId.delete(appId);
+  emitChange();
 }
 
 export async function ensureInlineRuntime(
@@ -338,26 +242,32 @@ export async function ensureInlineRuntime(
   const hostWindow = getCurrentWindow();
   const hostWebview = getCurrentWebview();
 
-  const runtimeId = runtimeIdFor(app.id);
   const webviewLabel = inlineLabelFor(app.id);
-  const entrySrc = appEntrySrc(app.id);
+  const entrySrc = `sage-app://${app.id}/index.html`;
 
-  let webview = await Webview.getByLabel(webviewLabel);
-  if (!webview) {
-    const createdWebview = new Webview(hostWindow, webviewLabel, {
-      url: entrySrc,
-      x: 0,
-      y: 0,
-      width: 1,
-      height: 1,
-      focus: true,
-      incognito: shouldUseIncognito(app),
-    });
-
-    await waitForWebviewCreated(createdWebview);
-    webview = createdWebview;
+  const staleWebview = await Webview.getByLabel(webviewLabel).catch(() => null);
+  if (staleWebview) {
+    try {
+      await staleWebview.close();
+    } catch {
+      // ignore
+    }
+    await waitForWebviewClosed(webviewLabel, 8000);
   }
 
+  const webview = new Webview(hostWindow, webviewLabel, {
+    url: entrySrc,
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    focus: true,
+    incognito: shouldUseIncognito(app),
+  });
+
+  await waitForWebviewCreated(webview);
+
+  const runtimeId = runtimeIdFor(app.id);
   const record: RuntimeInternalRecord = {
     runtimeId,
     appId: app.id,
@@ -381,6 +291,83 @@ export async function ensureInlineRuntime(
   emitChange();
 
   return stripInternal(record);
+}
+
+export async function clearAppRuntimeBrowsingData(
+  app: InstalledSageApp,
+): Promise<void> {
+  const webviewLabel = inlineLabelFor(app.id);
+  const hostWindow = getCurrentWindow();
+
+  const existingRuntimeId = runtimeByAppId.get(app.id);
+  if (existingRuntimeId) {
+    await closeAppRuntime(app.id, { timeoutMs: 8000 });
+  } else {
+    const staleWebview = await Webview.getByLabel(webviewLabel).catch(
+      (err: unknown) => {
+        throw new Error(
+          `Failed to query existing webview ${webviewLabel}: ${String(err)}`,
+        );
+      },
+    );
+
+    if (staleWebview) {
+      await staleWebview.close();
+      await waitForWebviewClosed(webviewLabel, 8000);
+    }
+  }
+
+  const clearingWebview = new Webview(hostWindow, webviewLabel, {
+    url: `sage-app://${app.id}/__sage/blank`,
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    focus: false,
+    incognito: false,
+  });
+
+  let created = false;
+  let cleared = false;
+  let closed = false;
+
+  try {
+    await waitForWebviewCreated(clearingWebview);
+    created = true;
+
+    await new Promise((resolve) => window.setTimeout(resolve, 150));
+
+    await clearingWebview.clearAllBrowsingData();
+    cleared = true;
+
+    await clearingWebview.close();
+    await waitForWebviewClosed(webviewLabel, 8000);
+    closed = true;
+  } catch (err) {
+    const parts = [
+      `Failed to clear browsing data for app ${app.id}.`,
+      `created=${created}`,
+      `cleared=${cleared}`,
+      `closed=${closed}`,
+      `error=${err instanceof Error ? err.message : String(err)}`,
+    ];
+
+    try {
+      const live = await Webview.getByLabel(webviewLabel);
+      if (live) {
+        await live.close();
+        await waitForWebviewClosed(webviewLabel, 8000);
+      }
+    } catch (closeErr) {
+      parts.push(
+        `cleanup_error=${
+          closeErr instanceof Error ? closeErr.message : String(closeErr)
+        }`,
+      );
+    }
+
+    throw new Error(parts.join(' '));
+  }
 }
 
 export async function getRuntimeWebview(
