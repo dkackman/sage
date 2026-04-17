@@ -5,15 +5,21 @@ import {
   type SageAppRuntimeRecord,
 } from '@/lib/apps/runtimeRegistry';
 
-export function useAppRuntimes() {
-  const [runtimes, setRuntimes] = useState<SageAppRuntimeRecord[]>(() =>
-    listAppRuntimes(),
-  );
+export function useAppRuntimes(options?: { includeInternal?: boolean }) {
+  const includeInternal = options?.includeInternal ?? false;
+
+  const [runtimes, setRuntimes] = useState<SageAppRuntimeRecord[]>(() => {
+    const all = listAppRuntimes();
+    return includeInternal ? all : all.filter((runtime) => !runtime.internal);
+  });
 
   useEffect(() => {
-    return subscribeAppRuntimes(setRuntimes);
-  }, []);
+    return subscribeAppRuntimes((next) => {
+      setRuntimes(
+        includeInternal ? next : next.filter((runtime) => !runtime.internal),
+      );
+    });
+  }, [includeInternal]);
 
   return runtimes;
 }
-

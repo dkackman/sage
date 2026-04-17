@@ -149,12 +149,16 @@ pub fn run() {
             apps::install::install_app_zip,
             apps::install::install_app_url,
             apps::install::uninstall_app,
+            apps::builtin_apps::get_builtin_test_app,
             apps::update::check_app_update,
             apps::update::download_app_update,
             apps::update::apply_app_update,
             apps::update::apps_update_permissions,
             apps::sandbox::sandbox_reset_run,
-            apps::sandbox::sandbox_get_run_results,
+            apps::sandbox::sandbox_get_isolation_results,
+            apps::sandbox::sandbox_get_persistence_write_results,
+            apps::sandbox::sandbox_get_persistence_read_results,
+            apps::sandbox::sandbox_get_network_results,
         ])
         .events(collect_events![SyncEvent]);
 

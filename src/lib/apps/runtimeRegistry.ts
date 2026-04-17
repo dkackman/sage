@@ -24,6 +24,7 @@ export interface SageAppRuntimeRecord {
   startedAt: number;
   lastActiveAt: number;
   visible: boolean;
+  internal: boolean;
   activeBatchCount: number;
   activeSocketCount: number;
   inFlightRequestCount: number;
@@ -77,6 +78,7 @@ function stripInternal(record: RuntimeInternalRecord): SageAppRuntimeRecord {
     startedAt: record.startedAt,
     lastActiveAt: record.lastActiveAt,
     visible: record.visible,
+    internal: record.internal,
     activeBatchCount: record.activeBatchCount,
     activeSocketCount: record.activeSocketCount,
     inFlightRequestCount: record.inFlightRequestCount,
@@ -169,6 +171,81 @@ async function waitForWebviewClosed(
   }
 }
 
+async function createInlineRuntime(
+  app: InstalledSageApp,
+  options?: {
+    visible?: boolean;
+    internal?: boolean;
+    query?: Record<string, string>;
+  },
+): Promise<SageAppRuntimeRecord> {
+  const hostWindow = getCurrentWindow();
+  const hostWebview = getCurrentWebview();
+
+  const webviewLabel = inlineLabelFor(app.id);
+
+  const url = new URL(`sage-app://${app.id}/index.html`);
+  for (const [key, value] of Object.entries(options?.query ?? {})) {
+    url.searchParams.set(key, value);
+  }
+  const entrySrc = url.toString();
+
+  const staleWebview = await Webview.getByLabel(webviewLabel).catch(() => null);
+  if (staleWebview) {
+    try {
+      await staleWebview.close();
+    } catch {
+      //
+    }
+    await waitForWebviewClosed(webviewLabel, 8000);
+  }
+
+  const isIncognito = shouldUseIncognito(app);
+
+  const webview = new Webview(hostWindow, webviewLabel, {
+    url: entrySrc,
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    focus: !!options?.visible,
+    incognito: isIncognito,
+    dataStoreIdentifier: dataStoreIdFor(app.id),
+  });
+
+  await waitForWebviewCreated(webview);
+
+  if (!options?.visible) {
+    await webview.hide();
+  }
+
+  const runtimeId = runtimeIdFor(app.id);
+  const record: RuntimeInternalRecord = {
+    runtimeId,
+    appId: app.id,
+    appName: app.name,
+    entrySrc,
+    webviewLabel,
+    hostWindowLabel: hostWebview.label,
+    mode: 'inline',
+    state: options?.visible === false ? 'hidden' : 'running',
+    startedAt: Date.now(),
+    lastActiveAt: Date.now(),
+    visible: options?.visible ?? true,
+    internal: options?.internal ?? false,
+    activeBatchCount: 0,
+    activeSocketCount: 0,
+    inFlightRequestCount: 0,
+    webview,
+  };
+
+  runtimes.set(runtimeId, record);
+  runtimeByAppId.set(app.id, runtimeId);
+  emitChange();
+
+  return stripInternal(record);
+}
+
 export function subscribeAppRuntimes(listener: RuntimeListener): () => void {
   listeners.add(listener);
   listener(Array.from(runtimes.values()).map(stripInternal));
@@ -250,61 +327,23 @@ export async function ensureInlineRuntime(
     }
   }
 
-  const hostWindow = getCurrentWindow();
-  const hostWebview = getCurrentWebview();
+  return createInlineRuntime(app, { visible: true, internal: false });
+}
 
-  const webviewLabel = inlineLabelFor(app.id);
-  const entrySrc = `sage-app://${app.id}/index.html`;
-
-  const staleWebview = await Webview.getByLabel(webviewLabel).catch(() => null);
-  if (staleWebview) {
-    try {
-      await staleWebview.close();
-    } catch {
-      // ignore
-    }
-    await waitForWebviewClosed(webviewLabel, 8000);
+export async function startInternalInlineRuntime(
+  app: InstalledSageApp,
+  options?: { query?: Record<string, string> },
+): Promise<SageAppRuntimeRecord> {
+  const existingRuntimeId = runtimeByAppId.get(app.id);
+  if (existingRuntimeId) {
+    await closeAppRuntime(app.id, { timeoutMs: 8000 });
   }
-  const isIncognito = shouldUseIncognito(app);
 
-  const webviewOptions = {
-    url: entrySrc,
-    x: 0,
-    y: 0,
-    width: 1,
-    height: 1,
-    focus: true,
-    incognito: isIncognito,
-    dataStoreIdentifier: dataStoreIdFor(app.id),
-  };
-  const webview = new Webview(hostWindow, webviewLabel, webviewOptions);
-
-  await waitForWebviewCreated(webview);
-
-  const runtimeId = runtimeIdFor(app.id);
-  const record: RuntimeInternalRecord = {
-    runtimeId,
-    appId: app.id,
-    appName: app.name,
-    entrySrc,
-    webviewLabel,
-    hostWindowLabel: hostWebview.label,
-    mode: 'inline',
-    state: 'running',
-    startedAt: Date.now(),
-    lastActiveAt: Date.now(),
-    visible: true,
-    activeBatchCount: 0,
-    activeSocketCount: 0,
-    inFlightRequestCount: 0,
-    webview,
-  };
-
-  runtimes.set(runtimeId, record);
-  runtimeByAppId.set(app.id, runtimeId);
-  emitChange();
-
-  return stripInternal(record);
+  return createInlineRuntime(app, {
+    visible: false,
+    internal: true,
+    query: options?.query,
+  });
 }
 
 export async function clearAppRuntimeBrowsingData(
@@ -476,12 +515,12 @@ export async function killRuntime(appId: string) {
       runtimeId,
     });
   } catch {
-    // ignore
+    //
   }
 
   try {
     await closeAppRuntime(appId, { timeoutMs: 8000 });
   } catch {
-    // ignore
+    //
   }
 }

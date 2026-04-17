@@ -1,0 +1,10 @@
+{
+  "name": "Sage Storage Isolation Persistent",
+  "version": "1.0.0",
+  "permissions": {
+    "required": ["persistent_storage"],
+    "optional": []
+  },
+  "files": []
+}
+

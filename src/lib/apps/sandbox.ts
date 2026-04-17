@@ -42,6 +42,36 @@ export interface SandboxIsolationProbeResult {
   error: string | null;
 }
 
+export interface SandboxPersistenceWriteProbeResult {
+  runId: string;
+  mode: string;
+  persistentStorage: boolean;
+  localStorageWrote: boolean;
+  cookieWrote: boolean;
+  indexedDbWrote: boolean;
+  error: string | null;
+}
+
+export interface SandboxPersistenceReadProbeResult {
+  runId: string;
+  mode: string;
+  persistentStorage: boolean;
+  localStoragePresent: boolean;
+  cookiePresent: boolean;
+  indexedDbPresent: boolean;
+  error: string | null;
+}
+
+export interface SandboxNetworkProbeResult {
+  runId: string;
+  mode: string;
+  allowedUrl: string;
+  blockedUrl: string;
+  allowedOk: boolean;
+  blockedOk: boolean;
+  error: string | null;
+}
+
 function makeCapabilityResult(
   status: SandboxCapabilityStatus,
   details: string | null = null,
@@ -74,52 +104,66 @@ export function buildRunningSandboxState(): SandboxState {
     finishedAt: null,
     capabilities: {
       storage_isolation_from_sage: makeCapabilityResult('running'),
-      storage_persistence_normal: makeCapabilityResult('pending'),
-      storage_non_persistence_incognito: makeCapabilityResult('pending'),
-      network_allowlist_enforced: makeCapabilityResult('pending'),
+      storage_persistence_normal: makeCapabilityResult('running'),
+      storage_non_persistence_incognito: makeCapabilityResult('running'),
+      network_allowlist_enforced: makeCapabilityResult('running'),
     },
   };
 }
 
-export function buildIsolationOnlySandboxState(
-  passed: boolean,
-  details: string | null,
-): SandboxState {
+export function buildCompletedSandboxState(args: {
+  isolation: { passed: boolean; details: string | null };
+  persistenceNormal: { passed: boolean; details: string | null };
+  persistenceIncognito: { passed: boolean; details: string | null };
+  network: { passed: boolean; details: string | null };
+}): SandboxState {
   const checkedAt = Date.now();
 
   return {
-    overallCriticalStatus: passed ? 'passed' : 'failed',
+    overallCriticalStatus: args.isolation.passed ? 'passed' : 'failed',
     startedAt: checkedAt,
     finishedAt: checkedAt,
     capabilities: {
       storage_isolation_from_sage: {
-        status: passed ? 'passed' : 'failed',
+        status: args.isolation.passed ? 'passed' : 'failed',
         checkedAt,
-        details,
+        details: args.isolation.details,
       },
       storage_persistence_normal: {
-        status: 'pending',
-        checkedAt: null,
-        details: 'Not implemented yet.',
+        status: args.persistenceNormal.passed ? 'passed' : 'failed',
+        checkedAt,
+        details: args.persistenceNormal.details,
       },
       storage_non_persistence_incognito: {
-        status: 'pending',
-        checkedAt: null,
-        details: 'Not implemented yet.',
+        status: args.persistenceIncognito.passed ? 'passed' : 'failed',
+        checkedAt,
+        details: args.persistenceIncognito.details,
       },
       network_allowlist_enforced: {
-        status: 'pending',
-        checkedAt: null,
-        details: 'Not implemented yet.',
+        status: args.network.passed ? 'passed' : 'failed',
+        checkedAt,
+        details: args.network.details,
       },
     },
   };
 }
 
 export function getRequiredSandboxCapabilities(
-  _app: InstalledSageApp,
+  app: InstalledSageApp,
 ): SandboxCapability[] {
-  return ['storage_isolation_from_sage'];
+  const required: SandboxCapability[] = ['storage_isolation_from_sage'];
+
+  if (app.grantedPermissions.includes('persistent_storage')) {
+    required.push('storage_persistence_normal');
+  } else {
+    required.push('storage_non_persistence_incognito');
+  }
+
+  if ((app.activeSnapshot.manifest.network?.whitelist?.length ?? 0) > 0) {
+    required.push('network_allowlist_enforced');
+  }
+
+  return required;
 }
 
 export function evaluateAppLaunchGate(
@@ -184,3 +228,4 @@ export function formatCapabilityLabel(capability: SandboxCapability): string {
       return 'network allowlist enforcement';
   }
 }
+

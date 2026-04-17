@@ -377,6 +377,9 @@ async installAppUrl(appUrl: string, grantedPermissions: string[]) : Promise<Inst
 async uninstallApp(appId: string) : Promise<null> {
     return await TAURI_INVOKE("uninstall_app", { appId });
 },
+async getBuiltinTestApp(appId: string) : Promise<InstalledSageApp | null> {
+    return await TAURI_INVOKE("get_builtin_test_app", { appId });
+},
 async checkAppUpdate(appId: string) : Promise<SageAppUrlPreview | null> {
     return await TAURI_INVOKE("check_app_update", { appId });
 },
@@ -392,8 +395,17 @@ async appsUpdatePermissions(appId: string, grantedPermissions: string[]) : Promi
 async sandboxResetRun(runId: string) : Promise<null> {
     return await TAURI_INVOKE("sandbox_reset_run", { runId });
 },
-async sandboxGetRunResults(runId: string) : Promise<SandboxIsolationProbeResult[]> {
-    return await TAURI_INVOKE("sandbox_get_run_results", { runId });
+async sandboxGetIsolationResults(runId: string) : Promise<SandboxIsolationProbeResult[]> {
+    return await TAURI_INVOKE("sandbox_get_isolation_results", { runId });
+},
+async sandboxGetPersistenceWriteResults(runId: string) : Promise<SandboxPersistenceWriteProbeResult[]> {
+    return await TAURI_INVOKE("sandbox_get_persistence_write_results", { runId });
+},
+async sandboxGetPersistenceReadResults(runId: string) : Promise<SandboxPersistenceReadProbeResult[]> {
+    return await TAURI_INVOKE("sandbox_get_persistence_read_results", { runId });
+},
+async sandboxGetNetworkResults(runId: string) : Promise<SandboxNetworkProbeResult[]> {
+    return await TAURI_INVOKE("sandbox_get_network_results", { runId });
 }
 }
 
@@ -2205,6 +2217,9 @@ export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestH
 export type SageNetworkPermissions = { whitelist?: SageNetworkWhitelistEntry[] }
 export type SageNetworkWhitelistEntry = { scheme: string; host: string; required?: boolean }
 export type SandboxIsolationProbeResult = { runId: string; mode: string; persistentStorage: boolean; localStorageVisible: boolean; cookieVisible: boolean; indexedDbVisible: boolean; error: string | null }
+export type SandboxNetworkProbeResult = { runId: string; mode: string; allowedUrl: string; blockedUrl: string; allowedOk: boolean; blockedOk: boolean; error: string | null }
+export type SandboxPersistenceReadProbeResult = { runId: string; mode: string; persistentStorage: boolean; localStoragePresent: boolean; cookiePresent: boolean; indexedDbPresent: boolean; error: string | null }
+export type SandboxPersistenceWriteProbeResult = { runId: string; mode: string; persistentStorage: boolean; localStorageWrote: boolean; cookieWrote: boolean; indexedDbWrote: boolean; error: string | null }
 /**
  * Save a theme NFT to the wallet
  */

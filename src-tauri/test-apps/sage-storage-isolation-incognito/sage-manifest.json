@@ -1,0 +1,10 @@
+{
+  "name": "Sage Storage Isolation Incognito",
+  "version": "1.0.0",
+  "permissions": {
+    "required": [],
+    "optional": []
+  },
+  "files": []
+}
+
