@@ -49,7 +49,7 @@ pub fn registry() -> BTreeMap<&'static str, PermissionDefinition> {
             description: "Allows the app to request XCH transactions from your wallet.",
             flags: PermissionFlags {
                 externally_observable: true,
-                accesses_sensitive_secret: true,
+                accesses_sensitive_secret: false,
                 persistent_storage: false,
             },
         },
@@ -62,8 +62,8 @@ pub fn registry() -> BTreeMap<&'static str, PermissionDefinition> {
             label: "Automatic XCH send",
             description: "Allows the app to submit XCH transactions without asking for per-transaction approval.",
             flags: PermissionFlags {
-                externally_observable: true,
-                accesses_sensitive_secret: true,
+                externally_observable: false,
+                accesses_sensitive_secret: false,
                 persistent_storage: false,
             },
         },
