@@ -152,6 +152,7 @@ pub fn run() {
             apps::update::check_app_update,
             apps::update::download_app_update,
             apps::update::apply_app_update,
+            apps::update::apps_update_permissions,
         ])
         .events(collect_events![SyncEvent]);
 

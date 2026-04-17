@@ -17,6 +17,7 @@ import { clearAppRuntimeBrowsingData } from '@/lib/apps/runtimeRegistry';
 import { LayoutGrid, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEditor.tsx';
 
 type InstalledEntry = ReturnType<typeof useApps>['apps'][number] & {
   kind: 'installed';
@@ -65,6 +66,8 @@ export function Apps() {
   const [clearDataErrorByAppId, setClearDataErrorByAppId] = useState<
     Record<string, string | null>
   >({});
+  const [permissionsDialogApp, setPermissionsDialogApp] =
+    useState<InstalledEntry | null>(null);
 
   const {
     apps,
@@ -115,24 +118,24 @@ export function Apps() {
     ? (clearDataErrorByAppId[contextMenu.app.id] ?? null)
     : null;
 
-  function closeContextMenu() {
-    setUpdateCheckStateByAppId((prev) => {
-      if (!contextMenu) {
-        return prev;
+  const closeContextMenu = useCallback(() => {
+    setContextMenu((prevContextMenu) => {
+      if (prevContextMenu) {
+        setUpdateCheckStateByAppId((prev) => {
+          if (prev[prevContextMenu.app.id] !== 'up_to_date') {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            [prevContextMenu.app.id]: 'idle',
+          };
+        });
       }
 
-      if (prev[contextMenu.app.id] !== 'up_to_date') {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        [contextMenu.app.id]: 'idle',
-      };
+      return null;
     });
-
-    setContextMenu(null);
-  }
+  }, []);
 
   async function handleCheckForUpdate(appId: string) {
     setUpdateCheckStateByAppId((prev) => ({
@@ -148,6 +151,14 @@ export function Apps() {
         [appId]: 'up_to_date',
       }));
     }
+  }
+
+  function openPermissionsDialog(app: InstalledEntry) {
+    setPermissionsDialogApp(app);
+  }
+
+  function closePermissionsDialog() {
+    setPermissionsDialogApp(null);
   }
 
   const handleClearData = useCallback(
@@ -193,7 +204,42 @@ export function Apps() {
         );
       }
     },
-    [navigate, refresh],
+    [navigate, refresh, closeContextMenu],
+  );
+
+  const handleApplyPermissions = useCallback(
+    async (app: InstalledEntry, nextPermissions: string[]) => {
+      const prev = new Set(app.grantedPermissions);
+      const next = new Set(nextPermissions);
+
+      const storageChanged =
+        prev.has('persistent_storage') !== next.has('persistent_storage');
+
+      // update permissions in backend
+      await invoke('apps_update_permissions', {
+        appId: app.id,
+        grantedPermissions: nextPermissions,
+      });
+
+      // critical: if storage permission changed → wipe
+      if (storageChanged) {
+        await clearAppRuntimeBrowsingData(app);
+      }
+
+      // restart if running
+      const isRunning = runningAppIds.has(app.id);
+      if (isRunning) {
+        const { restartAppRuntime } =
+          await import('@/lib/apps/restartAppRuntime');
+
+        await restartAppRuntime(app, { visible: true });
+        navigate(`/apps/${app.id}`);
+      }
+
+      await refresh();
+      closePermissionsDialog();
+    },
+    [runningAppIds, navigate, refresh],
   );
 
   useEffect(() => {
@@ -253,7 +299,7 @@ export function Apps() {
       window.removeEventListener('scroll', handleClose, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [contextMenu, clearingDataByAppId]);
+  }, [contextMenu, clearingDataByAppId, closeContextMenu]);
 
   if (loading) {
     return (
@@ -455,7 +501,13 @@ export function Apps() {
               },
             );
           }}
-          onChangePermissions={() => {}}
+          onChangePermissions={() => {
+            if (!contextMenu) {
+              return;
+            }
+
+            openPermissionsDialog(contextMenu.app);
+          }}
           onClearData={() => {
             if (!contextMenu) {
               return;
@@ -514,6 +566,28 @@ export function Apps() {
               setInstallOpen(false);
             }}
           />
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!permissionsDialogApp}
+        onOpenChange={(open) => {
+          if (!open) closePermissionsDialog();
+        }}
+      >
+        <DialogContent className='max-w-md'>
+          <DialogHeader>
+            <DialogTitle>Change permissions</DialogTitle>
+          </DialogHeader>
+
+          {permissionsDialogApp ? (
+            <PermissionsEditor
+              app={permissionsDialogApp}
+              onCancel={closePermissionsDialog}
+              onApply={(next) =>
+                handleApplyPermissions(permissionsDialogApp, next)
+              }
+            />
+          ) : null}
         </DialogContent>
       </Dialog>
     </>

@@ -205,3 +205,35 @@ pub async fn apply_app_update(
 
     Ok(app)
 }
+
+#[command]
+#[specta::specta]
+pub async fn apps_update_permissions(
+    state: State<'_, AppState>,
+    app_id: String,
+    granted_permissions: Vec<String>,
+) -> Result<()> {
+
+    let base_path = {
+        let state = state.lock().await;
+        state.path.clone()
+    };
+
+    let mut app = read_installed_app_by_id(&base_path, &app_id)
+        .map_err(|err| io::Error::other(format!("failed to read app {app_id}: {err}")))?;
+
+    // overwrite granted permissions
+    app.granted_permissions = granted_permissions;
+    // recompute derived flags
+    app.permission_flags = resolve_granted_permission_flags(
+        &app.granted_permissions,
+        Some(&app.permission_flags),
+    )
+        .map_err(|err| io::Error::other(err.to_string()))?;
+
+    let install_dir = PathBuf::from(&app.install_dir);
+    write_installed_app_metadata(&app, &install_dir)
+        .map_err(|err| io::Error::other(format!("failed to write metadata: {err}")))?;
+
+    Ok(())
+}
