@@ -140,9 +140,7 @@ export function AppPermissions({
         prevSet.delete(fullKey);
       }
 
-      const requiredKeys = new Set(
-        Object.keys(permissions?.required ?? {}),
-      );
+      const requiredKeys = new Set(permissions?.required ?? []);
 
       for (const key of requiredKeys) {
         prevSet.add(key);

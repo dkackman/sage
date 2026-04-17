@@ -37,29 +37,6 @@ pub struct SageAppPackageManifest {
     pub files: Vec<SageAppManifestFile>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SageNetworkPermissionEntry {
-    pub scheme: String,
-    pub host: String,
-    #[serde(default)]
-    pub required: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SagePermissionRequired {
-    #[serde(default)]
-    pub required: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SageWalletPermissions {
-    #[serde(rename = "sendXch", alias = "send_xch")]
-    pub send_xch: Option<SagePermissionRequired>,
-
-    #[serde(rename = "sendXchAutoSubmit", alias = "send_xch_auto_submit")]
-    pub send_xch_auto_submit: Option<SagePermissionRequired>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct SageAppUrlPreview {
     #[serde(rename = "appUrl", alias = "app_url")]
@@ -72,36 +49,6 @@ pub struct SageAppUrlPreview {
     pub manifest_hash: String,
 
     pub manifest: SageAppPackageManifest,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
-pub struct SageRequestedPermissions {
-    #[serde(default)]
-    pub network: Vec<SageNetworkPermissionEntry>,
-
-    #[serde(default, rename = "persistentStorage", alias = "persistent_storage")]
-    pub persistent_storage: Option<SagePermissionRequired>,
-
-    pub wallet: Option<SageWalletPermissions>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
-pub struct SageGrantedWalletPermissions {
-    #[serde(rename = "sendXch", alias = "send_xch")]
-    pub send_xch: bool,
-
-    #[serde(rename = "sendXchAutoSubmit", alias = "send_xch_auto_submit")]
-    pub send_xch_auto_submit: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
-pub struct SageGrantedPermissions {
-    pub network: Vec<SageGrantedNetworkPermissionEntry>,
-
-    #[serde(rename = "persistentStorage", alias = "persistent_storage")]
-    pub persistent_storage: bool,
-
-    pub wallet: SageGrantedWalletPermissions,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]
