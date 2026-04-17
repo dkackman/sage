@@ -14,6 +14,7 @@ import { useApps } from '@/contexts/AppsContext.tsx';
 import { LayoutGrid, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
 
 type InstalledEntry = ReturnType<typeof useApps>['apps'][number] & {
   kind: 'installed';
@@ -52,6 +53,10 @@ export function Apps() {
   const [installOpen, setInstallOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<AppContextMenuState>(null);
   const pageRef = useRef<HTMLDivElement | null>(null);
+  const runtimes = useAppRuntimes();
+  const [updateCheckStateByAppId, setUpdateCheckStateByAppId] = useState<
+    Record<string, 'idle' | 'checking' | 'up_to_date'>
+  >({});
 
   const {
     apps,
@@ -61,11 +66,14 @@ export function Apps() {
     installApp,
     uninstallApp,
     checkForUpdate,
-    downloadUpdate,
     performAppUpdate,
     updateAvailability,
     busyAppIds,
   } = useApps();
+
+  const runningAppIds = useMemo(() => {
+    return new Set(runtimes.map((runtime) => runtime.appId));
+  }, [runtimes]);
 
   const installedApps = useMemo(
     () =>
@@ -80,18 +88,54 @@ export function Apps() {
     [apps],
   );
 
+  const contextMenuPreview = contextMenu
+    ? updateAvailability[contextMenu.app.id]
+    : null;
+  const contextMenuBusy = contextMenu
+    ? (busyAppIds[contextMenu.app.id] ?? false)
+    : false;
+  const contextMenuCheckState = contextMenu
+    ? (updateCheckStateByAppId[contextMenu.app.id] ?? 'idle')
+    : 'idle';
+  const contextMenuAppIsRunning = contextMenu
+    ? runningAppIds.has(contextMenu.app.id)
+    : false;
+
+  useEffect(() => {
+    if (!contextMenu || contextMenuCheckState !== 'up_to_date') {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setUpdateCheckStateByAppId((prev) => {
+        if (prev[contextMenu.app.id] !== 'up_to_date') {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [contextMenu.app.id]: 'idle',
+        };
+      });
+    }, 3000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [contextMenu, contextMenuCheckState]);
+
   useEffect(() => {
     if (!contextMenu) {
       return;
     }
 
     const handleClose = () => {
-      setContextMenu(null);
+      closeContextMenu();
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setContextMenu(null);
+        closeContextMenu();
       }
     };
 
@@ -119,12 +163,40 @@ export function Apps() {
     );
   }
 
-  const contextMenuPreview = contextMenu
-    ? updateAvailability[contextMenu.app.id]
-    : null;
-  const contextMenuBusy = contextMenu
-    ? (busyAppIds[contextMenu.app.id] ?? false)
-    : false;
+  function closeContextMenu() {
+    setUpdateCheckStateByAppId((prev) => {
+      if (!contextMenu) {
+        return prev;
+      }
+
+      if (prev[contextMenu.app.id] !== 'up_to_date') {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [contextMenu.app.id]: 'idle',
+      };
+    });
+
+    setContextMenu(null);
+  }
+
+  async function handleCheckForUpdate(appId: string) {
+    setUpdateCheckStateByAppId((prev) => ({
+      ...prev,
+      [appId]: 'checking',
+    }));
+
+    try {
+      await checkForUpdate(appId);
+    } finally {
+      setUpdateCheckStateByAppId((prev) => ({
+        ...prev,
+        [appId]: 'up_to_date',
+      }));
+    }
+  }
 
   return (
     <>
@@ -306,7 +378,7 @@ export function Apps() {
           <div
             className='absolute inset-0 z-40'
             onClick={() => {
-              setContextMenu(null);
+              closeContextMenu();
             }}
           />
 
@@ -324,58 +396,51 @@ export function Apps() {
               type='button'
               className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted'
               onClick={() => {
+                setUpdateCheckStateByAppId((prev) => ({
+                  ...prev,
+                  [contextMenu.app.id]: 'idle',
+                }));
                 navigate(`/apps/${contextMenu.app.id}`);
-                setContextMenu(null);
+                closeContextMenu();
               }}
             >
               Open
             </button>
 
-            <button
-              type='button'
-              className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
-              disabled={contextMenuBusy}
-              onClick={() => {
-                void checkForUpdate(contextMenu.app.id).finally(() => {
-                  setContextMenu(null);
-                });
-              }}
-            >
-              Check for update
-            </button>
-
-            {contextMenuPreview ? (
-              <>
-                <button
-                  type='button'
-                  className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
-                  disabled={contextMenuBusy}
-                  onClick={() => {
-                    void downloadUpdate(contextMenu.app.id).finally(() => {
-                      setContextMenu(null);
-                    });
-                  }}
-                >
-                  Download update
-                </button>
-
-                <button
-                  type='button'
-                  className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
-                  disabled={contextMenuBusy}
-                  onClick={() => {
-                    void performAppUpdate(contextMenu.app.id, {
-                      restartIfRunning: true,
-                      visibleAfterRestart: false,
-                    }).finally(() => {
-                      setContextMenu(null);
-                    });
-                  }}
-                >
-                  Apply update
-                </button>
-              </>
-            ) : null}
+            {!contextMenuPreview ? (
+              <button
+                type='button'
+                className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
+                disabled={
+                  contextMenuBusy ||
+                  contextMenuCheckState === 'checking' ||
+                  contextMenuCheckState === 'up_to_date'
+                }
+                onClick={() => {
+                  void handleCheckForUpdate(contextMenu.app.id);
+                }}
+              >
+                {contextMenuCheckState === 'checking'
+                  ? 'Checking…'
+                  : contextMenuCheckState === 'up_to_date'
+                    ? 'Up to date'
+                    : 'Check for update'}
+              </button>
+            ) : (
+              <button
+                type='button'
+                className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
+                disabled={contextMenuBusy}
+                onClick={() => {
+                  void performAppUpdate(contextMenu.app.id, {
+                    restartIfRunning: true,
+                    visibleAfterRestart: contextMenuAppIsRunning,
+                  });
+                }}
+              >
+                {contextMenuAppIsRunning ? 'Update and reopen' : 'Update'}
+              </button>
+            )}
 
             <div className='my-1 h-px bg-border' />
 
@@ -391,8 +456,13 @@ export function Apps() {
               type='button'
               className='flex w-full rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-muted'
               onClick={() => {
+                setUpdateCheckStateByAppId((prev) => ({
+                  ...prev,
+                  [contextMenu.app.id]: 'idle',
+                }));
+
                 void uninstallApp(contextMenu.app.id).finally(() => {
-                  setContextMenu(null);
+                  closeContextMenu();
                 });
               }}
             >
