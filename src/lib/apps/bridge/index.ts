@@ -26,6 +26,7 @@ export type {
   SageBridgeRequestForMethod,
   SageBridgeRequestParamsMap,
   SageBridgeResponse,
+  SageBridgeSendPayload,
   SageBridgeSuccessResponse,
   SageWalletSendXchRequest,
 } from './types';

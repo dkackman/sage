@@ -1,4 +1,10 @@
 import type { Amount, InstalledSageApp } from '@/bindings';
+import type {
+  SandboxIsolationProbeResult,
+  SandboxNetworkProbeResult,
+  SandboxPersistenceReadProbeResult,
+  SandboxPersistenceWriteProbeResult,
+} from '@/lib/apps/sandbox';
 
 export interface SageBridgeSuccessResponse {
   channel: 'sage-bridge';
@@ -39,11 +45,32 @@ export interface SageWalletSendXchRequest {
   clawback?: number | null;
 }
 
+export interface SageBridgeSendPayload {
+  kind: 'sandbox_report';
+  report:
+    | {
+        type: 'isolation';
+        data: SandboxIsolationProbeResult;
+      }
+    | {
+        type: 'persistence_write';
+        data: SandboxPersistenceWriteProbeResult;
+      }
+    | {
+        type: 'persistence_read';
+        data: SandboxPersistenceReadProbeResult;
+      }
+    | {
+        type: 'network';
+        data: SandboxNetworkProbeResult;
+      };
+}
+
 export interface SageBridgeRequestParamsMap {
   'bridge.ping': undefined;
+  'bridge.send': SageBridgeSendPayload;
   'app.getInfo': undefined;
   'sage.getPermissions': undefined;
-
   'wallet.sendXch': SageWalletSendXchRequest;
 }
 

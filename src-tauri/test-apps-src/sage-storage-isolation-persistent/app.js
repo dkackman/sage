@@ -1,4 +1,7 @@
+import { createBridgeClient } from './bridge.js';
+
 (async () => {
+  const bridge = createBridgeClient();
   const params = new URLSearchParams(window.location.search);
   const runId = params.get('runId');
 
@@ -63,16 +66,14 @@
     }
   }
 
-  async function report(body) {
-    const response = await fetch('sage-app://__sandbox/report/isolation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+  async function report(result) {
+    await bridge.send({
+      kind: 'sandbox_report',
+      report: {
+        type: 'isolation',
+        data: result,
+      },
     });
-
-    if (!response.ok) {
-      throw new Error(`report failed with status ${response.status}`);
-    }
   }
 
   let localStorageVisible = false;
@@ -113,19 +114,23 @@
   });
 })().catch(async (err) => {
   try {
+    const bridge = createBridgeClient();
     const params = new URLSearchParams(window.location.search);
-    await fetch('sage-app://__sandbox/report/isolation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        runId: params.get('runId'),
-        mode: 'persistent',
-        persistentStorage: true,
-        localStorageVisible: false,
-        cookieVisible: false,
-        indexedDbVisible: false,
-        error: err instanceof Error ? err.message : String(err),
-      }),
+
+    await bridge.send({
+      kind: 'sandbox_report',
+      report: {
+        type: 'isolation',
+        data: {
+          runId: params.get('runId'),
+          mode: 'persistent',
+          persistentStorage: true,
+          localStorageVisible: false,
+          cookieVisible: false,
+          indexedDbVisible: false,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      },
     });
   } catch {
     //

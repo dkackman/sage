@@ -6,7 +6,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::command;
-
+use crate::apps::builtin_apps::builtin_test_app_spec;
 use crate::error::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -105,6 +105,69 @@ pub struct SandboxProbeStore {
     pub network: Mutex<HashMap<String, Vec<SandboxNetworkProbeResult>>>,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SandboxBridgeSendPayload {
+    SandboxReport {
+        report: SandboxBridgeReport,
+    },
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SandboxBridgeReport {
+    Isolation {
+        data: SandboxIsolationProbeResult,
+    },
+    PersistenceWrite {
+        data: SandboxPersistenceWriteProbeResult,
+    },
+    PersistenceRead {
+        data: SandboxPersistenceReadProbeResult,
+    },
+    Network {
+        data: SandboxNetworkProbeResult,
+    },
+}
+
+#[command]
+#[specta::specta]
+pub async fn sandbox_bridge_send(
+    app_id: String,
+    payload: SandboxBridgeSendPayload,
+    store: tauri::State<'_, SandboxProbeStore>,
+) -> Result<()> {
+    if builtin_test_app_spec(&app_id).is_none() {
+        return Err(std::io::Error::other(format!(
+            "sandbox bridge send is allowed only for builtin test apps, got {}",
+            app_id
+        ))
+            .into());
+    }
+
+    match payload {
+        SandboxBridgeSendPayload::SandboxReport { report } => match report {
+            SandboxBridgeReport::Isolation { data } => {
+                store_isolation_probe_result(&store, data);
+            }
+
+            SandboxBridgeReport::PersistenceWrite { data } => {
+                store_persistence_write_probe_result(&store, data);
+            }
+
+            SandboxBridgeReport::PersistenceRead { data } => {
+                store_persistence_read_probe_result(&store, data);
+            }
+
+            SandboxBridgeReport::Network { data } => {
+                store_network_probe_result(&store, data);
+            }
+        },
+    }
+
+    Ok(())
+}
+
 pub fn store_isolation_probe_result(
     store: &SandboxProbeStore,
     result: SandboxIsolationProbeResult,
@@ -186,53 +249,4 @@ pub async fn sandbox_reset_run(
         .remove(&run_id);
 
     Ok(())
-}
-
-#[command]
-#[specta::specta]
-pub async fn sandbox_get_isolation_results(
-    run_id: String,
-    store: tauri::State<'_, SandboxProbeStore>,
-) -> Result<Vec<SandboxIsolationProbeResult>> {
-    let guard = store
-        .isolation
-        .lock()
-        .expect("sandbox isolation store poisoned");
-    Ok(guard.get(&run_id).cloned().unwrap_or_default())
-}
-
-#[command]
-#[specta::specta]
-pub async fn sandbox_get_persistence_write_results(
-    run_id: String,
-    store: tauri::State<'_, SandboxProbeStore>,
-) -> Result<Vec<SandboxPersistenceWriteProbeResult>> {
-    let guard = store
-        .persistence_write
-        .lock()
-        .expect("sandbox persistence write store poisoned");
-    Ok(guard.get(&run_id).cloned().unwrap_or_default())
-}
-
-#[command]
-#[specta::specta]
-pub async fn sandbox_get_persistence_read_results(
-    run_id: String,
-    store: tauri::State<'_, SandboxProbeStore>,
-) -> Result<Vec<SandboxPersistenceReadProbeResult>> {
-    let guard = store
-        .persistence_read
-        .lock()
-        .expect("sandbox persistence read store poisoned");
-    Ok(guard.get(&run_id).cloned().unwrap_or_default())
-}
-
-#[command]
-#[specta::specta]
-pub async fn sandbox_get_network_results(
-    run_id: String,
-    store: tauri::State<'_, SandboxProbeStore>,
-) -> Result<Vec<SandboxNetworkProbeResult>> {
-    let guard = store.network.lock().expect("sandbox network store poisoned");
-    Ok(guard.get(&run_id).cloned().unwrap_or_default())
 }

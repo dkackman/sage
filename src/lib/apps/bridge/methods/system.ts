@@ -1,4 +1,5 @@
 import type { BridgeMethodRegistry } from '../types';
+import { invoke } from '@tauri-apps/api/core';
 
 export const systemBridgeMethods = {
   'bridge.ping': {
@@ -9,6 +10,20 @@ export const systemBridgeMethods = {
         appId: ctx.app.id,
         appName: ctx.app.name,
       };
+    },
+  },
+
+  'bridge.send': {
+    permission: { kind: 'none' },
+    async handle({ ctx, request }) {
+      if (request.params.kind === "sandbox_report") {
+        await invoke('sandbox_bridge_send', {
+          appId: ctx.app.id,
+          payload: request.params,
+        });
+      }
+
+      return { ok: true };
     },
   },
 

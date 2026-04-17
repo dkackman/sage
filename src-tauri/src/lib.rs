@@ -155,10 +155,7 @@ pub fn run() {
             apps::update::apply_app_update,
             apps::update::apps_update_permissions,
             apps::sandbox::sandbox_reset_run,
-            apps::sandbox::sandbox_get_isolation_results,
-            apps::sandbox::sandbox_get_persistence_write_results,
-            apps::sandbox::sandbox_get_persistence_read_results,
-            apps::sandbox::sandbox_get_network_results,
+            apps::sandbox::sandbox_bridge_send,
         ])
         .events(collect_events![SyncEvent]);
 

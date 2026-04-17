@@ -28,3 +28,4 @@ target
 .env
 /test.sqlite*
 
+src-tauri/test-apps

@@ -1,4 +1,7 @@
+import { createBridgeClient } from './bridge.js';
+
 (async () => {
+  const bridge = createBridgeClient();
   const params = new URLSearchParams(window.location.search);
   const runId = params.get('runId');
   const phase = params.get('phase');
@@ -11,9 +14,9 @@
     throw new Error('missing or invalid phase');
   }
 
-  const LOCAL_STORAGE_KEY = `sandbox_persistence_local_storage:${runId}:incognito`;
-  const COOKIE_KEY = `sandbox_persistence_cookie_${runId}_incognito`;
-  const DB_NAME = `sandbox_persistence_db_${runId}_incognito`;
+  const LOCAL_STORAGE_KEY = `sandbox_persistence_local_storage:${runId}:persistent`;
+  const COOKIE_KEY = `sandbox_persistence_cookie_${runId}_persistent`;
+  const DB_NAME = `sandbox_persistence_db_${runId}_persistent`;
   const STORE_NAME = 'probe_store';
   const DB_KEY = 'probe_key';
 
@@ -119,16 +122,24 @@
     }
   }
 
-  async function report(path, body) {
-    const response = await fetch(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+  async function reportWrite(result) {
+    await bridge.send({
+      kind: 'sandbox_report',
+      report: {
+        type: 'persistence_write',
+        data: result,
+      },
     });
+  }
 
-    if (!response.ok) {
-      throw new Error(`report failed with status ${response.status}`);
-    }
+  async function reportRead(result) {
+    await bridge.send({
+      kind: 'sandbox_report',
+      report: {
+        type: 'persistence_read',
+        data: result,
+      },
+    });
   }
 
   if (phase === 'write') {
@@ -161,10 +172,10 @@
       error = err instanceof Error ? err.message : String(err);
     }
 
-    await report('sage-app://__sandbox/report/persistence-write', {
+    await reportWrite({
       runId,
-      mode: 'incognito',
-      persistentStorage: false,
+      mode: 'persistent',
+      persistentStorage: true,
       localStorageWrote,
       cookieWrote,
       indexedDbWrote,
@@ -201,10 +212,10 @@
     error = err instanceof Error ? err.message : String(err);
   }
 
-  await report('sage-app://__sandbox/report/persistence-read', {
+  await reportRead({
     runId,
-    mode: 'incognito',
-    persistentStorage: false,
+    mode: 'persistent',
+    persistentStorage: true,
     localStoragePresent,
     cookiePresent,
     indexedDbPresent,
@@ -212,38 +223,43 @@
   });
 })().catch(async (err) => {
   try {
+    const bridge = createBridgeClient();
     const params = new URLSearchParams(window.location.search);
     const phase = params.get('phase');
 
     if (phase === 'write') {
-      await fetch('sage-app://__sandbox/report/persistence-write', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          runId: params.get('runId'),
-          mode: 'incognito',
-          persistentStorage: false,
-          localStorageWrote: false,
-          cookieWrote: false,
-          indexedDbWrote: false,
-          error: err instanceof Error ? err.message : String(err),
-        }),
+      await bridge.send({
+        kind: 'sandbox_report',
+        report: {
+          type: 'persistence_write',
+          data: {
+            runId: params.get('runId'),
+            mode: 'persistent',
+            persistentStorage: true,
+            localStorageWrote: false,
+            cookieWrote: false,
+            indexedDbWrote: false,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        },
       });
       return;
     }
 
-    await fetch('sage-app://__sandbox/report/persistence-read', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        runId: params.get('runId'),
-        mode: 'incognito',
-        persistentStorage: false,
-        localStoragePresent: false,
-        cookiePresent: false,
-        indexedDbPresent: false,
-        error: err instanceof Error ? err.message : String(err),
-      }),
+    await bridge.send({
+      kind: 'sandbox_report',
+      report: {
+        type: 'persistence_read',
+        data: {
+          runId: params.get('runId'),
+          mode: 'persistent',
+          persistentStorage: true,
+          localStoragePresent: false,
+          cookiePresent: false,
+          indexedDbPresent: false,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      },
     });
   } catch {
     //

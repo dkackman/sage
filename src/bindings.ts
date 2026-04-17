@@ -395,17 +395,8 @@ async appsUpdatePermissions(appId: string, grantedPermissions: string[]) : Promi
 async sandboxResetRun(runId: string) : Promise<null> {
     return await TAURI_INVOKE("sandbox_reset_run", { runId });
 },
-async sandboxGetIsolationResults(runId: string) : Promise<SandboxIsolationProbeResult[]> {
-    return await TAURI_INVOKE("sandbox_get_isolation_results", { runId });
-},
-async sandboxGetPersistenceWriteResults(runId: string) : Promise<SandboxPersistenceWriteProbeResult[]> {
-    return await TAURI_INVOKE("sandbox_get_persistence_write_results", { runId });
-},
-async sandboxGetPersistenceReadResults(runId: string) : Promise<SandboxPersistenceReadProbeResult[]> {
-    return await TAURI_INVOKE("sandbox_get_persistence_read_results", { runId });
-},
-async sandboxGetNetworkResults(runId: string) : Promise<SandboxNetworkProbeResult[]> {
-    return await TAURI_INVOKE("sandbox_get_network_results", { runId });
+async sandboxBridgeSend(appId: string, payload: SandboxBridgeSendPayload) : Promise<null> {
+    return await TAURI_INVOKE("sandbox_bridge_send", { appId, payload });
 }
 }
 
@@ -2216,6 +2207,8 @@ export type SageAppPermissions = { required?: string[]; optional?: string[] }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageNetworkPermissions = { whitelist?: SageNetworkWhitelistEntry[] }
 export type SageNetworkWhitelistEntry = { scheme: string; host: string; required?: boolean }
+export type SandboxBridgeReport = { type: "isolation"; data: SandboxIsolationProbeResult } | { type: "persistence_write"; data: SandboxPersistenceWriteProbeResult } | { type: "persistence_read"; data: SandboxPersistenceReadProbeResult } | { type: "network"; data: SandboxNetworkProbeResult }
+export type SandboxBridgeSendPayload = { kind: "sandbox_report"; report: SandboxBridgeReport }
 export type SandboxIsolationProbeResult = { runId: string; mode: string; persistentStorage: boolean; localStorageVisible: boolean; cookieVisible: boolean; indexedDbVisible: boolean; error: string | null }
 export type SandboxNetworkProbeResult = { runId: string; mode: string; allowedUrl: string; blockedUrl: string; allowedOk: boolean; blockedOk: boolean; error: string | null }
 export type SandboxPersistenceReadProbeResult = { runId: string; mode: string; persistentStorage: boolean; localStoragePresent: boolean; cookiePresent: boolean; indexedDbPresent: boolean; error: string | null }
