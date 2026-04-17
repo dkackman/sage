@@ -19,6 +19,8 @@ import { LayoutGrid, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEditor.tsx';
+import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy.ts';
+import { useSandbox } from '@/contexts/SandboxContext.tsx';
 
 type InstalledEntry = ReturnType<typeof useApps>['apps'][number] & {
   kind: 'installed';
@@ -80,9 +82,6 @@ export function Apps() {
     uninstallApp,
     checkForUpdate,
     performAppUpdate,
-    getAppLaunchGate,
-    sandboxState,
-    rerunSandboxTests,
     updateAvailability,
     busyAppIds,
   } = useApps();
@@ -103,6 +102,7 @@ export function Apps() {
     () => apps.filter((entry) => entry.kind === 'corrupted'),
     [apps],
   );
+  const { sandboxState, rerunSandboxTests } = useSandbox();
 
   const contextMenuPreview = contextMenu
     ? updateAvailability[contextMenu.app.id]
@@ -348,6 +348,17 @@ export function Apps() {
               <LayoutGrid className='mr-2 h-4 w-4' />
               Task Manager
             </Button>
+            <Button
+              variant='outline'
+              disabled={sandboxState.overallCriticalStatus === 'running'}
+              onClick={() => {
+                void rerunSandboxTests();
+              }}
+            >
+              {sandboxState.overallCriticalStatus === 'running'
+                ? 'Running sandbox tests...'
+                : 'Re-run sandbox tests'}
+            </Button>
           </div>
         </div>
 
@@ -414,13 +425,25 @@ export function Apps() {
             <div className='grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'>
               {installedApps.map((app) => {
                 const iconSrc = `sage-app://${app.id}/${app.iconFile}`;
-                const launchGate = getAppLaunchGate(app.id);
+                const launchGate = getSandboxLaunchDecision({
+                  app,
+                  sandboxState,
+                });
 
                 return (
                   <button
                     key={app.id}
                     type='button'
                     onClick={() => {
+                      const decision = getSandboxLaunchDecision({
+                        app,
+                        sandboxState,
+                      });
+
+                      if (!decision.allowed) {
+                        return;
+                      }
+
                       navigate(`/apps/${app.id}`);
                     }}
                     onContextMenu={(event) => {
@@ -473,11 +496,9 @@ export function Apps() {
                         v{app.version}
                       </div>
 
-                      {launchGate && !launchGate.allowed ? (
+                      {!launchGate.allowed ? (
                         <div className='mt-1 text-xs text-amber-600'>
-                          {launchGate.kind === 'running'
-                            ? 'Tests running'
-                            : 'Launch blocked'}
+                          {launchGate.title}
                         </div>
                       ) : null}
                     </div>

@@ -1,10 +1,11 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApps } from '@/contexts/AppsContext';
 import { useAppEmbeddedRuntime } from '@/hooks/useAppEmbeddedRuntime.ts';
 import { useAppsWorkspaceOutletContext } from '@/pages/AppsWorkspace.tsx';
+import { useSandbox } from '@/contexts/SandboxContext';
+import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
 
 function AppNotFound() {
   return (
@@ -20,14 +21,20 @@ function AppNotFound() {
 export function AppHost() {
   const { appId = '' } = useParams();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { getApp, getAppLaunchGate, rerunSandboxTests, loading } = useApps();
+  const { getApp, loading } = useApps();
   const { requestApproval } = useAppsWorkspaceOutletContext();
+  const { sandboxState } = useSandbox();
 
   const app = getApp(appId);
-  const gate = app ? getAppLaunchGate(app.id) : null;
+  const launchDecision = app
+    ? getSandboxLaunchDecision({
+        app,
+        sandboxState,
+      })
+    : null;
 
   useAppEmbeddedRuntime({
-    app: gate?.allowed ? app : null,
+    app: app && launchDecision?.allowed ? app : null,
     containerRef,
     requestApproval,
   });
@@ -47,32 +54,16 @@ export function AppHost() {
     return <AppNotFound />;
   }
 
-  if (gate && !gate.allowed) {
+  if (!launchDecision?.allowed) {
     return (
       <div className='mx-auto w-full max-w-4xl p-4 md:p-6'>
         <Alert>
           <AlertTitle>
-            {gate.kind === 'running'
-              ? 'Sandbox tests are still running'
-              : 'App launch is blocked'}
+            {launchDecision?.title ?? 'App launch blocked'}
           </AlertTitle>
-
-          <AlertDescription className='space-y-3'>
-            <div>
-              {gate.message ??
-                'This app cannot be launched until required sandbox tests pass.'}
-            </div>
-
-            <div>
-              <Button
-                variant='outline'
-                onClick={() => {
-                  void rerunSandboxTests();
-                }}
-              >
-                Re-run tests
-              </Button>
-            </div>
+          <AlertDescription>
+            {launchDecision?.description ??
+              'This app cannot be launched until required sandbox checks pass.'}
           </AlertDescription>
         </Alert>
       </div>

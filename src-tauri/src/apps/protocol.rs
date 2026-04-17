@@ -18,6 +18,7 @@ use crate::apps::{
     },
     snapshot::read_snapshot_file,
 };
+use crate::apps::builtin_apps::builtin_test_app_spec;
 
 fn build_blank_internal_response() -> AnyResult<Response<Vec<u8>>> {
     Response::builder()
@@ -161,7 +162,7 @@ pub fn handle_app_protocol_request(
         return handle_sandbox_protocol_request(app_handle, request);
     }
 
-    if build_builtin_test_app(host)?.is_some() {
+    if builtin_test_app_spec(host).is_some() {
         return handle_builtin_test_app_request(host, request);
     }
 
