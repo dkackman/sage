@@ -2,6 +2,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { InstallAppForm } from '@/components/apps/InstallAppForm';
 import { CorruptedAppCard } from '@/components/apps/CorruptedAppCard';
 import { AppsLaunchpadContextMenu } from '@/components/apps/AppsLaunchpadContextMenu';
+import { PermissionsDialog } from '@/components/apps/permissions/PermissionsDialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,6 +14,7 @@ import { SageAppPackageManifest, SageAppUrlPreview } from '@/bindings.ts';
 import { invoke } from '@tauri-apps/api/core';
 import { useApps } from '@/contexts/AppsContext.tsx';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
+import { formatAppError } from '@/lib/apps/formatAppError.ts';
 import { LayoutGrid, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -52,7 +54,21 @@ function clampContextMenuPosition(args: {
 export function Apps() {
   const navigate = useNavigate();
   const [installOpen, setInstallOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState<AppContextMenuState>(null);
+  const [contextMenu, setContextMenu] = useState<AppContextMenuState | null>(
+    null,
+  );
+  const [permissionsDialogAppId, setPermissionsDialogAppId] = useState<
+    string | null
+  >(null);
+  const [permissionsDialogError, setPermissionsDialogError] = useState<
+    string | null
+  >(null);
+  const [permissionsDialogSubmitting, setPermissionsDialogSubmitting] =
+    useState(false);
+  const [
+    permissionsDialogGrantedPermissions,
+    setPermissionsDialogGrantedPermissions,
+  ] = useState<string[]>([]);
   const pageRef = useRef<HTMLDivElement | null>(null);
   const runtimes = useAppRuntimes();
   const [updateCheckStateByAppId, setUpdateCheckStateByAppId] = useState<
@@ -65,11 +81,14 @@ export function Apps() {
     error,
     refresh,
     installApp,
+    installUrlApp,
     uninstallApp,
     checkForUpdate,
     performAppUpdate,
+    clearAppStorage,
     updateAvailability,
     busyAppIds,
+    getApp,
   } = useApps();
 
   const runningAppIds = useMemo(() => {
@@ -102,6 +121,10 @@ export function Apps() {
     ? runningAppIds.has(contextMenu.app.id)
     : false;
 
+  const permissionsDialogApp = permissionsDialogAppId
+    ? (getApp(permissionsDialogAppId) ?? null)
+    : null;
+
   function closeContextMenu() {
     setUpdateCheckStateByAppId((prev) => {
       if (!contextMenu) {
@@ -121,6 +144,24 @@ export function Apps() {
     setContextMenu(null);
   }
 
+  function openPermissionsDialog(appId: string) {
+    const app = getApp(appId);
+    if (!app) {
+      return;
+    }
+
+    setPermissionsDialogAppId(appId);
+    setPermissionsDialogError(null);
+    setPermissionsDialogGrantedPermissions(app.grantedPermissions ?? []);
+  }
+
+  function closePermissionsDialog() {
+    setPermissionsDialogAppId(null);
+    setPermissionsDialogError(null);
+    setPermissionsDialogSubmitting(false);
+    setPermissionsDialogGrantedPermissions([]);
+  }
+
   async function handleCheckForUpdate(appId: string) {
     setUpdateCheckStateByAppId((prev) => ({
       ...prev,
@@ -134,6 +175,57 @@ export function Apps() {
         ...prev,
         [appId]: 'up_to_date',
       }));
+    }
+  }
+
+  async function handleSavePermissions() {
+    if (!permissionsDialogApp) {
+      return;
+    }
+
+    try {
+      setPermissionsDialogSubmitting(true);
+      setPermissionsDialogError(null);
+
+      await performAppUpdate(
+        permissionsDialogApp.id,
+        permissionsDialogGrantedPermissions,
+        {
+          restartIfRunning: true,
+          visibleAfterRestart: runningAppIds.has(permissionsDialogApp.id),
+        },
+      );
+
+      closePermissionsDialog();
+    } catch (err) {
+      const message = formatAppError(err);
+      if (
+        message.includes('clear storage') ||
+        message.includes('cached secrets')
+      ) {
+        try {
+          await clearAppStorage(permissionsDialogApp.id);
+
+          await performAppUpdate(
+            permissionsDialogApp.id,
+            permissionsDialogGrantedPermissions,
+            {
+              restartIfRunning: true,
+              visibleAfterRestart: runningAppIds.has(permissionsDialogApp.id),
+            },
+          );
+
+          closePermissionsDialog();
+          return;
+        } catch (retryErr) {
+          setPermissionsDialogError(formatAppError(retryErr));
+          return;
+        }
+      }
+
+      setPermissionsDialogError(message);
+    } finally {
+      setPermissionsDialogSubmitting(false);
     }
   }
 
@@ -372,12 +464,17 @@ export function Apps() {
               return;
             }
 
-            void performAppUpdate(contextMenu.app.id, {
-              restartIfRunning: true,
-              visibleAfterRestart: contextMenuAppIsRunning,
-            });
+            openPermissionsDialog(contextMenu.app.id);
+            closeContextMenu();
           }}
-          onChangePermissions={() => {}}
+          onChangePermissions={() => {
+            if (!contextMenu) {
+              return;
+            }
+
+            openPermissionsDialog(contextMenu.app.id);
+            closeContextMenu();
+          }}
           onUninstall={() => {
             if (!contextMenu) {
               return;
@@ -418,16 +515,27 @@ export function Apps() {
               setInstallOpen(false);
             }}
             onInstallUrl={async (appUrl, permissions) => {
-              await invoke('install_app_url', {
-                appUrl,
-                grantedPermissions: permissions,
-              });
-              await refresh();
+              await installUrlApp(appUrl, permissions);
               setInstallOpen(false);
             }}
           />
         </DialogContent>
       </Dialog>
+
+      <PermissionsDialog
+        app={permissionsDialogApp}
+        open={!!permissionsDialogApp}
+        title='Change permissions'
+        description='Review and update the currently granted permissions for this app.'
+        error={permissionsDialogError}
+        submitting={permissionsDialogSubmitting}
+        grantedPermissions={permissionsDialogGrantedPermissions}
+        onGrantedPermissionsChange={setPermissionsDialogGrantedPermissions}
+        onCancel={closePermissionsDialog}
+        onConfirm={() => {
+          void handleSavePermissions();
+        }}
+      />
     </>
   );
 }

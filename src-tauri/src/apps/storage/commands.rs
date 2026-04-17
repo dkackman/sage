@@ -12,7 +12,8 @@ use crate::{
     apps::registry::read_installed_app_by_id,
     error::Result,
 };
-
+use crate::apps::permissions::resolve_granted_permission_flags;
+use crate::apps::registry::write_installed_app_metadata;
 use super::{
     db::{
         database_path, ensure_store_exists, get_current_version, open_connection,
@@ -487,4 +488,41 @@ pub async fn storage_get_all_from_index(
         .collect::<io::Result<Vec<_>>>()?;
 
     Ok(out)
+}
+
+#[command]
+#[specta::specta]
+pub async fn storage_clear_all_for_app(
+    state: State<'_, AppState>,
+    app_id: String,
+) -> Result<()> {
+    let base_path = base_path_from_state(&state).await;
+
+    let mut app = read_installed_app_by_id(&base_path, &app_id).map_err(|err| {
+        io::Error::other(format!("failed to read app {}: {err}", app_id))
+    })?;
+
+    let install_dir = PathBuf::from(&app.install_dir);
+    let storage_root = super::db::app_storage_root(&install_dir);
+
+    if storage_root.exists() {
+        fs::remove_dir_all(&storage_root).map_err(|err| {
+            io::Error::other(format!(
+                "failed to clear app storage {}: {err}",
+                storage_root.display()
+            ))
+        })?;
+    }
+
+    app.permission_flags.storage_may_contain_secrets = false;
+    app.permission_flags = resolve_granted_permission_flags(
+        &app.granted_permissions,
+        Some(&app.permission_flags),
+    )
+        .map_err(|err| io::Error::other(err.to_string()))?;
+
+    write_installed_app_metadata(&app, &install_dir)
+        .map_err(|err| io::Error::other(format!("failed to write app metadata: {err}")))?;
+
+    Ok(())
 }

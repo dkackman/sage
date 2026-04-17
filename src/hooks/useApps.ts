@@ -56,6 +56,17 @@ export function useAppsInternal() {
     [refresh],
   );
 
+  const installUrlApp = useCallback(
+    async (appUrl: string, permissions: string[]) => {
+      await invoke<InstalledSageApp>('install_app_url', {
+        appUrl,
+        grantedPermissions: permissions,
+      });
+      await refresh();
+    },
+    [refresh],
+  );
+
   const uninstallApp = useCallback(
     async (appId: string) => {
       await invoke('uninstall_app', { appId });
@@ -173,6 +184,7 @@ export function useAppsInternal() {
   const performAppUpdate = useCallback(
     async (
       appId: string,
+      grantedPermissions: string[],
       options?: { restartIfRunning?: boolean; visibleAfterRestart?: boolean },
     ) => {
       const restartIfRunning = options?.restartIfRunning ?? false;
@@ -198,10 +210,7 @@ export function useAppsInternal() {
         throw new Error(`App ${appId} no longer exists after refresh`);
       }
 
-      const updatedApp = await applyUpdate(
-        latestApp.id,
-        latestApp.grantedPermissions,
-      );
+      const updatedApp = await applyUpdate(latestApp.id, grantedPermissions);
 
       if (wasRunning) {
         await restartAppRuntime(updatedApp, {
@@ -213,6 +222,19 @@ export function useAppsInternal() {
       return updatedApp;
     },
     [applyUpdate, checkForUpdate, downloadUpdate, getApp, refresh],
+  );
+
+  const clearAppStorage = useCallback(
+    async (appId: string) => {
+      try {
+        setBusy(appId, true);
+        await invoke('storage_clear_all_for_app', { appId });
+        await refresh();
+      } finally {
+        setBusy(appId, false);
+      }
+    },
+    [refresh, setBusy],
   );
 
   useEffect(() => {
@@ -259,6 +281,7 @@ export function useAppsInternal() {
     error,
     refresh,
     installApp,
+    installUrlApp,
     uninstallApp,
     isInstalled,
     getApp,
@@ -266,6 +289,7 @@ export function useAppsInternal() {
     downloadUpdate,
     applyUpdate,
     performAppUpdate,
+    clearAppStorage,
     updateAvailability,
     busyAppIds,
   };

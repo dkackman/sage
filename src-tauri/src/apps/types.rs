@@ -3,7 +3,10 @@ use specta::Type;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
 pub struct SageAppPermissions {
+    #[serde(default)]
     pub required: Vec<String>,
+
+    #[serde(default)]
     pub optional: Vec<String>,
 }
 
@@ -51,12 +54,6 @@ pub struct SageAppUrlPreview {
     pub manifest: SageAppPackageManifest,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SageGrantedNetworkPermissionEntry {
-    pub scheme: String,
-    pub host: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct SageAppManifestFile {
     pub path: String,
@@ -78,6 +75,23 @@ pub struct InstalledSageAppSnapshot {
     pub manifest: SageAppPackageManifest,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+pub struct InstalledSageAppPermissionFlags {
+    #[serde(rename = "hasSecretAccess", alias = "has_secret_access")]
+    pub has_secret_access: bool,
+
+    #[serde(rename = "hasExternalAccess", alias = "has_external_access")]
+    pub has_external_access: bool,
+
+    #[serde(
+        rename = "storageMayContainSecrets",
+        alias = "storage_may_contain_secrets"
+    )]
+    pub storage_may_contain_secrets: bool,
+
+    pub isolated: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct InstalledSageAppPendingUpdate {
     #[serde(rename = "appUrl", alias = "app_url")]
@@ -90,8 +104,6 @@ pub struct InstalledSageAppPendingUpdate {
     pub manifest_hash: String,
 
     pub manifest: SageAppPackageManifest,
-
-    pub snapshot: InstalledSageAppSnapshot,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -126,6 +138,9 @@ pub struct InstalledSageApp {
 
     #[serde(rename = "grantedPermissions", alias = "granted_permissions")]
     pub granted_permissions: Vec<String>,
+
+    #[serde(rename = "permissionFlags", alias = "permission_flags")]
+    pub permission_flags: InstalledSageAppPermissionFlags,
 
     pub source: InstalledSageAppSource,
 

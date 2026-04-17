@@ -1758,8 +1758,9 @@ index: number }
  */
 export type IncreaseDerivationIndexResponse = Record<string, never>
 export type InheritedNetwork = "mainnet" | "testnet11"
-export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageAppPermissions; grantedPermissions: string[]; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot; pendingUpdate: InstalledSageAppPendingUpdate | null }
-export type InstalledSageAppPendingUpdate = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest; snapshot: InstalledSageAppSnapshot }
+export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageAppPermissions; grantedPermissions: string[]; permissionFlags: InstalledSageAppPermissionFlags; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot; pendingUpdate: InstalledSageAppPendingUpdate | null }
+export type InstalledSageAppPendingUpdate = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
+export type InstalledSageAppPermissionFlags = { hasSecretAccess: boolean; hasExternalAccess: boolean; storageMayContainSecrets: boolean; isolated: boolean }
 export type InstalledSageAppSnapshot = { manifestHash: string; snapshotDir: string; totalBytes: number; manifest: SageAppPackageManifest }
 export type InstalledSageAppSource = { kind: "zip" } | { kind: "url"; appUrl: string; manifestUrl: string }
 /**
@@ -2226,7 +2227,7 @@ export type ResyncCatResponse = Record<string, never>
 export type ResyncResponse = Record<string, never>
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
 export type SageAppPackageManifest = { name: string; version: string; permissions?: SageAppPermissions; network?: SageNetworkPermissions | null; files?: SageAppManifestFile[] }
-export type SageAppPermissions = { required: string[]; optional: string[] }
+export type SageAppPermissions = { required?: string[]; optional?: string[] }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageNetworkPermissions = { whitelist?: SageNetworkWhitelistEntry[] }
 export type SageNetworkWhitelistEntry = { scheme: string; host: string; required?: boolean }

@@ -1,10 +1,3 @@
-import { Button } from '@/components/ui/button';
-
-export type AppsLaunchpadContextMenuUpdateState =
-  | 'idle'
-  | 'checking'
-  | 'up_to_date';
-
 interface Props {
   open: boolean;
   x: number;
@@ -12,7 +5,7 @@ interface Props {
   busy: boolean;
   hasUpdate: boolean;
   isRunning: boolean;
-  updateCheckState: AppsLaunchpadContextMenuUpdateState;
+  updateCheckState: 'idle' | 'checking' | 'up_to_date';
   onClose: () => void;
   onOpen: () => void;
   onCheckForUpdate: () => void;
@@ -92,14 +85,14 @@ export function AppsLaunchpadContextMenu({
 
         <div className='my-1 h-px bg-border' />
 
-        <Button
-          variant='ghost'
-          className='h-auto w-full justify-start rounded-lg px-3 py-2 text-sm text-muted-foreground opacity-60'
-          disabled
+        <button
+          type='button'
+          className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
+          disabled={busy}
           onClick={onChangePermissions}
         >
           Change permissions
-        </Button>
+        </button>
 
         <button
           type='button'

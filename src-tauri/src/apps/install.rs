@@ -1,6 +1,6 @@
 use std::{
     fs, io,
-    path::{Path},
+    path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -15,7 +15,10 @@ use crate::{
             detect_package_root, prepare_zip_snapshot, read_manifest, unzip_to_dir,
             validate_package_structure,
         },
-        permissions::validate_granted_permissions,
+        permissions::{
+            normalize_and_validate_requested_permissions,
+            resolve_granted_permission_flags, validate_granted_permissions,
+        },
         registry::{
             apps_root, list_installed_apps_internal, write_installed_app_metadata,
         },
@@ -70,7 +73,8 @@ pub fn normalize_app_url(url: &str) -> AnyResult<String> {
         .ok_or_else(|| anyhow!("app URL is missing host"))?
         .to_ascii_lowercase();
 
-    let is_local_dev_host = host == "localhost" || host == "127.0.0.1" || host == "::1";
+    let is_local_dev_host =
+        host == "localhost" || host == "127.0.0.1" || host == "::1";
 
     match scheme {
         "https" => {}
@@ -99,12 +103,22 @@ pub fn hash_string(input: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-pub async fn preview_app_url_internal(app_url: String) -> AnyResult<SageAppUrlPreview> {
+fn normalize_manifest_permissions(
+    mut manifest: SageAppPackageManifest,
+) -> AnyResult<SageAppPackageManifest> {
+    manifest.permissions =
+        normalize_and_validate_requested_permissions(&manifest.permissions)?;
+    Ok(manifest)
+}
+
+pub async fn preview_app_url_internal(
+    app_url: String,
+) -> AnyResult<SageAppUrlPreview> {
     let app_url = normalize_app_url(&app_url)?;
 
     let manifest_url = derive_manifest_url(&app_url)?;
-
     let (manifest, manifest_hash) = fetch_url_manifest(&manifest_url).await?;
+    let manifest = normalize_manifest_permissions(manifest)?;
 
     Ok(SageAppUrlPreview {
         app_url,
@@ -117,20 +131,25 @@ pub async fn preview_app_url_internal(app_url: String) -> AnyResult<SageAppUrlPr
 #[command]
 #[specta::specta]
 pub async fn preview_app_zip(zip_path: String) -> Result<SageAppPackageManifest> {
-    let unpack_dir = std::env::temp_dir().join(format!(".sage-preview-{}", current_millis()));
+    let unpack_dir =
+        std::env::temp_dir().join(format!(".sage-preview-{}", current_millis()));
 
     let result = (|| -> AnyResult<SageAppPackageManifest> {
         unzip_to_dir(Path::new(&zip_path), &unpack_dir)?;
         let package_root = detect_package_root(&unpack_dir)?;
         let manifest = read_manifest(&package_root)?;
         validate_package_structure(&package_root)?;
-        Ok(manifest)
+        normalize_manifest_permissions(manifest)
     })();
 
     let _ = fs::remove_dir_all(&unpack_dir);
 
     result.map_err(|err| {
-        io::Error::other(format!("failed to preview app zip {}: {err}", zip_path)).into()
+        io::Error::other(format!(
+            "failed to preview app zip {}: {err}",
+            zip_path
+        ))
+            .into()
     })
 }
 
@@ -144,7 +163,9 @@ pub async fn preview_app_url(app_url: String) -> Result<SageAppUrlPreview> {
 
 #[command]
 #[specta::specta]
-pub async fn list_installed_apps(state: State<'_, AppState>) -> Result<Vec<ListedSageApp>> {
+pub async fn list_installed_apps(
+    state: State<'_, AppState>,
+) -> Result<Vec<ListedSageApp>> {
     let base_path = {
         let state = state.lock().await;
         state.path.clone()
@@ -199,15 +220,21 @@ pub async fn install_app_zip(
         unzip_to_dir(Path::new(&zip_path), &unpack_dir)?;
         let package_root = detect_package_root(&unpack_dir)?;
         validate_package_structure(&package_root)?;
-        let manifest = read_manifest(&package_root)?;
+
+        let manifest = normalize_manifest_permissions(read_manifest(&package_root)?)?;
+
         validate_granted_permissions(&manifest.permissions, &granted_permissions)?;
+        let permission_flags =
+            resolve_granted_permission_flags(&granted_permissions, None)?;
 
         let existing = list_installed_apps_internal(&root)?
             .into_iter()
             .find_map(|app| match app {
-                ListedSageApp::Installed(installed) if installed.name == manifest.name => {
-                    Some(installed)
-                }
+                ListedSageApp::Installed(installed)
+                if installed.name == manifest.name =>
+                    {
+                        Some(installed)
+                    }
                 _ => None,
             });
 
@@ -226,8 +253,8 @@ pub async fn install_app_zip(
         }
 
         fs::create_dir_all(&install_dir)?;
-
-        let snapshot = prepare_zip_snapshot(&package_root, &install_dir, &manifest)?;
+        let snapshot =
+            prepare_zip_snapshot(&package_root, &install_dir, &manifest)?;
 
         let installed = InstalledSageApp {
             id: app_id,
@@ -244,6 +271,7 @@ pub async fn install_app_zip(
                 .to_string(),
             requested_permissions: manifest.permissions.clone(),
             granted_permissions,
+            permission_flags,
             source: InstalledSageAppSource::Zip,
             active_snapshot: snapshot,
             pending_update: None,
@@ -258,7 +286,11 @@ pub async fn install_app_zip(
     }
 
     result.map_err(|err| {
-        io::Error::other(format!("failed to install app zip {}: {err}", zip_path)).into()
+        io::Error::other(format!(
+            "failed to install app zip {}: {err}",
+            zip_path
+        ))
+            .into()
     })
 }
 
@@ -283,7 +315,14 @@ pub async fn install_app_url(
         ))
     })?;
 
-    let preview = preview_app_url(app_url.clone()).await?;
+    let preview = preview_app_url_internal(app_url.clone())
+        .await
+        .map_err(|err| {
+            io::Error::other(format!(
+                "failed to preview app URL {}: {err}",
+                app_url
+            ))
+        })?;
 
     validate_granted_permissions(
         &preview.manifest.permissions,
@@ -296,13 +335,26 @@ pub async fn install_app_url(
             ))
         })?;
 
+    let permission_flags =
+        resolve_granted_permission_flags(&granted_permissions, None)
+            .map_err(|err| {
+                io::Error::other(format!(
+                    "invalid granted permission policy for URL app {}: {err}",
+                    app_url
+                ))
+            })?;
+
     let existing = list_installed_apps_internal(&root)
-        .map_err(|err| io::Error::other(format!("failed to list installed apps: {err}")))?
+        .map_err(|err| {
+            io::Error::other(format!("failed to list installed apps: {err}"))
+        })?
         .into_iter()
         .find_map(|app| match app {
-            ListedSageApp::Installed(installed) if installed.name == preview.manifest.name => {
-                Some(installed)
-            }
+            ListedSageApp::Installed(installed)
+            if installed.name == preview.manifest.name =>
+                {
+                    Some(installed)
+                }
             _ => None,
         });
 
@@ -325,7 +377,11 @@ pub async fn install_app_url(
         &preview.manifest_hash,
     )
         .await
-        .map_err(|err| io::Error::other(format!("failed to download URL app snapshot: {err}")))?;
+        .map_err(|err| {
+            io::Error::other(format!(
+                "failed to download URL app snapshot: {err}"
+            ))
+        })?;
 
     let installed = InstalledSageApp {
         id: app_id.clone(),
@@ -342,6 +398,7 @@ pub async fn install_app_url(
             .to_string(),
         requested_permissions: preview.manifest.permissions.clone(),
         granted_permissions,
+        permission_flags,
         source: InstalledSageAppSource::Url {
             app_url: preview.app_url.clone(),
             manifest_url: preview.manifest_url.clone(),
@@ -362,7 +419,10 @@ pub async fn install_app_url(
 
 #[command]
 #[specta::specta]
-pub async fn uninstall_app(state: State<'_, AppState>, app_id: String) -> Result<()> {
+pub async fn uninstall_app(
+    state: State<'_, AppState>,
+    app_id: String,
+) -> Result<()> {
     let base_path = {
         let state = state.lock().await;
         state.path.clone()

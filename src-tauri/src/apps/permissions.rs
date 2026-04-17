@@ -3,44 +3,41 @@ use std::collections::BTreeSet;
 
 use crate::apps::{
     permission_registry::get_permission_definition,
-    types::SageAppPermissions,
+    types::{InstalledSageAppPermissionFlags, SageAppPermissions},
 };
-use crate::apps::permission_registry::require_permission_definition;
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct GrantedPermissionSummary {
+pub struct PermissionSummary {
     pub externally_observable: bool,
     pub accesses_sensitive_secret: bool,
     pub persistent_storage: bool,
 }
 
-pub fn validate_permissions(permissions: &SageAppPermissions) -> AnyResult<()> {
-    let mut seen = BTreeSet::new();
+pub fn normalize_and_validate_requested_permissions(
+    permissions: &SageAppPermissions,
+) -> AnyResult<SageAppPermissions> {
+    let mut required = BTreeSet::new();
+    let mut optional = BTreeSet::new();
 
     for key in &permissions.required {
-        if get_permission_definition(key).is_none() {
-            return Err(anyhow!("unknown required permission: {}", key));
-        }
-
-        if !seen.insert(key) {
-            return Err(anyhow!("duplicate permission: {}", key));
+        if get_permission_definition(key).is_some() {
+            required.insert(key.clone());
         }
     }
 
     for key in &permissions.optional {
-        if get_permission_definition(key).is_none() {
-            return Err(anyhow!("unknown optional permission: {}", key));
-        }
-
-        if !seen.insert(key) {
-            return Err(anyhow!(
-                "permission cannot be both required and optional: {}",
-                key
-            ));
+        if get_permission_definition(key).is_some() && !required.contains(key) {
+            optional.insert(key.clone());
         }
     }
 
-    Ok(())
+    let normalized = SageAppPermissions {
+        required: required.into_iter().collect(),
+        optional: optional.into_iter().collect(),
+    };
+
+    validate_requested_permission_policy(&normalized)?;
+    Ok(normalized)
 }
 
 pub fn validate_granted_permissions(
@@ -71,23 +68,12 @@ pub fn validate_granted_permissions(
     Ok(())
 }
 
-pub fn validate_permission_policy(granted: &[String]) -> anyhow::Result<()> {
-    let summary = summarize_granted_permissions(granted)?;
+pub fn summarize_permissions(keys: &[String]) -> AnyResult<PermissionSummary> {
+    let mut summary = PermissionSummary::default();
 
-    if summary.externally_observable && summary.accesses_sensitive_secret {
-        return Err(anyhow::anyhow!(
-            "cannot grant externally observable permissions together with sensitive secret access permissions"
-        ));
-    }
-
-    Ok(())
-}
-
-pub fn summarize_granted_permissions(granted: &[String]) -> anyhow::Result<GrantedPermissionSummary> {
-    let mut summary = GrantedPermissionSummary::default();
-
-    for key in granted {
-        let def = require_permission_definition(key)?;
+    for key in keys {
+        let def = get_permission_definition(key)
+            .ok_or_else(|| anyhow!("unknown permission: {}", key))?;
 
         summary.externally_observable |= def.flags.externally_observable;
         summary.accesses_sensitive_secret |= def.flags.accesses_sensitive_secret;
@@ -95,5 +81,62 @@ pub fn summarize_granted_permissions(granted: &[String]) -> anyhow::Result<Grant
     }
 
     Ok(summary)
+}
 
+pub fn validate_requested_permission_policy(
+    permissions: &SageAppPermissions,
+) -> AnyResult<()> {
+    let mut requested = Vec::new();
+    requested.extend(permissions.required.iter().cloned());
+    requested.extend(permissions.optional.iter().cloned());
+
+    let summary = summarize_permissions(&requested)?;
+
+    if summary.externally_observable && summary.accesses_sensitive_secret {
+        return Err(anyhow!(
+            "requested permissions cannot include both externally observable and sensitive secret access permissions"
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn resolve_granted_permission_flags(
+    granted: &[String],
+    previous_flags: Option<&InstalledSageAppPermissionFlags>,
+) -> AnyResult<InstalledSageAppPermissionFlags> {
+    let summary = summarize_permissions(granted)?;
+
+    let previous_storage_may_contain_secrets = previous_flags
+        .map(|flags| flags.storage_may_contain_secrets)
+        .unwrap_or(false);
+
+    let storage_may_contain_secrets = if summary.persistent_storage {
+        previous_storage_may_contain_secrets || summary.accesses_sensitive_secret
+    } else {
+        false
+    };
+
+    let has_secret_access =
+        summary.accesses_sensitive_secret || storage_may_contain_secrets;
+    let has_external_access = summary.externally_observable;
+
+    if has_external_access && summary.accesses_sensitive_secret {
+        return Err(anyhow!(
+            "cannot grant externally observable permissions together with sensitive secret access permissions"
+        ));
+    }
+
+    if has_external_access && !summary.accesses_sensitive_secret && storage_may_contain_secrets {
+        return Err(anyhow!(
+            "before you can grant externally observable permissions, you need to clear storage that may contain cached secrets"
+        ));
+    }
+
+    Ok(InstalledSageAppPermissionFlags {
+        has_secret_access,
+        has_external_access,
+        storage_may_contain_secrets,
+        isolated: has_secret_access,
+    })
 }
