@@ -144,7 +144,7 @@ async function waitForWebviewClosed(
 ): Promise<void> {
   const startedAt = Date.now();
 
-  while (true) {
+  for (;;) {
     const live = await Webview.getByLabel(label).catch(() => null);
     if (!live) {
       return;
