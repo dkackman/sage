@@ -388,6 +388,12 @@ async applyAppUpdate(appId: string, grantedPermissions: string[]) : Promise<Inst
 },
 async appsUpdatePermissions(appId: string, grantedPermissions: string[]) : Promise<null> {
     return await TAURI_INVOKE("apps_update_permissions", { appId, grantedPermissions });
+},
+async sandboxResetRun(runId: string) : Promise<null> {
+    return await TAURI_INVOKE("sandbox_reset_run", { runId });
+},
+async sandboxGetRunResults(runId: string) : Promise<SandboxIsolationProbeResult[]> {
+    return await TAURI_INVOKE("sandbox_get_run_results", { runId });
 }
 }
 
@@ -2198,6 +2204,7 @@ export type SageAppPermissions = { required?: string[]; optional?: string[] }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageNetworkPermissions = { whitelist?: SageNetworkWhitelistEntry[] }
 export type SageNetworkWhitelistEntry = { scheme: string; host: string; required?: boolean }
+export type SandboxIsolationProbeResult = { runId: string; mode: string; persistentStorage: boolean; localStorageVisible: boolean; cookieVisible: boolean; indexedDbVisible: boolean; error: string | null }
 /**
  * Save a theme NFT to the wallet
  */

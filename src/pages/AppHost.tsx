@@ -1,4 +1,5 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApps } from '@/contexts/AppsContext';
@@ -19,13 +20,14 @@ function AppNotFound() {
 export function AppHost() {
   const { appId = '' } = useParams();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { getApp, loading } = useApps();
+  const { getApp, getAppLaunchGate, rerunSandboxTests, loading } = useApps();
   const { requestApproval } = useAppsWorkspaceOutletContext();
 
   const app = getApp(appId);
+  const gate = app ? getAppLaunchGate(app.id) : null;
 
   useAppEmbeddedRuntime({
-    app,
+    app: gate?.allowed ? app : null,
     containerRef,
     requestApproval,
   });
@@ -43,6 +45,38 @@ export function AppHost() {
 
   if (!app) {
     return <AppNotFound />;
+  }
+
+  if (gate && !gate.allowed) {
+    return (
+      <div className='mx-auto w-full max-w-4xl p-4 md:p-6'>
+        <Alert>
+          <AlertTitle>
+            {gate.kind === 'running'
+              ? 'Sandbox tests are still running'
+              : 'App launch is blocked'}
+          </AlertTitle>
+
+          <AlertDescription className='space-y-3'>
+            <div>
+              {gate.message ??
+                'This app cannot be launched until required sandbox tests pass.'}
+            </div>
+
+            <div>
+              <Button
+                variant='outline'
+                onClick={() => {
+                  void rerunSandboxTests();
+                }}
+              >
+                Re-run tests
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
   }
 
   return (

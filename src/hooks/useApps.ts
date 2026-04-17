@@ -5,6 +5,13 @@ import type {
   ListedSageApp,
   SageAppUrlPreview,
 } from '@/bindings.ts';
+import {
+  buildInitialSandboxState,
+  buildRunningSandboxState,
+  evaluateAppLaunchGate,
+  type SandboxState,
+} from '@/lib/apps/sandbox';
+import { runSandboxTests } from '@/lib/apps/runSandboxTests';
 
 type UpdateAvailabilityMap = Record<string, SageAppUrlPreview | null>;
 
@@ -15,6 +22,9 @@ export function useAppsInternal() {
   const [updateAvailability, setUpdateAvailability] =
     useState<UpdateAvailabilityMap>({});
   const [busyAppIds, setBusyAppIds] = useState<Record<string, boolean>>({});
+  const [sandboxState, setSandboxState] = useState<SandboxState>(
+    buildInitialSandboxState(),
+  );
 
   const setBusy = useCallback((appId: string, busy: boolean) => {
     setBusyAppIds((prev) => {
@@ -41,9 +51,19 @@ export function useAppsInternal() {
     }
   }, []);
 
+  const rerunSandboxTests = useCallback(async () => {
+    setSandboxState(buildRunningSandboxState());
+    const next = await runSandboxTests();
+    setSandboxState(next);
+  }, []);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    void rerunSandboxTests();
+  }, [rerunSandboxTests]);
 
   const installApp = useCallback(
     async (zipPath: string, permissions: string[]) => {
@@ -237,6 +257,18 @@ export function useAppsInternal() {
     [refresh, setBusy],
   );
 
+  const getAppLaunchGate = useCallback(
+    (appId: string) => {
+      const app = getApp(appId);
+      if (!app) {
+        return null;
+      }
+
+      return evaluateAppLaunchGate(app, sandboxState);
+    },
+    [getApp, sandboxState],
+  );
+
   useEffect(() => {
     const urlApps = apps.filter(
       (entry) => entry.kind === 'installed' && entry.source?.kind === 'url',
@@ -285,11 +317,14 @@ export function useAppsInternal() {
     uninstallApp,
     isInstalled,
     getApp,
+    getAppLaunchGate,
     checkForUpdate,
     downloadUpdate,
     applyUpdate,
     performAppUpdate,
     clearAppStorage,
+    sandboxState,
+    rerunSandboxTests,
     updateAvailability,
     busyAppIds,
   };

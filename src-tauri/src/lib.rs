@@ -153,6 +153,8 @@ pub fn run() {
             apps::update::download_app_update,
             apps::update::apply_app_update,
             apps::update::apps_update_permissions,
+            apps::sandbox::sandbox_reset_run,
+            apps::sandbox::sandbox_get_run_results,
         ])
         .events(collect_events![SyncEvent]);
 
@@ -190,17 +192,21 @@ pub fn run() {
 
     tauri_builder
         .register_uri_scheme_protocol("sage-app", move |ctx, request| {
-            let base_path: PathBuf = ctx
-                .app_handle()
-                .path()
-                .app_data_dir()
-                .expect("failed to resolve app data dir");
+                let app_handle = ctx.app_handle();
 
-            apps::handle_app_protocol_request(&base_path, &request).unwrap_or_else(|err| tauri::http::Response::builder()
-                .status(404)
-                .header("Content-Type", "text/plain; charset=utf-8")
-                .body(format!("sage-app error: {err}").into_bytes())
-                .expect("failed to build error response"))
+                let base_path: PathBuf = app_handle
+                    .path()
+                    .app_data_dir()
+                    .expect("failed to resolve app data dir");
+
+                apps::handle_app_protocol_request(&base_path, &app_handle, &request)
+                    .unwrap_or_else(|err| {
+                            tauri::http::Response::builder()
+                                .status(404)
+                                .header("Content-Type", "text/plain; charset=utf-8")
+                                .body(format!("sage-app error: {err}").into_bytes())
+                                .expect("failed to build error response")
+                    })
         })
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
@@ -210,6 +216,7 @@ pub fn run() {
             app.manage(Initialized(Mutex::new(false)));
             app.manage(RpcTask(Mutex::new(None)));
             app.manage(app_state);
+            app.manage(apps::sandbox::SandboxProbeStore::default());
             Ok(())
         })
         .run(tauri::generate_context!())

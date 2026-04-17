@@ -14,6 +14,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useApps } from '@/contexts/AppsContext.tsx';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
 import { clearAppRuntimeBrowsingData } from '@/lib/apps/runtimeRegistry';
+import { formatCapabilityLabel } from '@/lib/apps/sandbox';
 import { LayoutGrid, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -75,9 +76,13 @@ export function Apps() {
     error,
     refresh,
     installApp,
+    installUrlApp,
     uninstallApp,
     checkForUpdate,
     performAppUpdate,
+    getAppLaunchGate,
+    sandboxState,
+    rerunSandboxTests,
     updateAvailability,
     busyAppIds,
   } = useApps();
@@ -215,18 +220,15 @@ export function Apps() {
       const storageChanged =
         prev.has('persistent_storage') !== next.has('persistent_storage');
 
-      // update permissions in backend
       await invoke('apps_update_permissions', {
         appId: app.id,
         grantedPermissions: nextPermissions,
       });
 
-      // critical: if storage permission changed → wipe
       if (storageChanged) {
         await clearAppRuntimeBrowsingData(app);
       }
 
-      // restart if running
       const isRunning = runningAppIds.has(app.id);
       if (isRunning) {
         const { restartAppRuntime } =
@@ -350,6 +352,48 @@ export function Apps() {
         </div>
 
         <div className='mx-auto w-full max-w-7xl flex-1 min-h-0 overflow-auto px-4 pb-4 md:px-6 md:pb-6'>
+          <Alert className='mb-6'>
+            <AlertTitle>
+              {sandboxState.overallCriticalStatus === 'running'
+                ? 'Sandbox tests are running'
+                : sandboxState.overallCriticalStatus === 'passed'
+                  ? 'Sandbox tests passed'
+                  : sandboxState.overallCriticalStatus === 'failed'
+                    ? 'Sandbox tests failed'
+                    : 'Sandbox tests are pending'}
+            </AlertTitle>
+
+            <AlertDescription className='space-y-3'>
+              <div>
+                Apps are allowed to launch only when all required sandbox
+                capabilities have passed.
+              </div>
+
+              <div className='space-y-1 text-xs text-muted-foreground'>
+                {Object.entries(sandboxState.capabilities).map(
+                  ([capability, result]) => (
+                    <div key={capability}>
+                      {formatCapabilityLabel(capability as never)} —{' '}
+                      {result.status}
+                      {result.details ? ` — ${result.details}` : ''}
+                    </div>
+                  ),
+                )}
+              </div>
+
+              <div>
+                <Button
+                  variant='outline'
+                  onClick={() => {
+                    void rerunSandboxTests();
+                  }}
+                >
+                  Re-run tests
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+
           {error ? (
             <Alert className='mb-6'>
               <AlertTitle>Apps error</AlertTitle>
@@ -370,6 +414,7 @@ export function Apps() {
             <div className='grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'>
               {installedApps.map((app) => {
                 const iconSrc = `sage-app://${app.id}/${app.iconFile}`;
+                const launchGate = getAppLaunchGate(app.id);
 
                 return (
                   <button
@@ -423,9 +468,18 @@ export function Apps() {
                       <div className='truncate text-sm font-medium'>
                         {app.name}
                       </div>
+
                       <div className='truncate text-xs text-muted-foreground'>
                         v{app.version}
                       </div>
+
+                      {launchGate && !launchGate.allowed ? (
+                        <div className='mt-1 text-xs text-amber-600'>
+                          {launchGate.kind === 'running'
+                            ? 'Tests running'
+                            : 'Launch blocked'}
+                        </div>
+                      ) : null}
                     </div>
                   </button>
                 );
@@ -558,16 +612,13 @@ export function Apps() {
               setInstallOpen(false);
             }}
             onInstallUrl={async (appUrl, permissions) => {
-              await invoke('install_app_url', {
-                appUrl,
-                grantedPermissions: permissions,
-              });
-              await refresh();
+              await installUrlApp(appUrl, permissions);
               setInstallOpen(false);
             }}
           />
         </DialogContent>
       </Dialog>
+
       <Dialog
         open={!!permissionsDialogApp}
         onOpenChange={(open) => {

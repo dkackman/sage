@@ -3,13 +3,14 @@ pub mod install;
 pub mod limits;
 pub mod manifest;
 pub mod package;
+pub mod permission_registry;
 pub mod permissions;
 pub mod protocol;
 pub mod registry;
+pub mod sandbox;
 pub mod snapshot;
 pub mod storage;
 pub mod types;
 pub mod update;
-pub mod permission_registry;
 
 pub use protocol::handle_app_protocol_request;
