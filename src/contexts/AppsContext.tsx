@@ -1,5 +1,7 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import { useAppsInternal } from '@/hooks/useApps';
+import { useAppPendingApprovals } from '@/hooks/useAppPendingApprovals';
+import { useBridgeHost } from '@/hooks/useBridgeHost';
 
 const AppsContext = createContext<ReturnType<typeof useAppsInternal> | null>(
   null,
@@ -7,6 +9,30 @@ const AppsContext = createContext<ReturnType<typeof useAppsInternal> | null>(
 
 export function AppsProvider({ children }: { children: React.ReactNode }) {
   const value = useAppsInternal();
+  const { requestApproval } = useAppPendingApprovals();
+  const startedInitialSandboxRunRef = useRef(false);
+
+  useBridgeHost({
+    requestApproval,
+    getApp: value.getApp,
+  });
+
+  useEffect(() => {
+    if (startedInitialSandboxRunRef.current) {
+      return;
+    }
+
+    startedInitialSandboxRunRef.current = true;
+
+    const timeoutId = window.setTimeout(() => {
+      void value.rerunSandboxTests();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [value.rerunSandboxTests]);
+
   return <AppsContext.Provider value={value}>{children}</AppsContext.Provider>;
 }
 

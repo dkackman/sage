@@ -97,10 +97,6 @@ export function useAppsInternal() {
     void refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    void rerunSandboxTests();
-  }, [rerunSandboxTests]);
-
   const installApp = useCallback(
     async (zipPath: string, permissions: string[]) => {
       await invoke<InstalledSageApp>('install_app_zip', {

@@ -11,7 +11,6 @@ import {
 import { useApps } from '@/contexts/AppsContext.tsx';
 import { useAppPendingApprovals } from '@/hooks/useAppPendingApprovals.ts';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes';
-import { useBridgeHost } from '@/hooks/useBridgeHost';
 import { focusRuntime, killRuntime } from '@/lib/apps/runtimeRegistry';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -49,8 +48,6 @@ export function AppsWorkspace() {
   const [approvalExpanded, setApprovalExpanded] = useState(false);
   const [applyingUpdate, setApplyingUpdate] = useState(false);
   const [tabOrder, setTabOrder] = useState<string[]>([]);
-
-  useBridgeHost({ requestApproval });
 
   useEffect(() => {
     setTabOrder((prev) => {

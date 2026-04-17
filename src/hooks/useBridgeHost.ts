@@ -5,23 +5,35 @@ import {
   isBridgeRequest,
   type SageBridgeEventPayload,
 } from '@/lib/apps/bridge';
-import { useApps } from '@/contexts/AppsContext';
 import { getBuiltinApp } from '@/lib/apps/registry';
+import type { InstalledSageApp } from '@/bindings';
 
 interface Args {
   requestApproval: Parameters<typeof handleBridgeRequest>[2]['requestApproval'];
+  getApp: (appId: string) => InstalledSageApp | undefined;
 }
-export function useBridgeHost({ requestApproval }: Args) {
+
+export function useBridgeHost({ requestApproval, getApp }: Args) {
   const hostWebview = getCurrentWebview();
-  const { getApp } = useApps();
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
 
     const mount = async () => {
+      console.log(
+        'useBridgeHost mounted on host webview label:',
+        hostWebview.label,
+      );
+
       unlisten = await hostWebview.listen<SageBridgeEventPayload>(
         'sage-bridge:request',
         ({ payload }) => {
+          console.log(
+            'useBridgeHost got bridge request from:',
+            payload?.sourceLabel,
+            payload?.request,
+          );
+
           if (!payload || !isBridgeRequest(payload.request)) {
             return;
           }
@@ -34,10 +46,9 @@ export function useBridgeHost({ requestApproval }: Args) {
           }
 
           const appId = sourceLabel.slice(prefix.length);
-          const installedApp = getApp(appId);
 
           const run = async () => {
-            const app = installedApp ?? (await getBuiltinApp(appId));
+            const app = getApp(appId) ?? (await getBuiltinApp(appId));
 
             if (!app) {
               return;
