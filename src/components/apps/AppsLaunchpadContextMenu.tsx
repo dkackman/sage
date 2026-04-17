@@ -101,7 +101,7 @@ export function AppsLaunchpadContextMenu({
 
         <Button
           variant='ghost'
-          className='h-auto w-full justify-start rounded-lg px-3 py-2 text-sm text-muted-foreground opacity-60'
+          className='h-auto w-full justify-start rounded-lg px-3 py-2 text-sm'
           disabled={busy || clearDataBusy}
           onClick={onChangePermissions}
         >
