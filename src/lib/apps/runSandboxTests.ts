@@ -24,6 +24,22 @@ function uniqueRunId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function formatUnknownError(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+
+  if (typeof err === 'string') {
+    return err;
+  }
+
+  try {
+    return JSON.stringify(err, null, 2);
+  } catch {
+    return String(err);
+  }
+}
+
 async function writeSageProbeIndexedDb(runId: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const open = indexedDB.open(PROBE_INDEXED_DB_NAME);
@@ -193,7 +209,7 @@ async function runIsolationTest(): Promise<{
   } catch (err) {
     return {
       passed: false,
-      details: err instanceof Error ? err.message : String(err),
+      details: formatUnknownError(err),
     };
   } finally {
     await stopTestApps(appIds);
@@ -421,7 +437,7 @@ async function runPersistenceTest(): Promise<{
       },
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = formatUnknownError(err);
 
     return {
       persistentNormal: { passed: false, details: message },

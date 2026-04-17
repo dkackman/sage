@@ -19,7 +19,16 @@ export function useSandboxInternal() {
       const result = await runSandboxTests();
       setSandboxState(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message =
+        err instanceof Error
+          ? err.message
+          : (() => {
+              try {
+                return JSON.stringify(err, null, 2);
+              } catch {
+                return String(err);
+              }
+            })();
 
       setSandboxState(
         buildCompletedSandboxState({

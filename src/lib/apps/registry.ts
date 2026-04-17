@@ -10,9 +10,26 @@ export async function getBuiltinApp(
     return builtinAppCache.get(appId) ?? undefined;
   }
 
-  const app = await invoke<InstalledSageApp | null>('get_builtin_test_app', {
-    appId,
-  });
+  let app: InstalledSageApp | null;
+
+  try {
+    app = await invoke<InstalledSageApp | null>('get_builtin_test_app', {
+      appId,
+    });
+  } catch (err) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : (() => {
+            try {
+              return JSON.stringify(err, null, 2);
+            } catch {
+              return String(err);
+            }
+          })();
+
+    throw new Error(`Failed to load builtin test app ${appId}: ${message}`);
+  }
 
   builtinAppCache.set(appId, app);
   return app ?? undefined;
