@@ -1,12 +1,6 @@
 import React, { useCallback, useEffect } from 'react';
 import { platform } from '@tauri-apps/plugin-os';
 import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
-import { getCurrentWebview } from '@tauri-apps/api/webview';
-import {
-  handleBridgeRequest,
-  isBridgeRequest,
-  type SageBridgeEventPayload,
-} from '@/lib/apps/bridge';
 import {
   ensureInlineRuntime,
   getRuntimeWebview,
@@ -25,14 +19,10 @@ async function getMacWindowedTopInsetPx(): Promise<number> {
 interface Args {
   app: InstalledSageApp | null | undefined;
   containerRef: React.RefObject<HTMLDivElement | null>;
-  requestApproval: Parameters<typeof handleBridgeRequest>[2]['requestApproval'];
+  requestApproval: unknown;
 }
 
-export function useAppEmbeddedRuntime({
-  app,
-  containerRef,
-  requestApproval,
-}: Args) {
+export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
   const syncBounds = useCallback(
     async (installedAppId: string) => {
       const webview = await getRuntimeWebview(installedAppId);
@@ -49,7 +39,7 @@ export function useAppEmbeddedRuntime({
         Math.round(rect.height - (await getMacWindowedTopInsetPx())),
       );
       const x = Math.round(rect.left);
-      const y = Math.round(rect.top + await getMacWindowedTopInsetPx());
+      const y = Math.round(rect.top + (await getMacWindowedTopInsetPx()));
 
       await webview.setPosition(new LogicalPosition(x, y));
       await webview.setSize(new LogicalSize(width, height));
@@ -80,11 +70,9 @@ export function useAppEmbeddedRuntime({
     }
 
     const installedApp = app;
-    const hostWebview = getCurrentWebview();
 
     let disposed = false;
     let resizeObserver: ResizeObserver | null = null;
-    let unlistenBridge: (() => void) | null = null;
     let removeWindowResize: (() => void) | null = null;
     let delayedSyncTimers: number[] = [];
 
@@ -132,38 +120,6 @@ export function useAppEmbeddedRuntime({
       removeWindowResize = () => {
         window.removeEventListener('resize', handleWindowResize);
       };
-
-      const expectedSourceLabel = `app-inline-${installedApp.id}`;
-
-      unlistenBridge = await hostWebview.listen<SageBridgeEventPayload>(
-        'sage-bridge:request',
-        ({ payload }) => {
-          if (
-            !payload ||
-            payload.sourceLabel !== expectedSourceLabel ||
-            !isBridgeRequest(payload.request)
-          ) {
-            return;
-          }
-
-          void handleBridgeRequest(
-            {
-              app: installedApp,
-              sourceLabel: payload.sourceLabel,
-            },
-            payload.request,
-            {
-              requestApproval,
-            },
-          ).then((response) => {
-            void hostWebview.emitTo(
-              payload.sourceLabel,
-              'sage-bridge:response',
-              response,
-            );
-          });
-        },
-      );
     };
 
     void mount().catch((err) => {
@@ -174,13 +130,13 @@ export function useAppEmbeddedRuntime({
       disposed = true;
       void markRuntimeVisible(installedApp.id, false);
       resizeObserver?.disconnect();
-      unlistenBridge?.();
       removeWindowResize?.();
       clearDelayedSyncTimers();
     };
-  }, [app, containerRef, requestApproval, scheduleSyncBounds]);
+  }, [app, containerRef, scheduleSyncBounds]);
 
   return {
     scheduleSyncBounds,
   };
 }
+

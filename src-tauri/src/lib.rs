@@ -154,8 +154,6 @@ pub fn run() {
             apps::update::download_app_update,
             apps::update::apply_app_update,
             apps::update::apps_update_permissions,
-            apps::sandbox::sandbox_reset_run,
-            apps::sandbox::sandbox_bridge_send,
         ])
         .events(collect_events![SyncEvent]);
 
@@ -200,7 +198,7 @@ pub fn run() {
                     .app_data_dir()
                     .expect("failed to resolve app data dir");
 
-                apps::handle_app_protocol_request(&base_path, &app_handle, &request)
+                apps::handle_app_protocol_request(&base_path, &request)
                     .unwrap_or_else(|err| {
                             tauri::http::Response::builder()
                                 .status(404)
@@ -217,7 +215,6 @@ pub fn run() {
             app.manage(Initialized(Mutex::new(false)));
             app.manage(RpcTask(Mutex::new(None)));
             app.manage(app_state);
-            app.manage(apps::sandbox::SandboxProbeStore::default());
             Ok(())
         })
         .run(tauri::generate_context!())

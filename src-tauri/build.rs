@@ -4,9 +4,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Adds a temporary workaround for an issue with the Rust compiler and Android
-/// in `x86_64` devices: <https://github.com/rust-lang/rust/issues/109717>.
-/// The workaround comes from: <https://github.com/smartvaults/smartvaults/blob/827805a989561b78c0ea5b41f2c1c9e9e59545e0/bindings/smartvaults-sdk-ffi/build.rs>
 fn setup_x86_64_android_workaround() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set");
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("CARGO_CFG_TARGET_ARCH not set");
@@ -103,19 +100,59 @@ fn print_rerun_if_changed_recursive(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+fn copy_file(src: &Path, dst: &Path) -> io::Result<()> {
+    if let Some(parent) = dst.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::copy(src, dst)?;
+    Ok(())
+}
+
 fn build_test_apps() -> io::Result<()> {
     let manifest_dir =
         PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"));
+    let workspace_root = manifest_dir
+        .parent()
+        .expect("src-tauri should have a parent directory")
+        .to_path_buf();
 
-    let src_root = manifest_dir.join("test-apps-src");
+    let src_root = workspace_root.join("src").join("test-apps-src");
     let shared_dir = src_root.join("_shared");
-    let out_root = manifest_dir.join("test-apps");
+    let out_root = workspace_root.join("src").join("test-apps");
+
+    let sdk_dist_dir = workspace_root
+        .join("packages")
+        .join("sage-app-sdk")
+        .join("dist");
+
+    let sdk_runtime_bridge = sdk_dist_dir.join("runtime-bridge.js");
+    let sdk_index = sdk_dist_dir.join("index.js");
 
     print_rerun_if_changed_recursive(&src_root)?;
+    print_rerun_if_changed_recursive(&sdk_dist_dir)?;
 
     if !src_root.exists() {
-        // No source tree yet; nothing to build.
         return Ok(());
+    }
+
+    if !sdk_runtime_bridge.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "missing SDK runtime bridge build output at {}. Run `pnpm --filter @sage-app/sdk build` first.",
+                sdk_runtime_bridge.display()
+            ),
+        ));
+    }
+
+    if !sdk_index.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "missing SDK index build output at {}. Run `pnpm --filter @sage-app/sdk build` first.",
+                sdk_index.display()
+            ),
+        ));
     }
 
     fs::create_dir_all(&out_root)?;
@@ -141,14 +178,13 @@ fn build_test_apps() -> io::Result<()> {
         remove_dir_if_exists(&app_out_dir)?;
         fs::create_dir_all(&app_out_dir)?;
 
-        // First copy shared files.
         copy_dir_recursive(&shared_dir, &app_out_dir)?;
-
-        // Then copy app-specific files on top so they override shared ones.
         copy_dir_recursive(&app_src_dir, &app_out_dir)?;
+
+        copy_file(&sdk_runtime_bridge, &app_out_dir.join("bridge.js"))?;
+        copy_file(&sdk_index, &app_out_dir.join("sdk.js"))?;
     }
 
-    // Remove stale generated app directories that no longer exist in source.
     for existing_out_dir in list_subdirs(&out_root)? {
         let out_name = existing_out_dir
             .file_name()
@@ -166,8 +202,6 @@ fn build_test_apps() -> io::Result<()> {
 
 fn main() {
     setup_x86_64_android_workaround();
-
     build_test_apps().expect("failed to build materialized test apps");
-
     tauri_build::build();
 }

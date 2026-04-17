@@ -1,24 +1,14 @@
 use std::{fs, path::Path};
 
 use anyhow::{anyhow, Result as AnyResult};
-use tauri::{
-    http::{Response, StatusCode},
-    AppHandle, Manager,
-};
+use tauri::http::{Response, StatusCode};
 
 use crate::apps::{
-    builtin_apps::{build_builtin_test_app, builtin_test_app_dir},
+    builtin_apps::{build_builtin_test_app, builtin_test_app_spec, builtin_test_app_dir},
     csp::build_app_csp,
     registry::read_installed_app_by_id,
-    sandbox::{
-        store_isolation_probe_result, store_network_probe_result,
-        store_persistence_read_probe_result, store_persistence_write_probe_result,
-        SandboxIsolationProbeResult, SandboxNetworkProbeResult, SandboxPersistenceReadProbeResult,
-        SandboxPersistenceWriteProbeResult, SandboxProbeStore,
-    },
     snapshot::read_snapshot_file,
 };
-use crate::apps::builtin_apps::builtin_test_app_spec;
 
 fn build_blank_internal_response() -> AnyResult<Response<Vec<u8>>> {
     Response::builder()
@@ -31,72 +21,6 @@ fn build_blank_internal_response() -> AnyResult<Response<Vec<u8>>> {
                 .to_vec(),
         )
         .map_err(|err| anyhow!("failed to build blank internal response: {err}"))
-}
-
-fn build_sandbox_ok_response() -> AnyResult<Response<Vec<u8>>> {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json; charset=utf-8")
-        .header("Cache-Control", "no-store")
-        .header("X-Content-Type-Options", "nosniff")
-        .body(br#"{"ok":true}"#.to_vec())
-        .map_err(|err| anyhow!("failed to build sandbox ok response: {err}"))
-}
-
-fn handle_sandbox_protocol_request(
-    app_handle: &AppHandle,
-    request: &tauri::http::Request<Vec<u8>>,
-) -> AnyResult<Response<Vec<u8>>> {
-    let uri = request.uri();
-    let path = uri.path();
-
-    match (request.method().as_str(), path) {
-        ("POST", "/report/isolation") => {
-            let result: SandboxIsolationProbeResult = serde_json::from_slice(request.body())
-                .map_err(|err| anyhow!("failed to parse sandbox isolation result body: {err}"))?;
-
-            let store = app_handle.state::<SandboxProbeStore>();
-            store_isolation_probe_result(&store, result);
-
-            build_sandbox_ok_response()
-        }
-
-        ("POST", "/report/persistence-write") => {
-            let result: SandboxPersistenceWriteProbeResult =
-                serde_json::from_slice(request.body()).map_err(|err| {
-                    anyhow!("failed to parse sandbox persistence write result body: {err}")
-                })?;
-
-            let store = app_handle.state::<SandboxProbeStore>();
-            store_persistence_write_probe_result(&store, result);
-
-            build_sandbox_ok_response()
-        }
-
-        ("POST", "/report/persistence-read") => {
-            let result: SandboxPersistenceReadProbeResult =
-                serde_json::from_slice(request.body()).map_err(|err| {
-                    anyhow!("failed to parse sandbox persistence read result body: {err}")
-                })?;
-
-            let store = app_handle.state::<SandboxProbeStore>();
-            store_persistence_read_probe_result(&store, result);
-
-            build_sandbox_ok_response()
-        }
-
-        ("POST", "/report/network") => {
-            let result: SandboxNetworkProbeResult = serde_json::from_slice(request.body())
-                .map_err(|err| anyhow!("failed to parse sandbox network result body: {err}"))?;
-
-            let store = app_handle.state::<SandboxProbeStore>();
-            store_network_probe_result(&store, result);
-
-            build_sandbox_ok_response()
-        }
-
-        _ => Err(anyhow!("unknown sandbox protocol path: {}", path)),
-    }
 }
 
 fn handle_builtin_test_app_request(
@@ -149,7 +73,6 @@ fn handle_builtin_test_app_request(
 
 pub fn handle_app_protocol_request(
     base_path: &Path,
-    app_handle: &AppHandle,
     request: &tauri::http::Request<Vec<u8>>,
 ) -> AnyResult<Response<Vec<u8>>> {
     let uri = request.uri();
@@ -157,10 +80,6 @@ pub fn handle_app_protocol_request(
     let host = uri
         .host()
         .ok_or_else(|| anyhow!("missing host in sage-app URL"))?;
-
-    if host == "__sandbox" {
-        return handle_sandbox_protocol_request(app_handle, request);
-    }
 
     if builtin_test_app_spec(host).is_some() {
         return handle_builtin_test_app_request(host, request);

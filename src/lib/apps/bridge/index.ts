@@ -9,6 +9,7 @@ import type {
   SageBridgeMethod,
   SageBridgeRequest,
   SageBridgeResponse,
+  SageBridgeVersion,
 } from './types';
 
 export type {
@@ -28,10 +29,18 @@ export type {
   SageBridgeResponse,
   SageBridgeSendPayload,
   SageBridgeSuccessResponse,
+  SageBridgeVersion,
   SageWalletSendXchRequest,
 } from './types';
 
 const KNOWN_BRIDGE_METHODS = new Set<string>(Object.keys(bridgeMethods));
+const SUPPORTED_BRIDGE_VERSION: SageBridgeVersion = 'v1';
+
+export function isSupportedBridgeVersion(
+  value: unknown,
+): value is SageBridgeVersion {
+  return value === SUPPORTED_BRIDGE_VERSION;
+}
 
 export function isBridgeRequest(value: unknown): value is SageBridgeRequest {
   if (!value || typeof value !== 'object') {
@@ -40,12 +49,23 @@ export function isBridgeRequest(value: unknown): value is SageBridgeRequest {
 
   const maybe = value as {
     channel?: unknown;
+    bridgeVersion?: unknown;
     id?: unknown;
     method?: unknown;
   };
 
+  if (maybe.channel !== 'sage-bridge') {
+    return false;
+  }
+
+  if (
+    maybe.bridgeVersion !== undefined &&
+    !isSupportedBridgeVersion(maybe.bridgeVersion)
+  ) {
+    return false;
+  }
+
   return (
-    maybe.channel === 'sage-bridge' &&
     typeof maybe.id === 'string' &&
     typeof maybe.method === 'string' &&
     KNOWN_BRIDGE_METHODS.has(maybe.method)
@@ -58,6 +78,17 @@ export async function handleBridgeRequest(
   tools: SageBridgeHostTools,
 ): Promise<SageBridgeResponse> {
   try {
+    if (
+      request.bridgeVersion !== undefined &&
+      request.bridgeVersion !== SUPPORTED_BRIDGE_VERSION
+    ) {
+      return failure(
+        request.id,
+        'unsupported_bridge_version',
+        `Unsupported Sage bridge version: ${String(request.bridgeVersion)}`,
+      );
+    }
+
     const definition = bridgeMethods[request.method as SageBridgeMethod] as
       | BridgeMethodDefinition<SageBridgeMethod>
       | undefined;

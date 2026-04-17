@@ -64,7 +64,11 @@ pub fn builtin_test_app_spec(app_id: &str) -> Option<&'static BuiltinTestAppSpec
 }
 
 pub fn builtin_test_apps_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-apps")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("src-tauri should have a parent directory")
+        .join("src")
+        .join("test-apps")
 }
 
 pub fn builtin_test_app_dir(app_id: &str) -> AnyResult<Option<PathBuf>> {

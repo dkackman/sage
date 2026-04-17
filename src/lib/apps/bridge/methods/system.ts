@@ -1,5 +1,5 @@
 import type { BridgeMethodRegistry } from '../types';
-import { invoke } from '@tauri-apps/api/core';
+import { acceptSandboxBridgeSend } from '@/lib/apps/sandboxRuntimeStore';
 
 export const systemBridgeMethods = {
   'bridge.ping': {
@@ -16,12 +16,10 @@ export const systemBridgeMethods = {
   'bridge.send': {
     permission: { kind: 'none' },
     async handle({ ctx, request }) {
-      if (request.params.kind === "sandbox_report") {
-        await invoke('sandbox_bridge_send', {
-          appId: ctx.app.id,
-          payload: request.params,
-        });
-      }
+      acceptSandboxBridgeSend({
+        appId: ctx.app.id,
+        payload: request.params,
+      });
 
       return { ok: true };
     },
@@ -34,7 +32,9 @@ export const systemBridgeMethods = {
         id: ctx.app.id,
         name: ctx.app.name,
         version: ctx.app.version,
-        permissions: ctx.app.grantedPermissions,
+        requestedPermissions: ctx.app.requestedPermissions,
+        grantedPermissions: ctx.app.grantedPermissions,
+        network: ctx.app.activeSnapshot.manifest.network?.whitelist ?? [],
       };
     },
   },

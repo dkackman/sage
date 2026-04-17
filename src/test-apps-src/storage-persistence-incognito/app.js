@@ -1,7 +1,8 @@
-import { createBridgeClient } from './bridge.js';
+import './bridge.js';
+import { createSageClient } from './sdk.js';
 
 (async () => {
-  const bridge = createBridgeClient();
+  const sage = await createSageClient();
   const params = new URLSearchParams(window.location.search);
   const runId = params.get('runId');
   const phase = params.get('phase');
@@ -14,9 +15,9 @@ import { createBridgeClient } from './bridge.js';
     throw new Error('missing or invalid phase');
   }
 
-  const LOCAL_STORAGE_KEY = `sandbox_persistence_local_storage:${runId}:persistent`;
-  const COOKIE_KEY = `sandbox_persistence_cookie_${runId}_persistent`;
-  const DB_NAME = `sandbox_persistence_db_${runId}_persistent`;
+  const LOCAL_STORAGE_KEY = `sandbox_persistence_local_storage:${runId}:incognito`;
+  const COOKIE_KEY = `sandbox_persistence_cookie_${runId}_incognito`;
+  const DB_NAME = `sandbox_persistence_db_${runId}_incognito`;
   const STORE_NAME = 'probe_store';
   const DB_KEY = 'probe_key';
 
@@ -33,9 +34,7 @@ import { createBridgeClient } from './bridge.js';
             if (!db.objectStoreNames.contains(STORE_NAME)) {
               db.createObjectStore(STORE_NAME);
             }
-          } catch {
-            //
-          }
+          } catch {}
         };
 
         open.onsuccess = () => {
@@ -84,9 +83,7 @@ import { createBridgeClient } from './bridge.js';
             if (!db.objectStoreNames.contains(STORE_NAME)) {
               db.createObjectStore(STORE_NAME);
             }
-          } catch {
-            //
-          }
+          } catch {}
         };
 
         open.onsuccess = () => {
@@ -122,22 +119,22 @@ import { createBridgeClient } from './bridge.js';
     }
   }
 
-  async function reportWrite(result) {
-    await bridge.send({
+  async function reportWrite(data) {
+    await sage.app.bridgeSend({
       kind: 'sandbox_report',
       report: {
         type: 'persistence_write',
-        data: result,
+        data,
       },
     });
   }
 
-  async function reportRead(result) {
-    await bridge.send({
+  async function reportRead(data) {
+    await sage.app.bridgeSend({
       kind: 'sandbox_report',
       report: {
         type: 'persistence_read',
-        data: result,
+        data,
       },
     });
   }
@@ -174,8 +171,8 @@ import { createBridgeClient } from './bridge.js';
 
     await reportWrite({
       runId,
-      mode: 'persistent',
-      persistentStorage: true,
+      mode: 'incognito',
+      persistentStorage: false,
       localStorageWrote,
       cookieWrote,
       indexedDbWrote,
@@ -214,8 +211,8 @@ import { createBridgeClient } from './bridge.js';
 
   await reportRead({
     runId,
-    mode: 'persistent',
-    persistentStorage: true,
+    mode: 'incognito',
+    persistentStorage: false,
     localStoragePresent,
     cookiePresent,
     indexedDbPresent,
@@ -223,19 +220,19 @@ import { createBridgeClient } from './bridge.js';
   });
 })().catch(async (err) => {
   try {
-    const bridge = createBridgeClient();
+    const sage = await createSageClient();
     const params = new URLSearchParams(window.location.search);
     const phase = params.get('phase');
 
     if (phase === 'write') {
-      await bridge.send({
+      await sage.app.bridgeSend({
         kind: 'sandbox_report',
         report: {
           type: 'persistence_write',
           data: {
             runId: params.get('runId'),
-            mode: 'persistent',
-            persistentStorage: true,
+            mode: 'incognito',
+            persistentStorage: false,
             localStorageWrote: false,
             cookieWrote: false,
             indexedDbWrote: false,
@@ -246,14 +243,14 @@ import { createBridgeClient } from './bridge.js';
       return;
     }
 
-    await bridge.send({
+    await sage.app.bridgeSend({
       kind: 'sandbox_report',
       report: {
         type: 'persistence_read',
         data: {
           runId: params.get('runId'),
-          mode: 'persistent',
-          persistentStorage: true,
+          mode: 'incognito',
+          persistentStorage: false,
           localStoragePresent: false,
           cookiePresent: false,
           indexedDbPresent: false,
@@ -261,7 +258,5 @@ import { createBridgeClient } from './bridge.js';
         },
       },
     });
-  } catch {
-    //
-  }
+  } catch {}
 });

@@ -6,8 +6,11 @@ import type {
   SandboxPersistenceWriteProbeResult,
 } from '@/lib/apps/sandbox';
 
+export type SageBridgeVersion = 'v1';
+
 export interface SageBridgeSuccessResponse {
   channel: 'sage-bridge';
+  bridgeVersion: SageBridgeVersion;
   id: string;
   ok: true;
   result: unknown;
@@ -15,6 +18,7 @@ export interface SageBridgeSuccessResponse {
 
 export interface SageBridgeErrorResponse {
   channel: 'sage-bridge';
+  bridgeVersion: SageBridgeVersion;
   id: string;
   ok: false;
   error: {
@@ -76,17 +80,17 @@ export interface SageBridgeRequestParamsMap {
 
 export type SageBridgeMethod = keyof SageBridgeRequestParamsMap;
 
+type SageBridgeRequestBase<M extends SageBridgeMethod> = {
+  channel: 'sage-bridge';
+  bridgeVersion?: SageBridgeVersion;
+  id: string;
+  method: M;
+};
+
 export type SageBridgeRequestForMethod<M extends SageBridgeMethod> =
   SageBridgeRequestParamsMap[M] extends undefined
-    ? {
-        channel: 'sage-bridge';
-        id: string;
-        method: M;
-      }
-    : {
-        channel: 'sage-bridge';
-        id: string;
-        method: M;
+    ? SageBridgeRequestBase<M>
+    : SageBridgeRequestBase<M> & {
         params: SageBridgeRequestParamsMap[M];
       };
 

@@ -391,12 +391,6 @@ async applyAppUpdate(appId: string, grantedPermissions: string[]) : Promise<Inst
 },
 async appsUpdatePermissions(appId: string, grantedPermissions: string[]) : Promise<null> {
     return await TAURI_INVOKE("apps_update_permissions", { appId, grantedPermissions });
-},
-async sandboxResetRun(runId: string) : Promise<null> {
-    return await TAURI_INVOKE("sandbox_reset_run", { runId });
-},
-async sandboxBridgeSend(appId: string, payload: SandboxBridgeSendPayload) : Promise<null> {
-    return await TAURI_INVOKE("sandbox_bridge_send", { appId, payload });
 }
 }
 
@@ -2207,12 +2201,6 @@ export type SageAppPermissions = { required?: string[]; optional?: string[] }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageNetworkPermissions = { whitelist?: SageNetworkWhitelistEntry[] }
 export type SageNetworkWhitelistEntry = { scheme: string; host: string; required?: boolean }
-export type SandboxBridgeReport = { type: "isolation"; data: SandboxIsolationProbeResult } | { type: "persistence_write"; data: SandboxPersistenceWriteProbeResult } | { type: "persistence_read"; data: SandboxPersistenceReadProbeResult } | { type: "network"; data: SandboxNetworkProbeResult }
-export type SandboxBridgeSendPayload = { kind: "sandbox_report"; report: SandboxBridgeReport }
-export type SandboxIsolationProbeResult = { runId: string; mode: string; persistentStorage: boolean; localStorageVisible: boolean; cookieVisible: boolean; indexedDbVisible: boolean; error: string | null }
-export type SandboxNetworkProbeResult = { runId: string; mode: string; allowedUrl: string; blockedUrl: string; allowedOk: boolean; blockedOk: boolean; error: string | null }
-export type SandboxPersistenceReadProbeResult = { runId: string; mode: string; persistentStorage: boolean; localStoragePresent: boolean; cookiePresent: boolean; indexedDbPresent: boolean; error: string | null }
-export type SandboxPersistenceWriteProbeResult = { runId: string; mode: string; persistentStorage: boolean; localStorageWrote: boolean; cookieWrote: boolean; indexedDbWrote: boolean; error: string | null }
 /**
  * Save a theme NFT to the wallet
  */

@@ -1,13 +1,17 @@
-import { createBridgeClient } from './bridge.js';
+import './bridge.js';
+import { createSageClient } from './sdk.js';
 
 (async () => {
-  const bridge = createBridgeClient();
+  const sage = await createSageClient();
   const params = new URLSearchParams(window.location.search);
   const runId = params.get('runId');
 
   if (!runId) {
     throw new Error('missing runId');
   }
+
+  const allowedUrl = 'https://example.com/';
+  const blockedUrl = 'https://example.org/';
 
   async function tryFetch(url) {
     const controller = new AbortController();
@@ -29,19 +33,6 @@ import { createBridgeClient } from './bridge.js';
     }
   }
 
-  async function report(result) {
-    await bridge.send({
-      kind: 'sandbox_report',
-      report: {
-        type: 'network',
-        data: result,
-      },
-    });
-  }
-
-  const allowedUrl = 'https://example.com/';
-  const blockedUrl = 'https://example.org/';
-
   let allowedOk = false;
   let blockedOk = false;
   let error = null;
@@ -53,21 +44,27 @@ import { createBridgeClient } from './bridge.js';
     error = err instanceof Error ? err.message : String(err);
   }
 
-  await report({
-    runId,
-    mode: 'allow-a',
-    allowedUrl,
-    blockedUrl,
-    allowedOk,
-    blockedOk,
-    error,
+  await sage.app.bridgeSend({
+    kind: 'sandbox_report',
+    report: {
+      type: 'network',
+      data: {
+        runId,
+        mode: 'allow-a',
+        allowedUrl,
+        blockedUrl,
+        allowedOk,
+        blockedOk,
+        error,
+      },
+    },
   });
 })().catch(async (err) => {
   try {
-    const bridge = createBridgeClient();
+    const sage = await createSageClient();
     const params = new URLSearchParams(window.location.search);
 
-    await bridge.send({
+    await sage.app.bridgeSend({
       kind: 'sandbox_report',
       report: {
         type: 'network',
@@ -82,7 +79,5 @@ import { createBridgeClient } from './bridge.js';
         },
       },
     });
-  } catch {
-    //
-  }
+  } catch {}
 });

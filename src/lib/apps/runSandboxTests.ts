@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import { TEST_APP_IDS } from '@/lib/apps/testApps';
 import {
   startInternalInlineRuntime,
@@ -13,6 +12,10 @@ import type {
   SandboxState,
 } from '@/lib/apps/sandbox';
 import { buildCompletedSandboxState } from '@/lib/apps/sandbox';
+import {
+  getSandboxRunResults,
+  resetSandboxRun,
+} from '@/lib/apps/sandboxRuntimeStore';
 
 const PROBE_LOCAL_STORAGE_KEY = 'sage_probe_local_storage';
 const PROBE_COOKIE_KEY = 'sage_probe_cookie';
@@ -109,23 +112,24 @@ async function stopTestApps(appIds: string[]): Promise<void> {
   await Promise.allSettled(appIds.map((appId) => closeAppRuntime(appId)));
 }
 
-async function pollResults<T>(
-  command: string,
-  runId: string,
-  expectedCount: number,
-  timeoutMs: number,
-): Promise<T[]> {
+async function pollResults<T>(args: {
+  runId: string;
+  expectedCount: number;
+  timeoutMs: number;
+  read: () => T[];
+  label: string;
+}): Promise<T[]> {
   const startedAt = Date.now();
 
   for (;;) {
-    const results = await invoke<T[]>(command, { runId });
+    const results = args.read();
 
-    if (results.length >= expectedCount) {
+    if (results.length >= args.expectedCount) {
       return results;
     }
 
-    if (Date.now() - startedAt >= timeoutMs) {
-      throw new Error(`Timed out waiting for ${command} results.`);
+    if (Date.now() - startedAt >= args.timeoutMs) {
+      throw new Error(`Timed out waiting for ${args.label} results.`);
     }
 
     await new Promise((resolve) => window.setTimeout(resolve, 100));
@@ -142,7 +146,7 @@ async function runIsolationTest(): Promise<{
     TEST_APP_IDS.storageIsolationIncognito,
   ];
 
-  await invoke('sandbox_reset_run', { runId });
+  resetSandboxRun(runId);
   await stopTestApps(appIds);
   await writeSageProbes(runId);
 
@@ -152,12 +156,13 @@ async function runIsolationTest(): Promise<{
       startTestApp(TEST_APP_IDS.storageIsolationIncognito, { runId }),
     ]);
 
-    const results = await pollResults<SandboxIsolationProbeResult>(
-      'sandbox_get_isolation_results',
+    const results = await pollResults<SandboxIsolationProbeResult>({
       runId,
-      2,
-      10000,
-    );
+      expectedCount: 2,
+      timeoutMs: 10000,
+      label: 'sandbox isolation',
+      read: () => getSandboxRunResults(runId).isolation,
+    });
 
     if (results.length !== 2) {
       return {
@@ -226,7 +231,7 @@ async function runPersistenceTest(): Promise<{
     TEST_APP_IDS.persistenceIncognito,
   ];
 
-  await invoke('sandbox_reset_run', { runId });
+  resetSandboxRun(runId);
   await stopTestApps(appIds);
 
   try {
@@ -241,12 +246,13 @@ async function runPersistenceTest(): Promise<{
       }),
     ]);
 
-    const writeResults = await pollResults<SandboxPersistenceWriteProbeResult>(
-      'sandbox_get_persistence_write_results',
+    const writeResults = await pollResults<SandboxPersistenceWriteProbeResult>({
       runId,
-      2,
-      10000,
-    );
+      expectedCount: 2,
+      timeoutMs: 10000,
+      label: 'sandbox persistence write',
+      read: () => getSandboxRunResults(runId).persistenceWrite,
+    });
 
     if (writeResults.length !== 2) {
       const details = `Expected 2 persistence write results, got ${writeResults.length}.`;
@@ -362,12 +368,13 @@ async function runPersistenceTest(): Promise<{
       }),
     ]);
 
-    const readResults = await pollResults<SandboxPersistenceReadProbeResult>(
-      'sandbox_get_persistence_read_results',
+    const readResults = await pollResults<SandboxPersistenceReadProbeResult>({
       runId,
-      2,
-      10000,
-    );
+      expectedCount: 2,
+      timeoutMs: 10000,
+      label: 'sandbox persistence read',
+      read: () => getSandboxRunResults(runId).persistenceRead,
+    });
 
     if (readResults.length !== 2) {
       const details = `Expected 2 persistence read results, got ${readResults.length}.`;
@@ -455,7 +462,7 @@ async function runNetworkTest(): Promise<{
   const runId = uniqueRunId('sandbox-network');
   const appIds = [TEST_APP_IDS.networkAllowA, TEST_APP_IDS.networkAllowB];
 
-  await invoke('sandbox_reset_run', { runId });
+  resetSandboxRun(runId);
   await stopTestApps(appIds);
 
   try {
@@ -464,12 +471,13 @@ async function runNetworkTest(): Promise<{
       startTestApp(TEST_APP_IDS.networkAllowB, { runId }),
     ]);
 
-    const results = await pollResults<SandboxNetworkProbeResult>(
-      'sandbox_get_network_results',
+    const results = await pollResults<SandboxNetworkProbeResult>({
       runId,
-      2,
-      12000,
-    );
+      expectedCount: 2,
+      timeoutMs: 12000,
+      label: 'sandbox network',
+      read: () => getSandboxRunResults(runId).network,
+    });
 
     if (results.length !== 2) {
       return {
@@ -524,7 +532,7 @@ async function runNetworkTest(): Promise<{
   } catch (err) {
     return {
       passed: false,
-      details: err instanceof Error ? err.message : String(err),
+      details: formatUnknownError(err),
     };
   } finally {
     await stopTestApps(appIds);
