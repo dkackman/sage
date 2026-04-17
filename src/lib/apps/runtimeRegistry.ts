@@ -91,6 +91,10 @@ function inlineLabelFor(appId: string) {
   return `app-inline-${appId}`;
 }
 
+function shouldUseIncognito(app: InstalledSageApp): boolean {
+  return !app.grantedPermissions.includes('persistent_storage');
+}
+
 export function subscribeAppRuntimes(listener: RuntimeListener): () => void {
   listeners.add(listener);
   listener(Array.from(runtimes.values()).map(stripInternal));
@@ -206,6 +210,7 @@ export async function ensureInlineRuntime(
       width: 1,
       height: 1,
       focus: true,
+      incognito: shouldUseIncognito(app),
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -380,4 +385,3 @@ export async function killRuntime(appId: string) {
     // ignore
   }
 }
-

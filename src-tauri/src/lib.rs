@@ -152,18 +152,6 @@ pub fn run() {
             apps::update::check_app_update,
             apps::update::download_app_update,
             apps::update::apply_app_update,
-            apps::storage::commands::storage_open_database,
-            apps::storage::commands::storage_delete_database,
-            apps::storage::commands::storage_describe_database,
-            apps::storage::commands::storage_create_object_store,
-            apps::storage::commands::storage_create_index,
-            apps::storage::commands::storage_get,
-            apps::storage::commands::storage_put,
-            apps::storage::commands::storage_delete,
-            apps::storage::commands::storage_clear,
-            apps::storage::commands::storage_count,
-            apps::storage::commands::storage_get_all,
-            apps::storage::commands::storage_get_all_from_index,
         ])
         .events(collect_events![SyncEvent]);
 
