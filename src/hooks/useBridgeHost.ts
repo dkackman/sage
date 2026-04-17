@@ -20,20 +20,9 @@ export function useBridgeHost({ requestApproval, getApp }: Args) {
     let unlisten: (() => void) | null = null;
 
     const mount = async () => {
-      console.log(
-        'useBridgeHost mounted on host webview label:',
-        hostWebview.label,
-      );
-
       unlisten = await hostWebview.listen<SageBridgeEventPayload>(
         'sage-bridge:request',
         ({ payload }) => {
-          console.log(
-            'useBridgeHost got bridge request from:',
-            payload?.sourceLabel,
-            payload?.request,
-          );
-
           if (!payload || !isBridgeRequest(payload.request)) {
             return;
           }
