@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { InstallAppForm } from '@/components/apps/InstallAppForm';
 import { CorruptedAppCard } from '@/components/apps/CorruptedAppCard';
+import { AppsLaunchpadContextMenu } from '@/components/apps/AppsLaunchpadContextMenu';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -11,10 +12,10 @@ import {
 import { SageAppPackageManifest, SageAppUrlPreview } from '@/bindings.ts';
 import { invoke } from '@tauri-apps/api/core';
 import { useApps } from '@/contexts/AppsContext.tsx';
+import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
 import { LayoutGrid, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
 
 type InstalledEntry = ReturnType<typeof useApps>['apps'][number] & {
   kind: 'installed';
@@ -101,6 +102,41 @@ export function Apps() {
     ? runningAppIds.has(contextMenu.app.id)
     : false;
 
+  function closeContextMenu() {
+    setUpdateCheckStateByAppId((prev) => {
+      if (!contextMenu) {
+        return prev;
+      }
+
+      if (prev[contextMenu.app.id] !== 'up_to_date') {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [contextMenu.app.id]: 'idle',
+      };
+    });
+
+    setContextMenu(null);
+  }
+
+  async function handleCheckForUpdate(appId: string) {
+    setUpdateCheckStateByAppId((prev) => ({
+      ...prev,
+      [appId]: 'checking',
+    }));
+
+    try {
+      await checkForUpdate(appId);
+    } finally {
+      setUpdateCheckStateByAppId((prev) => ({
+        ...prev,
+        [appId]: 'up_to_date',
+      }));
+    }
+  }
+
   useEffect(() => {
     if (!contextMenu || contextMenuCheckState !== 'up_to_date') {
       return;
@@ -161,41 +197,6 @@ export function Apps() {
         </Alert>
       </div>
     );
-  }
-
-  function closeContextMenu() {
-    setUpdateCheckStateByAppId((prev) => {
-      if (!contextMenu) {
-        return prev;
-      }
-
-      if (prev[contextMenu.app.id] !== 'up_to_date') {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        [contextMenu.app.id]: 'idle',
-      };
-    });
-
-    setContextMenu(null);
-  }
-
-  async function handleCheckForUpdate(appId: string) {
-    setUpdateCheckStateByAppId((prev) => ({
-      ...prev,
-      [appId]: 'checking',
-    }));
-
-    try {
-      await checkForUpdate(appId);
-    } finally {
-      setUpdateCheckStateByAppId((prev) => ({
-        ...prev,
-        [appId]: 'up_to_date',
-      }));
-    }
   }
 
   return (
@@ -337,6 +338,61 @@ export function Apps() {
             </div>
           ) : null}
         </div>
+
+        <AppsLaunchpadContextMenu
+          open={!!contextMenu}
+          x={contextMenu?.x ?? 0}
+          y={contextMenu?.y ?? 0}
+          busy={contextMenuBusy}
+          hasUpdate={!!contextMenuPreview}
+          isRunning={contextMenuAppIsRunning}
+          updateCheckState={contextMenuCheckState}
+          onClose={closeContextMenu}
+          onOpen={() => {
+            if (!contextMenu) {
+              return;
+            }
+
+            setUpdateCheckStateByAppId((prev) => ({
+              ...prev,
+              [contextMenu.app.id]: 'idle',
+            }));
+            navigate(`/apps/${contextMenu.app.id}`);
+            closeContextMenu();
+          }}
+          onCheckForUpdate={() => {
+            if (!contextMenu) {
+              return;
+            }
+
+            void handleCheckForUpdate(contextMenu.app.id);
+          }}
+          onUpdate={() => {
+            if (!contextMenu) {
+              return;
+            }
+
+            void performAppUpdate(contextMenu.app.id, {
+              restartIfRunning: true,
+              visibleAfterRestart: contextMenuAppIsRunning,
+            });
+          }}
+          onChangePermissions={() => {}}
+          onUninstall={() => {
+            if (!contextMenu) {
+              return;
+            }
+
+            setUpdateCheckStateByAppId((prev) => ({
+              ...prev,
+              [contextMenu.app.id]: 'idle',
+            }));
+
+            void uninstallApp(contextMenu.app.id).finally(() => {
+              closeContextMenu();
+            });
+          }}
+        />
       </div>
 
       <Dialog
@@ -372,105 +428,6 @@ export function Apps() {
           />
         </DialogContent>
       </Dialog>
-
-      {contextMenu ? (
-        <>
-          <div
-            className='absolute inset-0 z-40'
-            onClick={() => {
-              closeContextMenu();
-            }}
-          />
-
-          <div
-            className='absolute z-50 w-[220px] rounded-xl border bg-popover p-1 shadow-lg'
-            style={{
-              left: `${contextMenu.x}px`,
-              top: `${contextMenu.y}px`,
-            }}
-            onClick={(event) => {
-              event.stopPropagation();
-            }}
-          >
-            <button
-              type='button'
-              className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted'
-              onClick={() => {
-                setUpdateCheckStateByAppId((prev) => ({
-                  ...prev,
-                  [contextMenu.app.id]: 'idle',
-                }));
-                navigate(`/apps/${contextMenu.app.id}`);
-                closeContextMenu();
-              }}
-            >
-              Open
-            </button>
-
-            {!contextMenuPreview ? (
-              <button
-                type='button'
-                className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
-                disabled={
-                  contextMenuBusy ||
-                  contextMenuCheckState === 'checking' ||
-                  contextMenuCheckState === 'up_to_date'
-                }
-                onClick={() => {
-                  void handleCheckForUpdate(contextMenu.app.id);
-                }}
-              >
-                {contextMenuCheckState === 'checking'
-                  ? 'Checking…'
-                  : contextMenuCheckState === 'up_to_date'
-                    ? 'Up to date'
-                    : 'Check for update'}
-              </button>
-            ) : (
-              <button
-                type='button'
-                className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
-                disabled={contextMenuBusy}
-                onClick={() => {
-                  void performAppUpdate(contextMenu.app.id, {
-                    restartIfRunning: true,
-                    visibleAfterRestart: contextMenuAppIsRunning,
-                  });
-                }}
-              >
-                {contextMenuAppIsRunning ? 'Update and reopen' : 'Update'}
-              </button>
-            )}
-
-            <div className='my-1 h-px bg-border' />
-
-            <button
-              type='button'
-              className='flex w-full rounded-lg px-3 py-2 text-left text-sm text-muted-foreground opacity-60'
-              disabled
-            >
-              Change permissions
-            </button>
-
-            <button
-              type='button'
-              className='flex w-full rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-muted'
-              onClick={() => {
-                setUpdateCheckStateByAppId((prev) => ({
-                  ...prev,
-                  [contextMenu.app.id]: 'idle',
-                }));
-
-                void uninstallApp(contextMenu.app.id).finally(() => {
-                  closeContextMenu();
-                });
-              }}
-            >
-              Uninstall
-            </button>
-          </div>
-        </>
-      ) : null}
     </>
   );
 }
