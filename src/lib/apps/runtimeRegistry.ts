@@ -39,6 +39,8 @@ const runtimes = new Map<string, RuntimeInternalRecord>();
 const runtimeByAppId = new Map<string, string>();
 const listeners = new Set<RuntimeListener>();
 
+const CLEAR_STUB_PATH = '/__sage_clear__.html';
+
 function emitChange() {
   const snapshot = Array.from(runtimes.values()).map(stripInternal);
   for (const listener of listeners) {
@@ -91,8 +93,103 @@ function inlineLabelFor(appId: string) {
   return `app-inline-${appId}`;
 }
 
+function clearLabelFor(appId: string) {
+  return `app-clear-${appId}`;
+}
+
 function shouldUseIncognito(app: InstalledSageApp): boolean {
   return !app.grantedPermissions.includes('persistent_storage');
+}
+
+function appEntrySrc(appId: string): string {
+  return `sage-app://${appId}/index.html`;
+}
+
+function clearStubSrc(appId: string): string {
+  return `sage-app://${appId}${CLEAR_STUB_PATH}`;
+}
+
+async function waitForWebviewCreated(webview: Webview): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let unlistenCreated: (() => void) | null = null;
+    let unlistenError: (() => void) | null = null;
+
+    const cleanupListeners = () => {
+      try {
+        unlistenCreated?.();
+      } catch (err) {
+        console.warn('Failed to unlisten created:', err);
+      }
+
+      try {
+        unlistenError?.();
+      } catch (err) {
+        console.warn('Failed to unlisten error:', err);
+      }
+    };
+
+    void (async () => {
+      try {
+        unlistenCreated = await webview.once('tauri://created', () => {
+          cleanupListeners();
+          resolve();
+        });
+
+        unlistenError = await webview.once('tauri://error', (event) => {
+          cleanupListeners();
+
+          const payload =
+            typeof event.payload === 'string'
+              ? event.payload
+              : JSON.stringify(event.payload);
+
+          reject(new Error(payload));
+        });
+      } catch (err) {
+        cleanupListeners();
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    })();
+  });
+}
+
+async function waitForWebviewClosed(
+  label: string,
+  timeoutMs = 8000,
+): Promise<void> {
+  const startedAt = Date.now();
+
+  while (true) {
+    const existing = await Webview.getByLabel(label).catch(() => null);
+
+    if (!existing) {
+      return;
+    }
+
+    if (Date.now() - startedAt >= timeoutMs) {
+      throw new Error(`Timed out closing webview ${label}`);
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+  }
+}
+
+async function closeLooseWebviewByLabel(
+  label: string,
+  timeoutMs = 8000,
+): Promise<void> {
+  const webview = await Webview.getByLabel(label).catch(() => null);
+  if (!webview) {
+    return;
+  }
+
+  try {
+    await webview.close();
+  } catch (err) {
+    console.warn(`Failed to request close for webview ${label}:`, err);
+  }
+
+  await waitForWebviewClosed(label, timeoutMs);
 }
 
 export function subscribeAppRuntimes(listener: RuntimeListener): () => void {
@@ -163,6 +260,50 @@ export async function closeAppRuntime(
   }
 }
 
+export async function clearBrowsingDataWithStub(
+  app: InstalledSageApp,
+): Promise<void> {
+  const runtimeId = runtimeByAppId.get(app.id);
+  if (runtimeId) {
+    await closeAppRuntime(app.id, { timeoutMs: 8000 });
+  }
+
+  await closeLooseWebviewByLabel(clearLabelFor(app.id), 8000);
+
+  const hostWindow = getCurrentWindow();
+  const clearLabel = clearLabelFor(app.id);
+
+  const clearWebview = new Webview(hostWindow, clearLabel, {
+    url: clearStubSrc(app.id),
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    focus: false,
+    incognito: false,
+  });
+
+  await waitForWebviewCreated(clearWebview);
+
+  try {
+    await clearWebview.hide();
+  } catch {
+    // ignore
+  }
+
+  await new Promise((resolve) => window.setTimeout(resolve, 50));
+
+  await clearWebview.clearAllBrowsingData();
+
+  try {
+    await clearWebview.close();
+  } catch (err) {
+    console.warn('Failed to request clear stub webview close:', err);
+  }
+
+  await waitForWebviewClosed(clearLabel, 8000);
+}
+
 export async function ensureInlineRuntime(
   app: InstalledSageApp,
 ): Promise<SageAppRuntimeRecord> {
@@ -199,7 +340,7 @@ export async function ensureInlineRuntime(
 
   const runtimeId = runtimeIdFor(app.id);
   const webviewLabel = inlineLabelFor(app.id);
-  const entrySrc = `sage-app://${app.id}/index.html`;
+  const entrySrc = appEntrySrc(app.id);
 
   let webview = await Webview.getByLabel(webviewLabel);
   if (!webview) {
@@ -213,50 +354,7 @@ export async function ensureInlineRuntime(
       incognito: shouldUseIncognito(app),
     });
 
-    await new Promise<void>((resolve, reject) => {
-      let unlistenCreated: (() => void) | null = null;
-      let unlistenError: (() => void) | null = null;
-
-      const cleanupListeners = () => {
-        try {
-          unlistenCreated?.();
-        } catch (err) {
-          console.warn('Failed to unlisten created:', err);
-        }
-
-        try {
-          unlistenError?.();
-        } catch (err) {
-          console.warn('Failed to unlisten error:', err);
-        }
-      };
-
-      void (async () => {
-        try {
-          unlistenCreated = await createdWebview.once('tauri://created', () => {
-            cleanupListeners();
-            resolve();
-          });
-
-          unlistenError = await createdWebview.once(
-            'tauri://error',
-            (event) => {
-              cleanupListeners();
-
-              const payload =
-                typeof event.payload === 'string'
-                  ? event.payload
-                  : JSON.stringify(event.payload);
-              reject(new Error(payload));
-            },
-          );
-        } catch (err) {
-          cleanupListeners();
-          reject(err instanceof Error ? err : new Error(String(err)));
-        }
-      })();
-    });
-
+    await waitForWebviewCreated(createdWebview);
     webview = createdWebview;
   }
 
