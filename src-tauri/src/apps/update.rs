@@ -179,14 +179,8 @@ pub async fn apply_app_update(
     app.granted_permissions = granted_permissions;
     app.permission_flags = permission_flags;
     app.active_snapshot = snapshot;
-    app.entry_file = Path::new(&app.active_snapshot.snapshot_dir)
-        .join("index.html")
-        .to_string_lossy()
-        .to_string();
-    app.icon_file = Path::new(&app.active_snapshot.snapshot_dir)
-        .join("icon.png")
-        .to_string_lossy()
-        .to_string();
+    app.entry_file = "index.html".to_string();
+    app.icon_file = "icon.png".to_string();
     app.pending_update = None;
 
     write_installed_app_metadata(&app, &install_dir)
