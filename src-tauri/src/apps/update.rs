@@ -3,8 +3,8 @@ use std::{io, path::PathBuf};
 use tauri::{command, State};
 
 use crate::apps::install::{
-    manifest_entry_file, manifest_icon_file, normalize_and_validate_granted_network_whitelist,
-    preview_app_url_internal,
+    manifest_entry_file, manifest_icon_file,
+    normalize_and_validate_granted_network_whitelist, preview_app_url_internal,
 };
 
 use crate::{
@@ -17,8 +17,8 @@ use crate::{
         registry::{read_installed_app_by_id, write_installed_app_metadata},
         snapshot::download_url_snapshot,
         types::{
-            InstalledSageApp, InstalledSageAppPendingUpdate,
-            InstalledSageAppSource, SageAppUrlPreview,
+            InstalledSageApp, InstalledSageAppPendingUpdate, InstalledSageAppSource,
+            SageAppUrlPreview,
         },
     },
     error::Result,
@@ -37,10 +37,7 @@ pub async fn check_app_update(
     };
 
     let app = read_installed_app_by_id(&base_path, &app_id).map_err(|err| {
-        io::Error::other(format!(
-            "failed to read installed app {}: {err}",
-            app_id
-        ))
+        io::Error::other(format!("failed to read installed app {}: {err}", app_id))
     })?;
 
     let (app_url, _) = match &app.source {
@@ -53,15 +50,10 @@ pub async fn check_app_update(
 
     let preview = preview_app_url_internal(app_url)
         .await
-        .map_err(|err| {
-            io::Error::other(format!("failed to preview app URL: {err}"))
-        })?;
+        .map_err(|err| io::Error::other(format!("failed to preview app URL: {err}")))?;
 
-    let same_manifest_hash =
-        preview.manifest_hash == app.active_snapshot.manifest_hash;
-
-    let same_manifest_content =
-        preview.manifest == app.active_snapshot.manifest;
+    let same_manifest_hash = preview.manifest_hash == app.active_snapshot.manifest_hash;
+    let same_manifest_content = preview.manifest == app.active_snapshot.manifest;
 
     if same_manifest_hash && same_manifest_content {
         return Ok(None);
@@ -91,10 +83,7 @@ pub async fn download_app_update(
     };
 
     let mut app = read_installed_app_by_id(&base_path, &app_id).map_err(|err| {
-        io::Error::other(format!(
-            "failed to read installed app {}: {err}",
-            app_id
-        ))
+        io::Error::other(format!("failed to read installed app {}: {err}", app_id))
     })?;
 
     let (app_url, manifest_url) = match &app.source {
@@ -103,10 +92,9 @@ pub async fn download_app_update(
             manifest_url,
         } => (app_url.clone(), manifest_url.clone()),
         InstalledSageAppSource::Zip => {
-            return Err(io::Error::other(
-                "zip apps do not support URL update download",
-            )
-                .into());
+            return Err(
+                io::Error::other("zip apps do not support URL update download").into(),
+            );
         }
     };
 
@@ -124,11 +112,7 @@ pub async fn download_app_update(
 
     let install_dir = PathBuf::from(&app.install_dir);
     write_installed_app_metadata(&app, &install_dir)
-        .map_err(|err| {
-            io::Error::other(format!(
-                "failed to write app metadata: {err}"
-            ))
-        })?;
+        .map_err(|err| io::Error::other(format!("failed to write app metadata: {err}")))?;
 
     Ok(app)
 }
@@ -146,34 +130,26 @@ pub async fn apply_app_update(
     };
 
     let mut app = read_installed_app_by_id(&base_path, &app_id).map_err(|err| {
-        io::Error::other(format!(
-            "failed to read installed app {}: {err}",
-            app_id
-        ))
+        io::Error::other(format!("failed to read installed app {}: {err}", app_id))
     })?;
 
-    let pending = app.pending_update.clone().ok_or_else(|| {
-        io::Error::other(format!("app {} has no pending update", app_id))
-    })?;
+    let pending = app
+        .pending_update
+        .clone()
+        .ok_or_else(|| io::Error::other(format!("app {} has no pending update", app_id)))?;
 
     validate_granted_permissions(
         &pending.manifest.permissions,
         &granted_permissions.capabilities,
     )
-        .map_err(|err| {
-            io::Error::other(format!(
-                "invalid granted permissions for update: {err}"
-            ))
-        })?;
+        .map_err(|err| io::Error::other(format!("invalid granted permissions for update: {err}")))?;
 
     let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
         &pending.manifest.permissions.network,
-        &app.granted_permissions.network.whitelist,
+        &granted_permissions.network.whitelist,
     )
         .map_err(|err| {
-            io::Error::other(format!(
-                "invalid granted network whitelist for update: {err}"
-            ))
+            io::Error::other(format!("invalid granted network whitelist for update: {err}"))
         })?;
 
     let permission_flags = resolve_granted_permission_flags(
@@ -181,9 +157,7 @@ pub async fn apply_app_update(
         Some(&app.permission_flags),
     )
         .map_err(|err| {
-            io::Error::other(format!(
-                "invalid granted permission policy for update: {err}"
-            ))
+            io::Error::other(format!("invalid granted permission policy for update: {err}"))
         })?;
 
     let install_dir = PathBuf::from(&app.install_dir);
@@ -195,16 +169,19 @@ pub async fn apply_app_update(
         &pending.manifest_hash,
     )
         .await
-        .map_err(|err| {
-            io::Error::other(format!(
-                "failed to download update snapshot: {err}"
-            ))
-        })?;
+        .map_err(|err| io::Error::other(format!("failed to download update snapshot: {err}")))?;
 
     app.name = pending.manifest.name.clone();
     app.version = pending.manifest.version.clone();
     app.requested_permissions = pending.manifest.permissions.clone();
-    app.granted_permissions = granted_permissions;
+
+    app.granted_permissions = SageGrantedPermissions {
+        capabilities: granted_permissions.capabilities,
+        network: crate::apps::types::SageGrantedNetworkPermissions {
+            whitelist: granted_network_whitelist,
+        },
+    };
+
     app.permission_flags = permission_flags;
     app.active_snapshot = snapshot;
     app.entry_file = manifest_entry_file(&app.active_snapshot.manifest).to_string();
@@ -212,11 +189,7 @@ pub async fn apply_app_update(
     app.pending_update = None;
 
     write_installed_app_metadata(&app, &install_dir)
-        .map_err(|err| {
-            io::Error::other(format!(
-                "failed to write app metadata: {err}"
-            ))
-        })?;
+        .map_err(|err| io::Error::other(format!("failed to write app metadata: {err}")))?;
 
     Ok(app)
 }
@@ -256,7 +229,13 @@ pub async fn apps_update_permissions(
         permission_flags = clear_storage_may_contain_secrets(&permission_flags);
     }
 
-    app.granted_permissions = granted_permissions;
+    app.granted_permissions = SageGrantedPermissions {
+        capabilities: granted_permissions.capabilities,
+        network: crate::apps::types::SageGrantedNetworkPermissions {
+            whitelist: granted_network_whitelist,
+        },
+    };
+
     app.permission_flags = resolve_granted_permission_flags(
         &app.granted_permissions.capabilities,
         Some(&permission_flags),

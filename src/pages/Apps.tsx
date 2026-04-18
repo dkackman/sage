@@ -12,6 +12,7 @@ import {
 import {
   SageAppPackageManifest,
   SageAppUrlPreview,
+  SageGrantedPermissions,
   SageNetworkPermissionTarget,
 } from '@/bindings.ts';
 import { invoke } from '@tauri-apps/api/core';
@@ -26,6 +27,7 @@ import { useNavigate } from 'react-router-dom';
 import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEditor.tsx';
 import { AppTile } from '@/components/apps/AppTile';
 import { formatAppError } from '@/lib/apps/formatAppError.ts';
+import { AppUpdateDialog } from '@/components/apps/AppUpdateDialog.tsx';
 
 type InstalledEntry = ReturnType<typeof useApps>['apps'][number] & {
   kind: 'installed';
@@ -107,6 +109,15 @@ export function Apps() {
   const [permissionsDialogError, setPermissionsDialogError] = useState<
     string | null
   >(null);
+  const [updateDialogApp, setUpdateDialogApp] = useState<InstalledEntry | null>(
+    null,
+  );
+  const [updateDialogPreview, setUpdateDialogPreview] =
+    useState<SageAppUrlPreview | null>(null);
+  const [updateDialogBusy, setUpdateDialogBusy] = useState(false);
+  const [updateDialogError, setUpdateDialogError] = useState<string | null>(
+    null,
+  );
   const [pendingPermissionsRetry, setPendingPermissionsRetry] =
     useState<PendingPermissionsRetry>(null);
   const [editingGrantedPermissions, setEditingGrantedPermissions] = useState<
@@ -168,6 +179,44 @@ export function Apps() {
   const contextMenuClearDataError = contextMenu
     ? (clearDataErrorByAppId[contextMenu.app.id] ?? null)
     : null;
+
+  function openUpdateDialog(app: InstalledEntry, preview: SageAppUrlPreview) {
+    setUpdateDialogApp(app);
+    setUpdateDialogPreview(preview);
+    setUpdateDialogBusy(false);
+    setUpdateDialogError(null);
+  }
+
+  function closeUpdateDialog() {
+    setUpdateDialogApp(null);
+    setUpdateDialogPreview(null);
+    setUpdateDialogBusy(false);
+    setUpdateDialogError(null);
+  }
+
+  const handleConfirmUpdate = useCallback(
+    async (
+      app: InstalledEntry,
+      nextGrantedPermissions: SageGrantedPermissions,
+    ) => {
+      try {
+        setUpdateDialogBusy(true);
+        setUpdateDialogError(null);
+
+        await performAppUpdate(app.id, nextGrantedPermissions, {
+          restartIfRunning: true,
+          visibleAfterRestart: runningAppIds.has(app.id),
+        });
+
+        closeUpdateDialog();
+      } catch (err) {
+        setUpdateDialogError(formatAppError(err));
+      } finally {
+        setUpdateDialogBusy(false);
+      }
+    },
+    [performAppUpdate, runningAppIds],
+  );
 
   const closeContextMenu = useCallback(() => {
     setContextMenu((prevContextMenu) => {
@@ -678,18 +727,12 @@ export function Apps() {
             void handleCheckForUpdate(contextMenu.app.id);
           }}
           onUpdate={() => {
-            if (!contextMenu) {
+            if (!contextMenu || !contextMenuPreview) {
               return;
             }
 
-            void performAppUpdate(
-              contextMenu.app.id,
-              contextMenu.app.grantedPermissions,
-              {
-                restartIfRunning: true,
-                visibleAfterRestart: contextMenuAppIsRunning,
-              },
-            );
+            closeContextMenu();
+            openUpdateDialog(contextMenu.app, contextMenuPreview);
           }}
           onChangePermissions={() => {
             if (!contextMenu) {
@@ -830,6 +873,25 @@ export function Apps() {
           ) : null}
         </DialogContent>
       </Dialog>
+      <AppUpdateDialog
+        open={!!updateDialogApp && !!updateDialogPreview}
+        app={updateDialogApp}
+        preview={updateDialogPreview}
+        submitting={updateDialogBusy}
+        error={updateDialogError}
+        onCancel={() => {
+          if (!updateDialogBusy) {
+            closeUpdateDialog();
+          }
+        }}
+        onConfirm={(nextGranted) => {
+          if (!updateDialogApp) {
+            return;
+          }
+
+          void handleConfirmUpdate(updateDialogApp, nextGranted);
+        }}
+      />
     </>
   );
 }

@@ -12,8 +12,15 @@ import { useApps } from '@/contexts/AppsContext.tsx';
 import { useAppPendingApprovals } from '@/hooks/useAppPendingApprovals.ts';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes';
 import { focusRuntime, killRuntime } from '@/lib/apps/runtimeRegistry';
+import { formatAppError } from '@/lib/apps/formatAppError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
+import type {
+  InstalledSageApp,
+  SageAppUrlPreview,
+  SageGrantedPermissions,
+} from '@/bindings';
+import { AppUpdateDialog } from '@/components/apps/AppUpdateDialog.tsx';
 
 export function AppsWorkspace() {
   const { appId } = useParams();
@@ -35,21 +42,25 @@ export function AppsWorkspace() {
   const [approvalExpanded, setApprovalExpanded] = useState(false);
   const [applyingUpdate, setApplyingUpdate] = useState(false);
   const [tabOrder, setTabOrder] = useState<string[]>([]);
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updateDialogError, setUpdateDialogError] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     setTabOrder((prev) => {
       const runtimeIds = runtimes.map((runtime) => runtime.appId);
-
       const kept = prev.filter((appId) => runtimeIds.includes(appId));
       const added = runtimeIds.filter((appId) => !kept.includes(appId));
-
       return [...kept, ...added];
     });
   }, [runtimes]);
 
-  const activeApp = appId ? getApp(appId) : null;
-  const activeUpdatePreview = activeApp
-    ? updateAvailability[activeApp.id]
+  const activeApp: InstalledSageApp | null = appId
+    ? (getApp(appId) ?? null)
+    : null;
+  const activeUpdatePreview: SageAppUrlPreview | null = activeApp
+    ? (updateAvailability[activeApp.id] ?? null)
     : null;
   const activeBusy = activeApp ? (busyAppIds[activeApp.id] ?? false) : false;
 
@@ -107,26 +118,30 @@ export function AppsWorkspace() {
     return null;
   }, [currentApproval]);
 
-  const handleApplyUpdate = useCallback(async () => {
-    if (!activeApp) {
-      return;
-    }
+  const handleConfirmUpdate = useCallback(
+    async (nextGrantedPermissions: SageGrantedPermissions) => {
+      if (!activeApp) {
+        return;
+      }
 
-    try {
-      setApplyingUpdate(true);
+      try {
+        setApplyingUpdate(true);
+        setUpdateDialogError(null);
 
-      await performAppUpdate(
-        activeApp.id,
-        activeApp.grantedPermissions,
-        {
+        await performAppUpdate(activeApp.id, nextGrantedPermissions, {
           restartIfRunning: true,
           visibleAfterRestart: true,
-        },
-      );
-    } finally {
-      setApplyingUpdate(false);
-    }
-  }, [activeApp, performAppUpdate]);
+        });
+
+        setUpdateDialogOpen(false);
+      } catch (err) {
+        setUpdateDialogError(formatAppError(err));
+      } finally {
+        setApplyingUpdate(false);
+      }
+    },
+    [activeApp, performAppUpdate],
+  );
 
   return (
     <div className='flex h-full min-h-0 w-full flex-col overflow-hidden'>
@@ -177,10 +192,11 @@ export function AppsWorkspace() {
               variant='outline'
               disabled={activeBusy || applyingUpdate}
               onClick={() => {
-                void handleApplyUpdate();
+                setUpdateDialogError(null);
+                setUpdateDialogOpen(true);
               }}
             >
-              {applyingUpdate ? 'Updating...' : 'Update and reopen'}
+              {applyingUpdate ? 'Updating...' : 'Review update'}
             </Button>
           </AlertDescription>
         </Alert>
@@ -189,6 +205,23 @@ export function AppsWorkspace() {
       <div className='flex-1 min-h-0 overflow-hidden'>
         <Outlet context={{ requestApproval }} />
       </div>
+
+      <AppUpdateDialog
+        open={updateDialogOpen}
+        app={activeApp}
+        preview={activeUpdatePreview}
+        submitting={applyingUpdate}
+        error={updateDialogError}
+        onCancel={() => {
+          if (!applyingUpdate) {
+            setUpdateDialogOpen(false);
+            setUpdateDialogError(null);
+          }
+        }}
+        onConfirm={(nextGranted) => {
+          void handleConfirmUpdate(nextGranted);
+        }}
+      />
     </div>
   );
 }
