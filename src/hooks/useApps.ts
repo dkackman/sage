@@ -1,9 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type {
+import  {
   InstalledSageApp,
   ListedSageApp,
-  SageAppUrlPreview,
+  SageAppUrlPreview, SageGrantedPermissions,
   SageNetworkPermissionTarget,
 } from '@/bindings.ts';
 import {
@@ -100,8 +100,12 @@ export function useAppsInternal() {
     ) => {
       await invoke<InstalledSageApp>('install_app_zip', {
         zipPath,
-        grantedPermissions: permissions,
-        grantedNetworkWhitelist: networkWhitelist,
+        grantedPermissions: {
+          capabilities: permissions,
+          network: {
+            whitelist: networkWhitelist,
+          },
+        },
       });
       await refresh();
     },
@@ -116,8 +120,12 @@ export function useAppsInternal() {
     ) => {
       await invoke<InstalledSageApp>('install_app_url', {
         appUrl,
-        grantedPermissions: permissions,
-        grantedNetworkWhitelist: networkWhitelist,
+        grantedPermissions: {
+          capabilities: permissions,
+          network: {
+            whitelist: networkWhitelist,
+          },
+        },
       });
       await refresh();
     },
@@ -223,7 +231,7 @@ export function useAppsInternal() {
   );
 
   const applyUpdate = useCallback(
-    async (appId: string, grantedPermissions: string[]) => {
+    async (appId: string, grantedPermissions: SageGrantedPermissions) => {
       try {
         setBusy(appId, true);
         const installed = await invoke<InstalledSageApp>('apply_app_update', {
@@ -248,7 +256,7 @@ export function useAppsInternal() {
   const performAppUpdate = useCallback(
     async (
       appId: string,
-      grantedPermissions: string[],
+      grantedPermissions: SageGrantedPermissions,
       options?: { restartIfRunning?: boolean; visibleAfterRestart?: boolean },
     ) => {
       const restartIfRunning = options?.restartIfRunning ?? false;

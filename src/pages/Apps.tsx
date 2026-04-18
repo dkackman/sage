@@ -305,8 +305,12 @@ export function Apps() {
       try {
         await invoke('apps_update_permissions', {
           appId: app.id,
-          grantedPermissions: nextPermissions,
-          grantedNetworkWhitelist: nextNetworkWhitelist,
+          grantedPermissions: {
+            capabilities: nextPermissions,
+            network: {
+              whitelist: nextNetworkWhitelist,
+            },
+          },
           clearStorageTaint: false,
         });
 
@@ -677,7 +681,7 @@ export function Apps() {
 
             void performAppUpdate(
               contextMenu.app.id,
-              contextMenu.app.grantedPermissions?.capabilities,
+              contextMenu.app.grantedPermissions,
               {
                 restartIfRunning: true,
                 visibleAfterRestart: contextMenuAppIsRunning,

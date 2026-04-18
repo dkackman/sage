@@ -117,7 +117,7 @@ export function AppsWorkspace() {
 
       await performAppUpdate(
         activeApp.id,
-        activeApp.grantedPermissions.capabilities,
+        activeApp.grantedPermissions,
         {
           restartIfRunning: true,
           visibleAfterRestart: true,
