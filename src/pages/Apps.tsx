@@ -19,7 +19,7 @@ import { LayoutGrid, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEditor.tsx';
-import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy.ts';
+import { AppTile } from '@/components/apps/AppTile.tsx';
 
 type InstalledEntry = ReturnType<typeof useApps>['apps'][number] & {
   kind: 'installed';
@@ -530,88 +530,47 @@ export function Apps() {
 
           {installedApps.length > 0 ? (
             <div className='grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'>
-              {installedApps.map((app) => {
-                const iconSrc = `sage-app://${app.id}/${app.iconFile}`;
-                const launchGate = getSandboxLaunchDecision({
-                  app,
-                  sandboxState,
-                });
+              {installedApps.map((app) => (
+                <AppTile
+                  key={app.id}
+                  app={app}
+                  sandboxState={sandboxState}
+                  onOpen={() => {
+                    navigate(`/apps/${app.id}`);
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
 
-                return (
-                  <button
-                    key={app.id}
-                    type='button'
-                    onClick={() => {
-                      const decision = getSandboxLaunchDecision({
-                        app,
-                        sandboxState,
-                      });
+                    const pageEl = pageRef.current;
+                    if (!pageEl) {
+                      return;
+                    }
 
-                      if (!decision.allowed) {
-                        return;
-                      }
+                    const pageRect = pageEl.getBoundingClientRect();
 
-                      navigate(`/apps/${app.id}`);
-                    }}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
+                    const localX = event.clientX - pageRect.left;
+                    const localY = event.clientY - pageRect.top;
 
-                      const pageEl = pageRef.current;
-                      if (!pageEl) {
-                        return;
-                      }
+                    const position = clampContextMenuPosition({
+                      x: localX,
+                      y: localY,
+                      containerWidth: pageRect.width,
+                      containerHeight: pageRect.height,
+                    });
 
-                      const pageRect = pageEl.getBoundingClientRect();
+                    setClearDataErrorByAppId((prev) => ({
+                      ...prev,
+                      [app.id]: null,
+                    }));
 
-                      const localX = event.clientX - pageRect.left;
-                      const localY = event.clientY - pageRect.top;
-
-                      const position = clampContextMenuPosition({
-                        x: localX,
-                        y: localY,
-                        containerWidth: pageRect.width,
-                        containerHeight: pageRect.height,
-                      });
-
-                      setClearDataErrorByAppId((prev) => ({
-                        ...prev,
-                        [app.id]: null,
-                      }));
-
-                      setContextMenu({
-                        app,
-                        x: position.x,
-                        y: position.y,
-                      });
-                    }}
-                    className='group flex flex-col items-center gap-3 rounded-2xl p-4 text-center transition-colors hover:bg-muted/50'
-                  >
-                    <div className='flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border bg-background shadow-sm'>
-                      <img
-                        src={iconSrc}
-                        alt=''
-                        className='h-full w-full object-cover'
-                      />
-                    </div>
-
-                    <div className='min-w-0 w-full'>
-                      <div className='truncate text-sm font-medium'>
-                        {app.name}
-                      </div>
-
-                      <div className='truncate text-xs text-muted-foreground'>
-                        v{app.version}
-                      </div>
-
-                      {!launchGate.allowed ? (
-                        <div className='mt-1 text-xs text-amber-600'>
-                          {launchGate.title}
-                        </div>
-                      ) : null}
-                    </div>
-                  </button>
-                );
-              })}
+                    setContextMenu({
+                      app,
+                      x: position.x,
+                      y: position.y,
+                    });
+                  }}
+                />
+              ))}
             </div>
           ) : null}
 

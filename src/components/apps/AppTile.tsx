@@ -1,0 +1,70 @@
+import type { InstalledSageApp } from '@/bindings';
+import type { SandboxState } from '@/lib/apps/sandbox';
+import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
+
+interface Props {
+  app: InstalledSageApp;
+  sandboxState: SandboxState;
+  onOpen: () => void;
+  onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => void;
+}
+
+export function AppTile({ app, sandboxState, onOpen, onContextMenu }: Props) {
+  const iconSrc = `sage-app://${app.id}/${app.iconFile}`;
+  const decision = getSandboxLaunchDecision({
+    app,
+    sandboxState,
+  });
+
+  const isChecking =
+    !decision.allowed &&
+    decision.title === 'Sandbox tests are still running';
+
+  const isBlocked = !decision.allowed && !isChecking;
+
+  return (
+    <button
+      type='button'
+      onClick={() => {
+        if (!decision.allowed) {
+          return;
+        }
+
+        onOpen();
+      }}
+      onContextMenu={onContextMenu}
+      className='relative group flex flex-col items-center gap-3 rounded-2xl p-4 text-center transition-colors hover:bg-muted/50'
+    >
+      {isChecking || isBlocked ? (
+        <div className='absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/55 backdrop-blur-[1px]'>
+          {isChecking ? (
+            <div className='flex flex-col items-center gap-2'>
+              <div className='h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground' />
+              <div className='text-xs text-muted-foreground'>Checking…</div>
+            </div>
+          ) : (
+            <div className='px-3 text-center text-xs font-medium text-amber-600'>
+              Blocked
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      <div className='flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border bg-background shadow-sm'>
+        <img src={iconSrc} alt='' className='h-full w-full object-cover' />
+      </div>
+
+      <div className='min-w-0 w-full'>
+        <div className='truncate text-sm font-medium'>{app.name}</div>
+
+        <div className='truncate text-xs text-muted-foreground'>
+          v{app.version}
+        </div>
+
+        {!decision.allowed && !isChecking ? (
+          <div className='mt-1 text-xs text-amber-600'>{decision.title}</div>
+        ) : null}
+      </div>
+    </button>
+  );
+}

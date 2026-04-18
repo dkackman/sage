@@ -6,15 +6,14 @@ import type {
   SageAppUrlPreview,
 } from '@/bindings.ts';
 import {
-  buildCompletedSandboxState,
   buildInitialSandboxState,
   buildRunningSandboxState,
   evaluateAppLaunchGate,
   setStorageClearCapabilityPassed,
   type SandboxState,
 } from '@/lib/apps/sandbox';
-import { runSandboxTests } from '@/lib/apps/sandbox-tests';
 import { clearAppDataStore } from '@/lib/apps/storageClearCycle';
+import { runSandboxTestsIncremental } from '@/lib/apps/sandbox-tests';
 
 type UpdateAvailabilityMap = Record<string, SageAppUrlPreview | null>;
 
@@ -59,47 +58,30 @@ export function useAppsInternal() {
     setStorageClearCapabilityPassed(false);
 
     try {
-      const next = await runSandboxTests();
-      setSandboxState(next);
-      setStorageClearCapabilityPassed(
-        next.capabilities.storage_clear_cycle.status === 'passed',
-      );
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : (() => {
-              try {
-                return JSON.stringify(err, null, 2);
-              } catch {
-                return String(err);
-              }
-            })();
-
-      const failed = buildCompletedSandboxState({
-        isolation: {
-          passed: false,
-          details: message,
-        },
-        persistenceNormal: {
-          passed: false,
-          details: 'Skipped because sandbox run failed before completion.',
-        },
-        persistenceIncognito: {
-          passed: false,
-          details: 'Skipped because sandbox run failed before completion.',
-        },
-        clearCycle: {
-          passed: false,
-          details: 'Skipped because sandbox run failed before completion.',
-        },
-        network: {
-          passed: false,
-          details: 'Skipped because sandbox run failed before completion.',
-        },
+      const finalState = await runSandboxTestsIncremental((next) => {
+        setSandboxState({ ...next });
       });
 
-      setSandboxState(failed);
+      setStorageClearCapabilityPassed(
+        finalState.capabilities.storage_clear_cycle.status === 'passed',
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+
+      setSandboxState((prev) => ({
+        ...prev,
+        overallCriticalStatus: 'failed',
+        finishedAt: Date.now(),
+        capabilities: {
+          ...prev.capabilities,
+          storage_isolation_from_sage: {
+            status: 'failed',
+            checkedAt: Date.now(),
+            details: message,
+          },
+        },
+      }));
+
       setStorageClearCapabilityPassed(false);
     }
   }, []);
