@@ -389,8 +389,8 @@ async downloadAppUpdate(appId: string) : Promise<InstalledSageApp> {
 async applyAppUpdate(appId: string, grantedPermissions: string[]) : Promise<InstalledSageApp> {
     return await TAURI_INVOKE("apply_app_update", { appId, grantedPermissions });
 },
-async appsUpdatePermissions(appId: string, grantedPermissions: string[]) : Promise<null> {
-    return await TAURI_INVOKE("apps_update_permissions", { appId, grantedPermissions });
+async appsUpdatePermissions(appId: string, grantedPermissions: string[], clearStorageTaint: boolean) : Promise<null> {
+    return await TAURI_INVOKE("apps_update_permissions", { appId, grantedPermissions, clearStorageTaint });
 }
 }
 

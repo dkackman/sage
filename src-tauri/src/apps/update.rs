@@ -11,6 +11,7 @@ use crate::{
     app_state::AppState,
     apps::{
         permissions::{
+            clear_storage_may_contain_secrets, mark_storage_may_contain_secrets,
             resolve_granted_permission_flags, validate_granted_permissions,
         },
         registry::{read_installed_app_by_id, write_installed_app_metadata},
@@ -51,9 +52,7 @@ pub async fn check_app_update(
 
     let preview = preview_app_url_internal(app_url)
         .await
-        .map_err(|err| {
-            io::Error::other(format!("failed to preview app URL: {err}"))
-        })?;
+        .map_err(|err| io::Error::other(format!("failed to preview app URL: {err}")))?;
 
     if preview.manifest_hash == app.active_snapshot.manifest_hash {
         return Ok(None);
@@ -113,11 +112,7 @@ pub async fn download_app_update(
 
     let install_dir = PathBuf::from(&app.install_dir);
     write_installed_app_metadata(&app, &install_dir)
-        .map_err(|err| {
-            io::Error::other(format!(
-                "failed to write app metadata: {err}"
-            ))
-        })?;
+        .map_err(|err| io::Error::other(format!("failed to write app metadata: {err}")))?;
 
     Ok(app)
 }
@@ -155,15 +150,13 @@ pub async fn apply_app_update(
             ))
         })?;
 
-    let permission_flags = resolve_granted_permission_flags(
-        &granted_permissions,
-        Some(&app.permission_flags),
-    )
-        .map_err(|err| {
-            io::Error::other(format!(
-                "invalid granted permission policy for update: {err}"
-            ))
-        })?;
+    let permission_flags =
+        resolve_granted_permission_flags(&granted_permissions, Some(&app.permission_flags))
+            .map_err(|err| {
+                io::Error::other(format!(
+                    "invalid granted permission policy for update: {err}"
+                ))
+            })?;
 
     let install_dir = PathBuf::from(&app.install_dir);
 
@@ -197,11 +190,7 @@ pub async fn apply_app_update(
     app.pending_update = None;
 
     write_installed_app_metadata(&app, &install_dir)
-        .map_err(|err| {
-            io::Error::other(format!(
-                "failed to write app metadata: {err}"
-            ))
-        })?;
+        .map_err(|err| io::Error::other(format!("failed to write app metadata: {err}")))?;
 
     Ok(app)
 }
@@ -212,8 +201,8 @@ pub async fn apps_update_permissions(
     state: State<'_, AppState>,
     app_id: String,
     granted_permissions: Vec<String>,
+    clear_storage_taint: bool,
 ) -> Result<()> {
-
     let base_path = {
         let state = state.lock().await;
         state.path.clone()
@@ -222,14 +211,77 @@ pub async fn apps_update_permissions(
     let mut app = read_installed_app_by_id(&base_path, &app_id)
         .map_err(|err| io::Error::other(format!("failed to read app {app_id}: {err}")))?;
 
-    // overwrite granted permissions
+    validate_granted_permissions(&app.requested_permissions, &granted_permissions)
+        .map_err(|err| io::Error::other(format!("invalid granted permissions: {err}")))?;
+
+    let mut permission_flags =
+        resolve_granted_permission_flags(&granted_permissions, Some(&app.permission_flags))
+            .map_err(|err| io::Error::other(err.to_string()))?;
+
+    if clear_storage_taint {
+        permission_flags = clear_storage_may_contain_secrets(&permission_flags);
+
+        permission_flags =
+            resolve_granted_permission_flags(&granted_permissions, Some(&permission_flags))
+                .map_err(|err| io::Error::other(err.to_string()))?;
+    }
+
     app.granted_permissions = granted_permissions;
-    // recompute derived flags
-    app.permission_flags = resolve_granted_permission_flags(
-        &app.granted_permissions,
-        Some(&app.permission_flags),
-    )
-        .map_err(|err| io::Error::other(err.to_string()))?;
+    app.permission_flags = permission_flags;
+
+    let install_dir = PathBuf::from(&app.install_dir);
+    write_installed_app_metadata(&app, &install_dir)
+        .map_err(|err| io::Error::other(format!("failed to write metadata: {err}")))?;
+
+    Ok(())
+}
+
+#[command]
+#[specta::specta]
+pub async fn apps_mark_storage_may_contain_secrets(
+    state: State<'_, AppState>,
+    app_id: String,
+) -> Result<()> {
+    let base_path = {
+        let state = state.lock().await;
+        state.path.clone()
+    };
+
+    let mut app = read_installed_app_by_id(&base_path, &app_id)
+        .map_err(|err| io::Error::other(format!("failed to read app {app_id}: {err}")))?;
+
+    if !app.permission_flags.has_secret_access {
+        return Ok(());
+    }
+
+    if app.permission_flags.storage_may_contain_secrets {
+        return Ok(());
+    }
+
+    app.permission_flags = mark_storage_may_contain_secrets(&app.permission_flags);
+
+    let install_dir = PathBuf::from(&app.install_dir);
+    write_installed_app_metadata(&app, &install_dir)
+        .map_err(|err| io::Error::other(format!("failed to write metadata: {err}")))?;
+
+    Ok(())
+}
+
+#[command]
+#[specta::specta]
+pub async fn apps_clear_storage_may_contain_secrets(
+    state: State<'_, AppState>,
+    app_id: String,
+) -> Result<()> {
+    let base_path = {
+        let state = state.lock().await;
+        state.path.clone()
+    };
+
+    let mut app = read_installed_app_by_id(&base_path, &app_id)
+        .map_err(|err| io::Error::other(format!("failed to read app {app_id}: {err}")))?;
+
+    app.permission_flags = clear_storage_may_contain_secrets(&app.permission_flags);
 
     let install_dir = PathBuf::from(&app.install_dir);
     write_installed_app_metadata(&app, &install_dir)

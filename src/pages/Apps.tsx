@@ -226,20 +226,10 @@ export function Apps() {
 
   const handleApplyPermissions = useCallback(
     async (app: InstalledEntry, nextPermissions: string[]) => {
-      const prev = new Set(app.grantedPermissions);
-      const next = new Set(nextPermissions);
-
-      const storageChanged =
-        prev.has('persistent_storage') !== next.has('persistent_storage');
-
       await invoke('apps_update_permissions', {
         appId: app.id,
         grantedPermissions: nextPermissions,
       });
-
-      if (storageChanged) {
-        await clearAppStorage(app.id);
-      }
 
       const isRunning = runningAppIds.has(app.id);
       if (isRunning) {
@@ -253,7 +243,7 @@ export function Apps() {
       await refresh();
       closePermissionsDialog();
     },
-    [runningAppIds, navigate, refresh, closePermissionsDialog, clearAppStorage],
+    [runningAppIds, navigate, refresh, closePermissionsDialog],
   );
 
   useEffect(() => {

@@ -5,6 +5,7 @@ import { platform } from '@tauri-apps/plugin-os';
 import { removeDataStore } from '@tauri-apps/api/app';
 import { BaseDirectory, remove } from '@tauri-apps/plugin-fs';
 import { isStorageClearCapabilityPassed } from '@/lib/apps/sandbox';
+import { invoke } from '@tauri-apps/api/core';
 
 export type SageAppRuntimeState =
   | 'starting'
@@ -274,6 +275,9 @@ async function createInlineRuntime(
   const webviewOptions = await buildWebviewOptions(app, entrySrc, {
     visible: options?.visible,
   });
+  if (!shouldUseIncognito(app) && app.permissionFlags.hasSecretAccess) {
+    await invoke('apps_mark_storage_may_contain_secrets', { appId: app.id });
+  }
 
   const webview = new Webview(hostWindow, webviewLabel, webviewOptions);
 

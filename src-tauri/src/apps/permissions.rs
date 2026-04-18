@@ -111,23 +111,18 @@ pub fn resolve_granted_permission_flags(
         .map(|flags| flags.storage_may_contain_secrets)
         .unwrap_or(false);
 
-    let storage_may_contain_secrets = if summary.persistent_storage {
-        previous_storage_may_contain_secrets || summary.accesses_sensitive_secret
-    } else {
-        false
-    };
-
-    let has_secret_access =
-        summary.accesses_sensitive_secret || storage_may_contain_secrets;
+    let has_secret_access = summary.accesses_sensitive_secret;
     let has_external_access = summary.externally_observable;
 
-    if has_external_access && summary.accesses_sensitive_secret {
+    let storage_may_contain_secrets = previous_storage_may_contain_secrets;
+
+    if has_external_access && has_secret_access {
         return Err(anyhow!(
             "cannot grant externally observable permissions together with sensitive secret access permissions"
         ));
     }
 
-    if has_external_access && !summary.accesses_sensitive_secret && storage_may_contain_secrets {
+    if has_external_access && storage_may_contain_secrets {
         return Err(anyhow!(
             "before you can grant externally observable permissions, you need to clear storage that may contain cached secrets"
         ));
@@ -137,6 +132,28 @@ pub fn resolve_granted_permission_flags(
         has_secret_access,
         has_external_access,
         storage_may_contain_secrets,
-        isolated: has_secret_access,
+        isolated: has_secret_access || storage_may_contain_secrets,
     })
+}
+
+pub fn mark_storage_may_contain_secrets(
+    flags: &InstalledSageAppPermissionFlags,
+) -> InstalledSageAppPermissionFlags {
+    InstalledSageAppPermissionFlags {
+        has_secret_access: flags.has_secret_access,
+        has_external_access: flags.has_external_access,
+        storage_may_contain_secrets: true,
+        isolated: true,
+    }
+}
+
+pub fn clear_storage_may_contain_secrets(
+    flags: &InstalledSageAppPermissionFlags,
+) -> InstalledSageAppPermissionFlags {
+    InstalledSageAppPermissionFlags {
+        has_secret_access: flags.has_secret_access,
+        has_external_access: flags.has_external_access,
+        storage_may_contain_secrets: false,
+        isolated: flags.has_secret_access,
+    }
 }
