@@ -1,11 +1,8 @@
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::{io, path::PathBuf};
 
 use tauri::{command, State};
 
-use crate::apps::install::preview_app_url_internal;
+use crate::apps::install::{manifest_entry_file, manifest_icon_file, preview_app_url_internal};
 
 use crate::{
     app_state::AppState,
@@ -52,7 +49,9 @@ pub async fn check_app_update(
 
     let preview = preview_app_url_internal(app_url)
         .await
-        .map_err(|err| io::Error::other(format!("failed to preview app URL: {err}")))?;
+        .map_err(|err| {
+            io::Error::other(format!("failed to preview app URL: {err}"))
+        })?;
 
     if preview.manifest_hash == app.active_snapshot.manifest_hash {
         return Ok(None);
@@ -112,7 +111,11 @@ pub async fn download_app_update(
 
     let install_dir = PathBuf::from(&app.install_dir);
     write_installed_app_metadata(&app, &install_dir)
-        .map_err(|err| io::Error::other(format!("failed to write app metadata: {err}")))?;
+        .map_err(|err| {
+            io::Error::other(format!(
+                "failed to write app metadata: {err}"
+            ))
+        })?;
 
     Ok(app)
 }
@@ -150,13 +153,15 @@ pub async fn apply_app_update(
             ))
         })?;
 
-    let permission_flags =
-        resolve_granted_permission_flags(&granted_permissions, Some(&app.permission_flags))
-            .map_err(|err| {
-                io::Error::other(format!(
-                    "invalid granted permission policy for update: {err}"
-                ))
-            })?;
+    let permission_flags = resolve_granted_permission_flags(
+        &granted_permissions,
+        Some(&app.permission_flags),
+    )
+        .map_err(|err| {
+            io::Error::other(format!(
+                "invalid granted permission policy for update: {err}"
+            ))
+        })?;
 
     let install_dir = PathBuf::from(&app.install_dir);
 
@@ -179,12 +184,16 @@ pub async fn apply_app_update(
     app.granted_permissions = granted_permissions;
     app.permission_flags = permission_flags;
     app.active_snapshot = snapshot;
-    app.entry_file = "index.html".to_string();
-    app.icon_file = "icon.png".to_string();
+    app.entry_file = manifest_entry_file(&app.active_snapshot.manifest).to_string();
+    app.icon_file = manifest_icon_file(&app.active_snapshot.manifest).to_string();
     app.pending_update = None;
 
     write_installed_app_metadata(&app, &install_dir)
-        .map_err(|err| io::Error::other(format!("failed to write app metadata: {err}")))?;
+        .map_err(|err| {
+            io::Error::other(format!(
+                "failed to write app metadata: {err}"
+            ))
+        })?;
 
     Ok(app)
 }
@@ -197,6 +206,7 @@ pub async fn apps_update_permissions(
     granted_permissions: Vec<String>,
     clear_storage_taint: bool,
 ) -> Result<()> {
+
     let base_path = {
         let state = state.lock().await;
         state.path.clone()
@@ -208,20 +218,22 @@ pub async fn apps_update_permissions(
     validate_granted_permissions(&app.requested_permissions, &granted_permissions)
         .map_err(|err| io::Error::other(format!("invalid granted permissions: {err}")))?;
 
-    let mut permission_flags =
-        resolve_granted_permission_flags(&granted_permissions, Some(&app.permission_flags))
-            .map_err(|err| io::Error::other(err.to_string()))?;
+    let mut permission_flags = resolve_granted_permission_flags(
+        &app.granted_permissions,
+        Some(&app.permission_flags),
+    )
+        .map_err(|err| io::Error::other(err.to_string()))?;
 
     if clear_storage_taint {
         permission_flags = clear_storage_may_contain_secrets(&permission_flags);
-
-        permission_flags =
-            resolve_granted_permission_flags(&granted_permissions, Some(&permission_flags))
-                .map_err(|err| io::Error::other(err.to_string()))?;
     }
 
     app.granted_permissions = granted_permissions;
-    app.permission_flags = permission_flags;
+    app.permission_flags = resolve_granted_permission_flags(
+        &app.granted_permissions,
+        Some(&permission_flags),
+    )
+        .map_err(|err| io::Error::other(err.to_string()))?;
 
     let install_dir = PathBuf::from(&app.install_dir);
     write_installed_app_metadata(&app, &install_dir)

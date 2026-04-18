@@ -111,6 +111,14 @@ fn normalize_manifest_permissions(
     Ok(manifest)
 }
 
+pub fn manifest_entry_file(manifest: &SageAppPackageManifest) -> &str {
+    manifest.entry.as_deref().unwrap_or("index.html")
+}
+
+pub fn manifest_icon_file(manifest: &SageAppPackageManifest) -> &str {
+    manifest.icon.as_deref().unwrap_or("icon.png")
+}
+
 pub async fn preview_app_url_internal(
     app_url: String,
 ) -> AnyResult<SageAppUrlPreview> {
@@ -261,8 +269,8 @@ pub async fn install_app_zip(
             name: manifest.name.clone(),
             version: manifest.version.clone(),
             install_dir: install_dir.to_string_lossy().to_string(),
-            entry_file: "index.html".to_string(),
-            icon_file: "icon.png".to_string(),
+            entry_file: manifest_entry_file(&manifest).to_string(),
+            icon_file: manifest_icon_file(&manifest).to_string(),
             requested_permissions: manifest.permissions.clone(),
             granted_permissions,
             permission_flags,
@@ -382,8 +390,8 @@ pub async fn install_app_url(
         name: preview.manifest.name.clone(),
         version: preview.manifest.version.clone(),
         install_dir: install_dir.to_string_lossy().to_string(),
-        entry_file: "index.html".to_string(),
-        icon_file: "icon.png".to_string(),
+        entry_file: manifest_entry_file(&preview.manifest).to_string(),
+        icon_file: manifest_icon_file(&preview.manifest).to_string(),
         requested_permissions: preview.manifest.permissions.clone(),
         granted_permissions,
         permission_flags,

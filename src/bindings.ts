@@ -2196,7 +2196,7 @@ export type ResyncCatResponse = Record<string, never>
  */
 export type ResyncResponse = Record<string, never>
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
-export type SageAppPackageManifest = { name: string; version: string; permissions?: SageAppPermissions; network?: SageNetworkPermissions | null; files?: SageAppManifestFile[] }
+export type SageAppPackageManifest = { name: string; version: string; permissions?: SageAppPermissions; network?: SageNetworkPermissions | null; files?: SageAppManifestFile[]; entry?: string | null; icon?: string | null }
 export type SageAppPermissions = { required?: string[]; optional?: string[] }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageNetworkPermissions = { whitelist?: SageNetworkWhitelistEntry[] }

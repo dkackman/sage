@@ -38,6 +38,12 @@ pub struct SageAppPackageManifest {
 
     #[serde(default)]
     pub files: Vec<SageAppManifestFile>,
+
+    #[serde(default)]
+    pub entry: Option<String>,
+
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
