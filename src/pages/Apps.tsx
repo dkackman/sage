@@ -113,6 +113,8 @@ export function Apps() {
   >([]);
   const [editingGrantedNetworkWhitelist, setEditingGrantedNetworkWhitelist] =
     useState<SageNetworkPermissionTarget[]>([]);
+  const showSandboxDebugUi =
+      import.meta.env.DEV && import.meta.env.VITE_SAGE_DEBUG_TEST_APPS === '1';
 
   const {
     apps,
@@ -516,47 +518,49 @@ export function Apps() {
         </div>
 
         <div className='mx-auto w-full max-w-7xl flex-1 min-h-0 overflow-auto px-4 pb-4 md:px-6 md:pb-6'>
-          <Alert className='mb-6'>
-            <AlertTitle>
-              {sandboxState.overallCriticalStatus === 'running'
-                ? 'Sandbox tests are running'
-                : sandboxState.overallCriticalStatus === 'passed'
-                  ? 'Sandbox tests passed'
-                  : sandboxState.overallCriticalStatus === 'failed'
-                    ? 'Sandbox tests failed'
-                    : 'Sandbox tests are pending'}
-            </AlertTitle>
+          {showSandboxDebugUi ? (
+            <Alert className='mb-6'>
+              <AlertTitle>
+                {sandboxState.overallCriticalStatus === 'running'
+                  ? 'Sandbox tests are running'
+                  : sandboxState.overallCriticalStatus === 'passed'
+                    ? 'Sandbox tests passed'
+                    : sandboxState.overallCriticalStatus === 'failed'
+                      ? 'Sandbox tests failed'
+                      : 'Sandbox tests are pending'}
+              </AlertTitle>
 
-            <AlertDescription className='space-y-3'>
-              <div>
-                Apps are allowed to launch only when all required sandbox
-                capabilities have passed.
-              </div>
+              <AlertDescription className='space-y-3'>
+                <div>
+                  Apps are allowed to launch only when all required sandbox
+                  capabilities have passed.
+                </div>
 
-              <div className='space-y-1 text-xs text-muted-foreground'>
-                {Object.entries(sandboxState.capabilities).map(
-                  ([capability, result]) => (
-                    <div key={capability}>
-                      {formatCapabilityLabel(capability as never)} —{' '}
-                      {result.status}
-                      {result.details ? ` — ${result.details}` : ''}
-                    </div>
-                  ),
-                )}
-              </div>
+                <div className='space-y-1 text-xs text-muted-foreground'>
+                  {Object.entries(sandboxState.capabilities).map(
+                    ([capability, result]) => (
+                      <div key={capability}>
+                        {formatCapabilityLabel(capability as never)} —{' '}
+                        {result.status}
+                        {result.details ? ` — ${result.details}` : ''}
+                      </div>
+                    ),
+                  )}
+                </div>
 
-              <div>
-                <Button
-                  variant='outline'
-                  onClick={() => {
-                    void rerunSandboxTests();
-                  }}
-                >
-                  Re-run tests
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
+                <div>
+                  <Button
+                    variant='outline'
+                    onClick={() => {
+                      void rerunSandboxTests();
+                    }}
+                  >
+                    Re-run tests
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
           {error ? (
             <Alert className='mb-6'>
