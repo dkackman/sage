@@ -391,6 +391,9 @@ async applyAppUpdate(appId: string, grantedPermissions: string[]) : Promise<Inst
 },
 async appsUpdatePermissions(appId: string, grantedPermissions: string[], clearStorageTaint: boolean) : Promise<null> {
     return await TAURI_INVOKE("apps_update_permissions", { appId, grantedPermissions, clearStorageTaint });
+},
+async appsMarkStorageMayContainSecrets(appId: string) : Promise<null> {
+    return await TAURI_INVOKE("apps_mark_storage_may_contain_secrets", { appId });
 }
 }
 

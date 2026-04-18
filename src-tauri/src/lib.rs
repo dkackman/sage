@@ -154,6 +154,7 @@ pub fn run() {
             apps::update::download_app_update,
             apps::update::apply_app_update,
             apps::update::apps_update_permissions,
+            apps::update::apps_mark_storage_may_contain_secrets,
         ])
         .events(collect_events![SyncEvent]);
 

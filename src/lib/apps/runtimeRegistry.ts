@@ -1,11 +1,10 @@
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview, Webview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { InstalledSageApp } from '@/bindings.ts';
 import { platform } from '@tauri-apps/plugin-os';
 import { removeDataStore } from '@tauri-apps/api/app';
 import { BaseDirectory, remove } from '@tauri-apps/plugin-fs';
-import { isStorageClearCapabilityPassed } from '@/lib/apps/sandbox';
-import { invoke } from '@tauri-apps/api/core';
 
 export type SageAppRuntimeState =
   | 'starting'
@@ -44,6 +43,12 @@ type RuntimeInternalRecord = SageAppRuntimeRecord & {
 const runtimes = new Map<string, RuntimeInternalRecord>();
 export const runtimeByAppId = new Map<string, string>();
 const listeners = new Set<RuntimeListener>();
+
+let forceIncognitoForSecretApps = false;
+
+export function setForceIncognitoForSecretApps(value: boolean) {
+  forceIncognitoForSecretApps = value;
+}
 
 function isBuiltinTestApp(app: InstalledSageApp): boolean {
   return app.id.startsWith('__sage_test_');
@@ -110,6 +115,10 @@ export function inlineLabelFor(appId: string) {
   return `app-inline-${appId}`;
 }
 
+/**
+ * Windows-only custom data directory for the webview profile.
+ * Tauri resolves this relative to appDataDir()/${webviewLabel}.
+ */
 export function dataDirectoryFor(appId: string) {
   return `profiles/${appId}`;
 }
@@ -126,15 +135,22 @@ export function dataStoreIdFor(appId: string): number[] {
 }
 
 export function shouldUseIncognito(app: InstalledSageApp): boolean {
-  if (app.permissionFlags.storageMayContainSecrets) {
-    if (!app.grantedPermissions.includes('persistent_storage')) {
-      return true;
-    }
+  const hasPersistentStorage =
+    app.grantedPermissions.includes('persistent_storage');
 
-    return !isStorageClearCapabilityPassed();
+  if (!hasPersistentStorage) {
+    return true;
   }
 
-  return !app.grantedPermissions.includes('persistent_storage');
+  if (app.permissionFlags.storageMayContainSecrets) {
+    return true;
+  }
+
+  if (forceIncognitoForSecretApps && app.permissionFlags.hasSecretAccess) {
+    return true;
+  }
+
+  return false;
 }
 
 async function supportsDataDirectory(): Promise<boolean> {
@@ -253,9 +269,9 @@ async function createInlineRuntime(
   const hostWebview = getCurrentWebview();
 
   const webviewLabel = inlineLabelFor(app.id);
-  const requestPath = options?.path ?? '/index.html';
 
-  const url = new URL(`sage-app://${app.id}${requestPath}`);
+  const entryPath = options?.path ?? `/${app.entryFile}`;
+  const url = new URL(`sage-app://${app.id}${entryPath}`);
   for (const [key, value] of Object.entries(options?.query ?? {})) {
     url.searchParams.set(key, value);
   }
@@ -272,12 +288,17 @@ async function createInlineRuntime(
   }
 
   const debug = shouldDebugTestAppWindows(app);
+  const isIncognito = shouldUseIncognito(app);
+
+  if (!isIncognito && app.permissionFlags.hasSecretAccess) {
+    await invoke('apps_mark_storage_may_contain_secrets', {
+      appId: app.id,
+    });
+  }
+
   const webviewOptions = await buildWebviewOptions(app, entrySrc, {
     visible: options?.visible,
   });
-  if (!shouldUseIncognito(app) && app.permissionFlags.hasSecretAccess) {
-    await invoke('apps_mark_storage_may_contain_secrets', { appId: app.id });
-  }
 
   const webview = new Webview(hostWindow, webviewLabel, webviewOptions);
 
@@ -463,6 +484,12 @@ async function removeAppDataDirectory(app: InstalledSageApp): Promise<void> {
   }
 }
 
+/**
+ * Best-effort host-side clear.
+ *
+ * This does NOT prove the app origin is clean; your verification cycle should
+ * still decide whether the capability passed for this environment.
+ */
 export async function clearAppRuntimeBrowsingData(
   app: InstalledSageApp,
 ): Promise<void> {

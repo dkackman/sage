@@ -272,26 +272,3 @@ pub async fn apps_mark_storage_may_contain_secrets(
 
     Ok(())
 }
-
-#[command]
-#[specta::specta]
-pub async fn apps_clear_storage_may_contain_secrets(
-    state: State<'_, AppState>,
-    app_id: String,
-) -> Result<()> {
-    let base_path = {
-        let state = state.lock().await;
-        state.path.clone()
-    };
-
-    let mut app = read_installed_app_by_id(&base_path, &app_id)
-        .map_err(|err| io::Error::other(format!("failed to read app {app_id}: {err}")))?;
-
-    app.permission_flags = clear_storage_may_contain_secrets(&app.permission_flags);
-
-    let install_dir = PathBuf::from(&app.install_dir);
-    write_installed_app_metadata(&app, &install_dir)
-        .map_err(|err| io::Error::other(format!("failed to write metadata: {err}")))?;
-
-    Ok(())
-}

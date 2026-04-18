@@ -4,6 +4,7 @@ use anyhow::{anyhow, Context, Result as AnyResult};
 use tauri::command;
 
 use crate::apps::{
+    install::{manifest_entry_file, manifest_icon_file},
     permissions::{
         normalize_and_validate_requested_permissions, resolve_granted_permission_flags,
         validate_granted_permissions,
@@ -166,27 +167,24 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
     let permission_flags =
         resolve_granted_permission_flags(&granted_permissions, None)?;
 
-    let entry_file = app_dir.join("index.html");
+    let entry_file_name = manifest_entry_file(&manifest).to_string();
+    let icon_file_name = manifest_icon_file(&manifest).to_string();
+
+    let entry_file = app_dir.join(&entry_file_name);
     if !entry_file.is_file() {
         return Err(anyhow!(
-            "builtin test app is missing index.html: {}",
+            "builtin test app entry file does not exist: {}",
             entry_file.display()
         ));
     }
 
-    let icon_svg = app_dir.join("icon.svg");
-    let icon_png = app_dir.join("icon.png");
-
-    let icon_file = if icon_svg.is_file() {
-        icon_svg
-    } else if icon_png.is_file() {
-        icon_png
-    } else {
+    let icon_file = app_dir.join(&icon_file_name);
+    if !icon_file.is_file() {
         return Err(anyhow!(
-            "builtin test app is missing icon.svg or icon.png in {}",
-            app_dir.display()
+            "builtin test app icon file does not exist: {}",
+            icon_file.display()
         ));
-    };
+    }
 
     let total_bytes = compute_total_bytes(&app_dir)?;
 
@@ -195,8 +193,8 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
         name: manifest.name.clone(),
         version: manifest.version.clone(),
         install_dir: app_dir.to_string_lossy().to_string(),
-        entry_file: entry_file.to_string_lossy().to_string(),
-        icon_file: icon_file.to_string_lossy().to_string(),
+        entry_file: entry_file_name,
+        icon_file: icon_file_name,
         requested_permissions: manifest.permissions.clone(),
         granted_permissions,
         permission_flags,
@@ -211,11 +209,6 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
     };
 
     Ok(Some(app))
-}
-
-pub fn require_builtin_test_app(app_id: &str) -> AnyResult<InstalledSageApp> {
-    build_builtin_test_app(app_id)?
-        .ok_or_else(|| anyhow!("unknown builtin test app id {}", app_id))
 }
 
 #[command]

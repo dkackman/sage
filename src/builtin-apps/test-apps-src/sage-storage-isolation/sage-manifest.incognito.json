@@ -1,6 +1,7 @@
 {
   "name": "Sage Storage Isolation",
   "version": "1.0.0",
+  "icon": "icon.svg",
   "permissions": {
     "required": [],
     "optional": []
