@@ -15,6 +15,8 @@ interface Props {
   updateCheckState: AppsLaunchpadContextMenuUpdateState;
   clearDataBusy?: boolean;
   clearDataError?: string | null;
+  clearDataEnabled?: boolean;
+  clearDataDisabledReason?: string | null;
   onClose: () => void;
   onOpen: () => void;
   onCheckForUpdate: () => void;
@@ -34,6 +36,8 @@ export function AppsLaunchpadContextMenu({
   updateCheckState,
   clearDataBusy = false,
   clearDataError = null,
+  clearDataEnabled = true,
+  clearDataDisabledReason = null,
   onClose,
   onOpen,
   onCheckForUpdate,
@@ -45,6 +49,8 @@ export function AppsLaunchpadContextMenu({
   if (!open) {
     return null;
   }
+
+  const clearDataDisabled = busy || clearDataBusy || !clearDataEnabled;
 
   return (
     <>
@@ -111,7 +117,7 @@ export function AppsLaunchpadContextMenu({
         <button
           type='button'
           className='flex w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50'
-          disabled={busy || clearDataBusy}
+          disabled={clearDataDisabled}
           onClick={onClearData}
         >
           {clearDataBusy
@@ -126,6 +132,10 @@ export function AppsLaunchpadContextMenu({
         {clearDataError ? (
           <div className='px-3 py-2 text-xs text-destructive break-words'>
             {clearDataError}
+          </div>
+        ) : !clearDataEnabled && clearDataDisabledReason ? (
+          <div className='px-3 py-2 text-xs text-muted-foreground break-words'>
+            {clearDataDisabledReason}
           </div>
         ) : null}
 

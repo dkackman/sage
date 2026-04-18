@@ -1,0 +1,194 @@
+import './bridge.js';
+import { createSageClient } from './sdk.js';
+
+const STORE_NAME = 'probe_store';
+const DB_KEY = 'probe_key';
+
+function getKeys(runId) {
+  return {
+    localStorageKey: `storage_clear_probe_local_storage:${runId}`,
+    dbName: `storage_clear_probe_db_${runId}`,
+  };
+}
+
+async function writeIndexedDbValue(dbName) {
+  try {
+    return await new Promise((resolve) => {
+      const open = indexedDB.open(dbName);
+
+      open.onerror = () => resolve(false);
+
+      open.onupgradeneeded = () => {
+        try {
+          const db = open.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME);
+          }
+        } catch {
+          //
+        }
+      };
+
+      open.onsuccess = () => {
+        try {
+          const db = open.result;
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.put('present', DB_KEY);
+
+          req.onerror = () => {
+            db.close();
+            resolve(false);
+          };
+
+          req.onsuccess = () => {
+            tx.oncomplete = () => {
+              db.close();
+              resolve(true);
+            };
+
+            tx.onerror = () => {
+              db.close();
+              resolve(false);
+            };
+          };
+        } catch {
+          resolve(false);
+        }
+      };
+    });
+  } catch {
+    return false;
+  }
+}
+
+async function readIndexedDbValue(dbName) {
+  try {
+    return await new Promise((resolve) => {
+      const open = indexedDB.open(dbName);
+
+      open.onerror = () => resolve(false);
+
+      open.onupgradeneeded = () => {
+        try {
+          const db = open.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME);
+          }
+        } catch {
+          //
+        }
+      };
+
+      open.onsuccess = () => {
+        try {
+          const db = open.result;
+
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.close();
+            resolve(false);
+            return;
+          }
+
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.get(DB_KEY);
+
+          req.onerror = () => {
+            db.close();
+            resolve(false);
+          };
+
+          req.onsuccess = () => {
+            db.close();
+            resolve(req.result === 'present');
+          };
+        } catch {
+          resolve(false);
+        }
+      };
+    });
+  } catch {
+    return false;
+  }
+}
+
+async function report(sage, data) {
+  await sage.app.bridgeSend({
+    kind: 'sandbox_report',
+    report: {
+      type: 'clear_cycle',
+      data,
+    },
+  });
+}
+
+(async () => {
+  const sage = await createSageClient();
+  const params = new URLSearchParams(window.location.search);
+  const runId = params.get('runId');
+  const phase = params.get('phase');
+
+  if (!runId) {
+    throw new Error('missing runId');
+  }
+
+  if (
+    phase !== 'write' &&
+    phase !== 'check_present' &&
+    phase !== 'check_absent'
+  ) {
+    throw new Error('missing or invalid phase');
+  }
+
+  const { localStorageKey, dbName } = getKeys(runId);
+
+  let localStoragePresent = false;
+  let indexedDbPresent = false;
+  let error = null;
+
+  try {
+    if (phase === 'write') {
+      try {
+        localStorage.setItem(localStorageKey, 'present');
+      } catch {
+        //
+      }
+
+      await writeIndexedDbValue(dbName);
+    }
+
+    try {
+      localStoragePresent = localStorage.getItem(localStorageKey) === 'present';
+    } catch {
+      localStoragePresent = false;
+    }
+
+    indexedDbPresent = await readIndexedDbValue(dbName);
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+  }
+
+  await report(sage, {
+    runId,
+    phase,
+    localStoragePresent,
+    indexedDbPresent,
+    error,
+  });
+})().catch(async (err) => {
+  try {
+    const sage = await createSageClient();
+    const params = new URLSearchParams(window.location.search);
+
+    await report(sage, {
+      runId: params.get('runId'),
+      phase: params.get('phase'),
+      localStoragePresent: false,
+      indexedDbPresent: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  } catch {
+    //
+  }
+});

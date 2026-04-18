@@ -4,6 +4,7 @@ import type {
   SandboxNetworkProbeResult,
   SandboxPersistenceReadProbeResult,
   SandboxPersistenceWriteProbeResult,
+  SandboxStorageClearProbeResult,
 } from '@/lib/apps/sandbox';
 
 export interface SandboxAppResult<T> {
@@ -15,6 +16,7 @@ export interface SandboxRunResults {
   isolation: SandboxAppResult<SandboxIsolationProbeResult>[];
   persistenceWrite: SandboxAppResult<SandboxPersistenceWriteProbeResult>[];
   persistenceRead: SandboxAppResult<SandboxPersistenceReadProbeResult>[];
+  clearCycle: SandboxAppResult<SandboxStorageClearProbeResult>[];
   network: SandboxAppResult<SandboxNetworkProbeResult>[];
 }
 
@@ -25,6 +27,7 @@ function createEmptyRunResults(): SandboxRunResults {
     isolation: [],
     persistenceWrite: [],
     persistenceRead: [],
+    clearCycle: [],
     network: [],
   };
 }
@@ -68,11 +71,20 @@ export function acceptSandboxBridgeSend(args: {
     return false;
   }
 
+  const report = payload.report;
+
+  if (report.type === 'clear_cycle') {
+    const run = getOrCreateRun(report.data.runId);
+    run.clearCycle = replaceByAppId(run.clearCycle, {
+      appId,
+      data: report.data,
+    });
+    return true;
+  }
+
   if (!appId.startsWith('__sage_test_')) {
     return false;
   }
-
-  const report = payload.report;
 
   switch (report.type) {
     case 'isolation': {

@@ -10,9 +10,11 @@ import {
   buildInitialSandboxState,
   buildRunningSandboxState,
   evaluateAppLaunchGate,
+  setStorageClearCapabilityPassed,
   type SandboxState,
 } from '@/lib/apps/sandbox';
 import { runSandboxTests } from '@/lib/apps/sandbox-tests';
+import { runStorageClearCycle } from '@/lib/apps/storageClearCycle';
 
 type UpdateAvailabilityMap = Record<string, SageAppUrlPreview | null>;
 
@@ -54,10 +56,14 @@ export function useAppsInternal() {
 
   const rerunSandboxTests = useCallback(async () => {
     setSandboxState(buildRunningSandboxState());
+    setStorageClearCapabilityPassed(false);
 
     try {
       const next = await runSandboxTests();
       setSandboxState(next);
+      setStorageClearCapabilityPassed(
+        next.capabilities.storage_clear_cycle.status === 'passed',
+      );
     } catch (err) {
       const message =
         err instanceof Error
@@ -70,26 +76,31 @@ export function useAppsInternal() {
               }
             })();
 
-      setSandboxState(
-        buildCompletedSandboxState({
-          isolation: {
-            passed: false,
-            details: message,
-          },
-          persistenceNormal: {
-            passed: false,
-            details: 'Skipped because sandbox run failed before completion.',
-          },
-          persistenceIncognito: {
-            passed: false,
-            details: 'Skipped because sandbox run failed before completion.',
-          },
-          network: {
-            passed: false,
-            details: 'Skipped because sandbox run failed before completion.',
-          },
-        }),
-      );
+      const failed = buildCompletedSandboxState({
+        isolation: {
+          passed: false,
+          details: message,
+        },
+        persistenceNormal: {
+          passed: false,
+          details: 'Skipped because sandbox run failed before completion.',
+        },
+        persistenceIncognito: {
+          passed: false,
+          details: 'Skipped because sandbox run failed before completion.',
+        },
+        clearCycle: {
+          passed: false,
+          details: 'Skipped because sandbox run failed before completion.',
+        },
+        network: {
+          passed: false,
+          details: 'Skipped because sandbox run failed before completion.',
+        },
+      });
+
+      setSandboxState(failed);
+      setStorageClearCapabilityPassed(false);
     }
   }, []);
 
@@ -278,15 +289,25 @@ export function useAppsInternal() {
 
   const clearAppStorage = useCallback(
     async (appId: string) => {
+      const app = getApp(appId);
+      if (!app) {
+        throw new Error(`Missing app ${appId}`);
+      }
+
       try {
         setBusy(appId, true);
-        await invoke('storage_clear_all_for_app', { appId });
+        const result = await runStorageClearCycle(app);
+
+        if (!result.passed) {
+          throw new Error(result.details ?? 'Storage clear cycle failed.');
+        }
+
         await refresh();
       } finally {
         setBusy(appId, false);
       }
     },
-    [refresh, setBusy],
+    [getApp, refresh, setBusy],
   );
 
   const getAppLaunchGate = useCallback(
@@ -327,7 +348,7 @@ export function useAppsInternal() {
               }));
             })
             .catch(() => {
-              // intentionally quiet
+              //
             });
         });
       },

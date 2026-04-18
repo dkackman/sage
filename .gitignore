@@ -28,4 +28,4 @@ target
 .env
 /test.sqlite*
 
-src/test-apps
+src/builtin-apps/test-apps

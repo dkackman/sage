@@ -5,9 +5,13 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
-const SRC_DIR = path.join(ROOT, 'src/test-apps-src');
-const OUT_DIR = path.join(ROOT, 'src/test-apps');
-const SHARED_DIR = path.join(SRC_DIR, '_shared');
+const BUILTIN_ROOT = path.join(ROOT, 'src/builtin-apps');
+const SHARED_DIR = path.join(BUILTIN_ROOT, 'shared');
+const TEST_SRC_DIR = path.join(BUILTIN_ROOT, 'test-apps-src');
+const RUNTIME_SRC_DIR = path.join(BUILTIN_ROOT, 'runtime-apps-src');
+const DIST_ROOT = path.join(BUILTIN_ROOT, 'dist');
+const TEST_OUT_DIR = path.join(DIST_ROOT, 'test-apps');
+const RUNTIME_OUT_DIR = path.join(DIST_ROOT, 'runtime-apps');
 const SDK_DIST = path.join(ROOT, 'packages/sage-app-sdk/dist');
 
 async function rmrf(dir) {
@@ -58,12 +62,11 @@ async function copyFileRequired(src, dst, label) {
   await fs.copyFile(src, dst);
 }
 
-async function buildVariant({ sourceDirName, outDirName, manifestFileName }) {
-  const sourceDir = path.join(SRC_DIR, sourceDirName);
-  const outDir = path.join(OUT_DIR, outDirName);
-  const manifestSrc = path.join(sourceDir, manifestFileName);
-  const manifestDst = path.join(outDir, 'sage-manifest.json');
-
+async function finalizeBuiltApp({
+  sourceDir,
+  outDir,
+  manifestFileName = null,
+}) {
   await mkdirp(outDir);
 
   if (await exists(SHARED_DIR)) {
@@ -80,11 +83,13 @@ async function buildVariant({ sourceDirName, outDirName, manifestFileName }) {
     }
   }
 
-  await copyFileRequired(
-    manifestSrc,
-    manifestDst,
-    `manifest ${manifestFileName}`,
-  );
+  if (manifestFileName) {
+    await copyFileRequired(
+      path.join(sourceDir, manifestFileName),
+      path.join(outDir, 'sage-manifest.json'),
+      `manifest ${manifestFileName}`,
+    );
+  }
 
   await copyFileRequired(
     path.join(SDK_DIST, 'runtime-bridge.js'),
@@ -99,7 +104,7 @@ async function buildVariant({ sourceDirName, outDirName, manifestFileName }) {
   );
 }
 
-const BUILD_PLAN = [
+const TEST_BUILD_PLAN = [
   {
     sourceDirName: 'sage-storage-isolation',
     variants: [
@@ -146,24 +151,41 @@ const BUILD_PLAN = [
   },
 ];
 
+const RUNTIME_BUILD_PLAN = [
+  {
+    sourceDirName: 'storage-clear-probe',
+    outDirName: 'storage-clear-probe',
+  },
+];
+
 async function main() {
-  console.log('→ building test apps');
+  console.log('→ building builtin apps');
 
-  await rmrf(OUT_DIR);
-  await mkdirp(OUT_DIR);
+  await rmrf(DIST_ROOT);
+  await mkdirp(TEST_OUT_DIR);
+  await mkdirp(RUNTIME_OUT_DIR);
 
-  for (const group of BUILD_PLAN) {
+  for (const group of TEST_BUILD_PLAN) {
     for (const variant of group.variants) {
-      console.log(`  - ${variant.outDirName}`);
-      await buildVariant({
-        sourceDirName: group.sourceDirName,
-        outDirName: variant.outDirName,
+      console.log(`  - test ${variant.outDirName}`);
+      await finalizeBuiltApp({
+        sourceDir: path.join(TEST_SRC_DIR, group.sourceDirName),
+        outDir: path.join(TEST_OUT_DIR, variant.outDirName),
         manifestFileName: variant.manifestFileName,
       });
     }
   }
 
-  console.log('✓ test apps ready');
+  for (const runtimeApp of RUNTIME_BUILD_PLAN) {
+    console.log(`  - runtime ${runtimeApp.outDirName}`);
+    await finalizeBuiltApp({
+      sourceDir: path.join(RUNTIME_SRC_DIR, runtimeApp.sourceDirName),
+      outDir: path.join(RUNTIME_OUT_DIR, runtimeApp.outDirName),
+      manifestFileName: null,
+    });
+  }
+
+  console.log('✓ builtin apps ready');
 }
 
 main().catch((err) => {

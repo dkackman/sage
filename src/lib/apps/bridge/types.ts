@@ -1,74 +1,16 @@
-import type { Amount, InstalledSageApp } from '@/bindings';
-import type {
-  SandboxIsolationProbeResult,
-  SandboxNetworkProbeResult,
-  SandboxPersistenceReadProbeResult,
-  SandboxPersistenceWriteProbeResult,
-} from '@/lib/apps/sandbox';
+import type { InstalledSageApp } from '@/bindings';
+import {
+  SageBridgeRequest,
+  SageBridgeSendPayload,
+  SageWalletSendXchRequest,
+} from '@sage-app/sdk';
 
-export type SageBridgeVersion = 'v1';
-
-export interface SageBridgeSuccessResponse {
-  channel: 'sage-bridge';
-  bridgeVersion: SageBridgeVersion;
-  id: string;
-  ok: true;
-  result: unknown;
-}
-
-export interface SageBridgeErrorResponse {
-  channel: 'sage-bridge';
-  bridgeVersion: SageBridgeVersion;
-  id: string;
-  ok: false;
-  error: {
-    code: string;
-    message: string;
-  };
-}
-
-export type SageBridgeResponse =
-  | SageBridgeSuccessResponse
-  | SageBridgeErrorResponse;
-
-export interface SageBridgeContext {
-  app: InstalledSageApp;
-  sourceLabel: string;
-}
-
-export interface SageBridgeEventPayload {
-  sourceLabel: string;
-  request: SageBridgeRequest;
-}
-
-export interface SageWalletSendXchRequest {
-  address: string;
-  amount: Amount;
-  fee: Amount;
-  memos?: string[];
-  clawback?: number | null;
-}
-
-export interface SageBridgeSendPayload {
-  kind: 'sandbox_report';
-  report:
-    | {
-        type: 'isolation';
-        data: SandboxIsolationProbeResult;
-      }
-    | {
-        type: 'persistence_write';
-        data: SandboxPersistenceWriteProbeResult;
-      }
-    | {
-        type: 'persistence_read';
-        data: SandboxPersistenceReadProbeResult;
-      }
-    | {
-        type: 'network';
-        data: SandboxNetworkProbeResult;
-      };
-}
+export type SageBridgeMethod =
+  | 'bridge.ping'
+  | 'bridge.send'
+  | 'app.getInfo'
+  | 'sage.getPermissions'
+  | 'wallet.sendXch';
 
 export interface SageBridgeRequestParamsMap {
   'bridge.ping': undefined;
@@ -78,14 +20,12 @@ export interface SageBridgeRequestParamsMap {
   'wallet.sendXch': SageWalletSendXchRequest;
 }
 
-export type SageBridgeMethod = keyof SageBridgeRequestParamsMap;
-
-type SageBridgeRequestBase<M extends SageBridgeMethod> = {
+interface SageBridgeRequestBase<M extends SageBridgeMethod> {
   channel: 'sage-bridge';
-  bridgeVersion?: SageBridgeVersion;
   id: string;
   method: M;
-};
+  bridgeVersion: 'v1';
+}
 
 export type SageBridgeRequestForMethod<M extends SageBridgeMethod> =
   SageBridgeRequestParamsMap[M] extends undefined
@@ -94,9 +34,14 @@ export type SageBridgeRequestForMethod<M extends SageBridgeMethod> =
         params: SageBridgeRequestParamsMap[M];
       };
 
-export type SageBridgeRequest = {
+export type KnownSageBridgeRequest = {
   [M in SageBridgeMethod]: SageBridgeRequestForMethod<M>;
 }[SageBridgeMethod];
+
+export interface SageBridgeContext {
+  app: InstalledSageApp;
+  sourceLabel: string;
+}
 
 export type BridgePermissionPolicy =
   | { kind: 'none' }
@@ -104,7 +49,7 @@ export type BridgePermissionPolicy =
       kind: 'custom';
       check: (args: {
         ctx: SageBridgeContext;
-        request: SageBridgeRequest;
+        request: KnownSageBridgeRequest;
       }) => void | Promise<void>;
     };
 
@@ -149,3 +94,21 @@ export interface BridgeMethodDefinition<M extends SageBridgeMethod> {
 export type BridgeMethodRegistry = Partial<{
   [M in SageBridgeMethod]: BridgeMethodDefinition<M>;
 }>;
+
+export function isKnownSageBridgeMethod(
+  method: string,
+): method is SageBridgeMethod {
+  return (
+    method === 'bridge.ping' ||
+    method === 'bridge.send' ||
+    method === 'app.getInfo' ||
+    method === 'sage.getPermissions' ||
+    method === 'wallet.sendXch'
+  );
+}
+
+export function isKnownSageBridgeRequest(
+  request: SageBridgeRequest,
+): request is KnownSageBridgeRequest {
+  return isKnownSageBridgeMethod(request.method);
+}

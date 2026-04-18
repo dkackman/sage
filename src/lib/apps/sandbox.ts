@@ -4,6 +4,7 @@ export type SandboxCapability =
   | 'storage_isolation_from_sage'
   | 'storage_persistence_normal'
   | 'storage_non_persistence_incognito'
+  | 'storage_clear_cycle'
   | 'network_allowlist_enforced';
 
 export type SandboxCapabilityStatus =
@@ -34,42 +35,55 @@ export interface AppLaunchGateResult {
 
 export interface SandboxIsolationProbeResult {
   runId: string;
-  mode: string;
-  persistentStorage: boolean;
   localStorageVisible: boolean;
-  cookieVisible: boolean;
   indexedDbVisible: boolean;
   error: string | null;
 }
 
 export interface SandboxPersistenceWriteProbeResult {
   runId: string;
-  mode: string;
-  persistentStorage: boolean;
   localStorageWrote: boolean;
-  cookieWrote: boolean;
   indexedDbWrote: boolean;
   error: string | null;
 }
 
 export interface SandboxPersistenceReadProbeResult {
   runId: string;
-  mode: string;
-  persistentStorage: boolean;
   localStoragePresent: boolean;
-  cookiePresent: boolean;
   indexedDbPresent: boolean;
   error: string | null;
 }
 
 export interface SandboxNetworkProbeResult {
   runId: string;
-  mode: string;
   allowedUrl: string;
   blockedUrl: string;
   allowedOk: boolean;
   blockedOk: boolean;
   error: string | null;
+}
+
+export type SandboxStorageClearProbePhase =
+  | 'write'
+  | 'check_present'
+  | 'check_absent';
+
+export interface SandboxStorageClearProbeResult {
+  runId: string;
+  phase: SandboxStorageClearProbePhase;
+  localStoragePresent: boolean;
+  indexedDbPresent: boolean;
+  error: string | null;
+}
+
+let storageClearCapabilityPassed = false;
+
+export function setStorageClearCapabilityPassed(value: boolean) {
+  storageClearCapabilityPassed = value;
+}
+
+export function isStorageClearCapabilityPassed() {
+  return storageClearCapabilityPassed;
 }
 
 function makeCapabilityResult(
@@ -92,6 +106,7 @@ export function buildInitialSandboxState(): SandboxState {
       storage_isolation_from_sage: makeCapabilityResult('pending'),
       storage_persistence_normal: makeCapabilityResult('pending'),
       storage_non_persistence_incognito: makeCapabilityResult('pending'),
+      storage_clear_cycle: makeCapabilityResult('pending'),
       network_allowlist_enforced: makeCapabilityResult('pending'),
     },
   };
@@ -106,6 +121,7 @@ export function buildRunningSandboxState(): SandboxState {
       storage_isolation_from_sage: makeCapabilityResult('running'),
       storage_persistence_normal: makeCapabilityResult('running'),
       storage_non_persistence_incognito: makeCapabilityResult('running'),
+      storage_clear_cycle: makeCapabilityResult('running'),
       network_allowlist_enforced: makeCapabilityResult('running'),
     },
   };
@@ -115,6 +131,7 @@ export function buildCompletedSandboxState(args: {
   isolation: { passed: boolean; details: string | null };
   persistenceNormal: { passed: boolean; details: string | null };
   persistenceIncognito: { passed: boolean; details: string | null };
+  clearCycle: { passed: boolean; details: string | null };
   network: { passed: boolean; details: string | null };
 }): SandboxState {
   const checkedAt = Date.now();
@@ -138,6 +155,11 @@ export function buildCompletedSandboxState(args: {
         status: args.persistenceIncognito.passed ? 'passed' : 'failed',
         checkedAt,
         details: args.persistenceIncognito.details,
+      },
+      storage_clear_cycle: {
+        status: args.clearCycle.passed ? 'passed' : 'failed',
+        checkedAt,
+        details: args.clearCycle.details,
       },
       network_allowlist_enforced: {
         status: args.network.passed ? 'passed' : 'failed',
@@ -224,8 +246,9 @@ export function formatCapabilityLabel(capability: SandboxCapability): string {
       return 'persistent storage behavior';
     case 'storage_non_persistence_incognito':
       return 'incognito storage behavior';
+    case 'storage_clear_cycle':
+      return 'storage clear cycle behavior';
     case 'network_allowlist_enforced':
       return 'network allowlist enforcement';
   }
 }
-

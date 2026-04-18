@@ -13,7 +13,6 @@ import { SageAppPackageManifest, SageAppUrlPreview } from '@/bindings.ts';
 import { invoke } from '@tauri-apps/api/core';
 import { useApps } from '@/contexts/AppsContext.tsx';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
-import { clearAppRuntimeBrowsingData } from '@/lib/apps/runtimeRegistry';
 import { formatCapabilityLabel } from '@/lib/apps/sandbox';
 import { LayoutGrid, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -81,6 +80,7 @@ export function Apps() {
     uninstallApp,
     checkForUpdate,
     performAppUpdate,
+    clearAppStorage,
     updateAvailability,
     busyAppIds,
     sandboxState,
@@ -103,6 +103,18 @@ export function Apps() {
     () => apps.filter((entry) => entry.kind === 'corrupted'),
     [apps],
   );
+
+  const clearCapability = sandboxState.capabilities.storage_clear_cycle;
+  const clearDataEnabled = clearCapability.status === 'passed';
+  const clearDataDisabledReason =
+    clearCapability.status === 'failed'
+      ? (clearCapability.details ??
+        'Clear data is disabled because the storage clear capability failed.')
+      : clearCapability.status === 'running'
+        ? 'Clear data is disabled while sandbox tests are running.'
+        : clearCapability.status === 'pending'
+          ? 'Clear data is disabled until sandbox tests complete.'
+          : null;
 
   const contextMenuPreview = contextMenu
     ? updateAvailability[contextMenu.app.id]
@@ -178,7 +190,7 @@ export function Apps() {
       }));
 
       try {
-        await clearAppRuntimeBrowsingData(app);
+        await clearAppStorage(app.id);
 
         if (reopen) {
           closeContextMenu();
@@ -209,7 +221,7 @@ export function Apps() {
         );
       }
     },
-    [navigate, refresh, closeContextMenu],
+    [clearAppStorage, navigate, refresh, closeContextMenu],
   );
 
   const handleApplyPermissions = useCallback(
@@ -226,7 +238,7 @@ export function Apps() {
       });
 
       if (storageChanged) {
-        await clearAppRuntimeBrowsingData(app);
+        await clearAppStorage(app.id);
       }
 
       const isRunning = runningAppIds.has(app.id);
@@ -241,7 +253,7 @@ export function Apps() {
       await refresh();
       closePermissionsDialog();
     },
-    [runningAppIds, navigate, refresh],
+    [runningAppIds, navigate, refresh, closePermissionsDialog, clearAppStorage],
   );
 
   useEffect(() => {
@@ -542,6 +554,8 @@ export function Apps() {
           updateCheckState={contextMenuCheckState}
           clearDataBusy={contextMenuClearDataBusy}
           clearDataError={contextMenuClearDataError}
+          clearDataEnabled={clearDataEnabled}
+          clearDataDisabledReason={clearDataDisabledReason}
           onClose={closeContextMenu}
           onOpen={() => {
             if (!contextMenu) {
@@ -584,7 +598,7 @@ export function Apps() {
             openPermissionsDialog(contextMenu.app);
           }}
           onClearData={() => {
-            if (!contextMenu) {
+            if (!contextMenu || !clearDataEnabled) {
               return;
             }
 
