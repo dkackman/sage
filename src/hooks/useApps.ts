@@ -12,7 +12,7 @@ import {
   evaluateAppLaunchGate,
   type SandboxState,
 } from '@/lib/apps/sandbox';
-import { runSandboxTests } from '@/lib/apps/runSandboxTests';
+import { runSandboxTests } from '@/lib/apps/sandbox-tests';
 
 type UpdateAvailabilityMap = Record<string, SageAppUrlPreview | null>;
 

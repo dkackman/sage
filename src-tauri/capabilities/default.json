@@ -8,6 +8,7 @@
     "core:event:default",
     "core:window:default",
     "core:webview:default",
+    "core:webview:allow-clear-all-browsing-data",
     "core:webview:allow-create-webview",
     "core:webview:allow-webview-hide",
     "core:webview:allow-webview-show",
