@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button.tsx';
-import { LayoutGrid, X } from 'lucide-react';
+import { Blocks, X } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -235,7 +235,7 @@ export function AppTaskBar({
         className='h-9 shrink-0 px-3'
         onClick={onOpenApps}
       >
-        <LayoutGrid className='mr-2 h-4 w-4' />
+        <Blocks className='mr-2 h-4 w-4' />
         Apps
       </Button>
 
