@@ -129,6 +129,10 @@ const TEST_BUILD_PLAN = [
         outDirName: 'storage-persistence-incognito',
         manifestFileName: 'sage-manifest.incognito.json',
       },
+      {
+        outDirName: 'storage-clear-persistent',
+        manifestFileName: 'sage-manifest.persistent.json',
+      },
     ],
   },
   {

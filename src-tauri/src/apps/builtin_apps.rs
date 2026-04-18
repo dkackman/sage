@@ -25,6 +25,8 @@ pub const BUILTIN_PERSISTENCE_PERSISTENT_ID: &str =
     "__sage_test_persistence_persistent";
 pub const BUILTIN_PERSISTENCE_INCOGNITO_ID: &str =
     "__sage_test_persistence_incognito";
+pub const BUILTIN_STORAGE_CLEAR_PERSISTENT_ID: &str =
+    "__sage_test_storage_clear_persistent";
 pub const BUILTIN_NETWORK_ALLOW_A_ID: &str = "__sage_test_network_allow_a";
 pub const BUILTIN_NETWORK_ALLOW_B_ID: &str = "__sage_test_network_allow_b";
 
@@ -50,6 +52,10 @@ const BUILTIN_TEST_APPS: &[BuiltinTestAppSpec] = &[
     BuiltinTestAppSpec {
         app_id: BUILTIN_PERSISTENCE_INCOGNITO_ID,
         dir_name: "storage-persistence-incognito",
+    },
+    BuiltinTestAppSpec {
+        app_id: BUILTIN_STORAGE_CLEAR_PERSISTENT_ID,
+        dir_name: "storage-clear-persistent",
     },
     BuiltinTestAppSpec {
         app_id: BUILTIN_NETWORK_ALLOW_A_ID,
@@ -168,7 +174,7 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
         capabilities: requested_capabilities,
         network: SageGrantedNetworkPermissions {
             whitelist: manifest.permissions.network.whitelist.required.clone(),
-        }
+        },
     };
 
     validate_granted_permissions(&manifest.permissions, &granted_permissions.capabilities)?;
