@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeSet},
     fs, io,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
@@ -26,12 +26,13 @@ use crate::{
         snapshot::{derive_manifest_url, download_url_snapshot, fetch_url_manifest},
         types::{
             InstalledSageApp, InstalledSageAppSource, ListedSageApp,
-            SageAppPackageManifest, SageAppUrlPreview, SageNetworkPermissions,
-            SageNetworkWhitelistEntry,
+            SageAppPackageManifest, SageAppUrlPreview,
         },
     },
     error::Result,
 };
+use crate::apps::permissions::normalize_network_key;
+use crate::apps::types::{SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedNetworkPermissions};
 
 pub fn current_millis() -> u128 {
     SystemTime::now()
@@ -121,40 +122,29 @@ pub fn manifest_icon_file(manifest: &SageAppPackageManifest) -> &str {
     manifest.icon.as_deref().unwrap_or("icon.png")
 }
 
-fn normalize_network_key(
-    scheme: &str,
-    host: &str,
-) -> AnyResult<(String, String)> {
-    let scheme = scheme.trim().to_ascii_lowercase();
-    let host = host.trim().to_ascii_lowercase();
-
-    if scheme.is_empty() {
-        return Err(anyhow!("network whitelist entry is missing scheme"));
-    }
-
-    if host.is_empty() {
-        return Err(anyhow!("network whitelist entry is missing host"));
-    }
-
-    Ok((scheme, host))
-}
-
 pub fn normalize_and_validate_granted_network_whitelist(
-    requested: Option<&SageNetworkPermissions>,
-    granted: &[SageNetworkWhitelistEntry],
-) -> AnyResult<Vec<SageNetworkWhitelistEntry>> {
-    let mut requested_by_key = BTreeMap::<(String, String), bool>::new();
+    requested: &SageRequestedNetworkPermissions,
+    granted: &[SageNetworkPermissionTarget],
+) -> AnyResult<Vec<SageNetworkPermissionTarget>> {
+    let mut requested_required = BTreeSet::<(String, String)>::new();
+    let mut requested_optional = BTreeSet::<(String, String)>::new();
 
-    for entry in requested.map(|n| n.whitelist.as_slice()).unwrap_or(&[]) {
-        let (scheme, host) = normalize_network_key(&entry.scheme, &entry.host)?;
-        requested_by_key.insert((scheme, host), entry.required);
+    for entry in &requested.whitelist.required {
+        requested_required.insert(normalize_network_key(&entry.scheme, &entry.host)?);
+    }
+
+    for entry in &requested.whitelist.optional {
+        let key = normalize_network_key(&entry.scheme, &entry.host)?;
+        if !requested_required.contains(&key) {
+            requested_optional.insert(key);
+        }
     }
 
     let mut granted_keys = BTreeSet::<(String, String)>::new();
 
     for entry in granted {
         let key = normalize_network_key(&entry.scheme, &entry.host)?;
-        if !requested_by_key.contains_key(&key) {
+        if !requested_required.contains(&key) && !requested_optional.contains(&key) {
             return Err(anyhow!(
                 "granted network whitelist entry not requested in manifest: {}://{}",
                 key.0,
@@ -164,28 +154,19 @@ pub fn normalize_and_validate_granted_network_whitelist(
         granted_keys.insert(key);
     }
 
-    let mut result = BTreeSet::<SageNetworkWhitelistEntry>::new();
+    let mut result = BTreeSet::<SageNetworkPermissionTarget>::new();
 
-    for ((scheme, host), required) in &requested_by_key {
-        if *required {
-            result.insert(SageNetworkWhitelistEntry {
-                scheme: scheme.clone(),
-                host: host.clone(),
-                required: true,
-            });
-        }
+    for (scheme, host) in &requested_required {
+        result.insert(SageNetworkPermissionTarget {
+            scheme: scheme.clone(),
+            host: host.clone(),
+        });
     }
 
     for (scheme, host) in granted_keys {
-        let required = requested_by_key
-            .get(&(scheme.clone(), host.clone()))
-            .copied()
-            .unwrap_or(false);
-
-        result.insert(SageNetworkWhitelistEntry {
+        result.insert(SageNetworkPermissionTarget {
             scheme,
             host,
-            required,
         });
     }
 
@@ -271,8 +252,7 @@ pub async fn list_installed_apps(
 pub async fn install_app_zip(
     state: State<'_, AppState>,
     zip_path: String,
-    granted_permissions: Vec<String>,
-    granted_network_whitelist: Vec<SageNetworkWhitelistEntry>,
+    granted_permissions: SageGrantedPermissions,
 ) -> Result<InstalledSageApp> {
     let base_path = {
         let state = state.lock().await;
@@ -305,13 +285,13 @@ pub async fn install_app_zip(
 
         let manifest = normalize_manifest_permissions(read_manifest(&package_root)?)?;
 
-        validate_granted_permissions(&manifest.permissions, &granted_permissions)?;
+        validate_granted_permissions(&manifest.permissions, &granted_permissions.capabilities)?;
         let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
-            manifest.network.as_ref(),
-            &granted_network_whitelist,
+            &manifest.permissions.network,
+            &granted_permissions.network.whitelist,
         )?;
         let permission_flags =
-            resolve_granted_permission_flags(&granted_permissions, None)?;
+            resolve_granted_permission_flags(&granted_permissions.capabilities, None)?;
 
         let existing = list_installed_apps_internal(&root)?
             .into_iter()
@@ -351,7 +331,6 @@ pub async fn install_app_zip(
             icon_file: manifest_icon_file(&manifest).to_string(),
             requested_permissions: manifest.permissions.clone(),
             granted_permissions,
-            granted_network_whitelist,
             permission_flags,
             source: InstalledSageAppSource::Zip,
             active_snapshot: snapshot,
@@ -380,8 +359,7 @@ pub async fn install_app_zip(
 pub async fn install_app_url(
     state: State<'_, AppState>,
     app_url: String,
-    granted_permissions: Vec<String>,
-    granted_network_whitelist: Vec<SageNetworkWhitelistEntry>,
+    granted_permissions: SageGrantedPermissions,
 ) -> Result<InstalledSageApp> {
     let base_path = {
         let state = state.lock().await;
@@ -408,7 +386,7 @@ pub async fn install_app_url(
 
     validate_granted_permissions(
         &preview.manifest.permissions,
-        &granted_permissions,
+        &granted_permissions.capabilities,
     )
         .map_err(|err| {
             io::Error::other(format!(
@@ -418,8 +396,8 @@ pub async fn install_app_url(
         })?;
 
     let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
-        preview.manifest.network.as_ref(),
-        &granted_network_whitelist,
+        &preview.manifest.permissions.network,
+        &granted_permissions.network.whitelist,
     )
         .map_err(|err| {
             io::Error::other(format!(
@@ -429,7 +407,7 @@ pub async fn install_app_url(
         })?;
 
     let permission_flags =
-        resolve_granted_permission_flags(&granted_permissions, None)
+        resolve_granted_permission_flags(&granted_permissions.capabilities, None)
             .map_err(|err| {
                 io::Error::other(format!(
                     "invalid granted permission policy for URL app {}: {err}",
@@ -485,7 +463,6 @@ pub async fn install_app_url(
         icon_file: manifest_icon_file(&preview.manifest).to_string(),
         requested_permissions: preview.manifest.permissions.clone(),
         granted_permissions,
-        granted_network_whitelist,
         permission_flags,
         source: InstalledSageAppSource::Url {
             app_url: preview.app_url.clone(),

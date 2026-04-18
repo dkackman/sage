@@ -1,17 +1,19 @@
-import type { InstalledSageApp, SageNetworkWhitelistEntry } from '@/bindings';
+import type { InstalledSageApp, SageNetworkPermissionTarget } from '@/bindings';
 import { AppPermissions } from './AppPermissions';
 
 interface Props {
   app: InstalledSageApp;
   grantedPermissions: string[];
-  grantedNetworkWhitelist: SageNetworkWhitelistEntry[];
+  grantedNetworkWhitelist: SageNetworkPermissionTarget[];
   onGrantedPermissionsChange: (next: string[]) => void;
-  onGrantedNetworkWhitelistChange: (next: SageNetworkWhitelistEntry[]) => void;
+  onGrantedNetworkWhitelistChange: (
+    next: SageNetworkPermissionTarget[],
+  ) => void;
 }
 
 function sortNetworkEntries(
-  entries: SageNetworkWhitelistEntry[],
-): SageNetworkWhitelistEntry[] {
+  entries: SageNetworkPermissionTarget[],
+): SageNetworkPermissionTarget[] {
   return [...entries].sort((a, b) => {
     const aKey = `${a.scheme}://${a.host}`;
     const bKey = `${b.scheme}://${b.host}`;
@@ -19,7 +21,7 @@ function sortNetworkEntries(
   });
 }
 
-function networkKey(entry: SageNetworkWhitelistEntry): string {
+function networkKey(entry: SageNetworkPermissionTarget): string {
   return `${entry.scheme}://${entry.host}`;
 }
 
@@ -31,18 +33,32 @@ export function PermissionsEditor({
   onGrantedNetworkWhitelistChange,
 }: Props) {
   const manifest = app.pendingUpdate?.manifest ?? app.activeSnapshot.manifest;
-  const requestedNetwork = manifest.network?.whitelist ?? [];
+
+  const requestedRequiredNetwork =
+    manifest.permissions?.network?.whitelist?.required ?? [];
+  const requestedOptionalNetwork =
+    manifest.permissions?.network?.whitelist?.optional ?? [];
+  const requestedNetwork = [
+    ...requestedRequiredNetwork.map((entry) => ({
+      entry,
+      required: true,
+    })),
+    ...requestedOptionalNetwork.map((entry) => ({
+      entry,
+      required: false,
+    })),
+  ];
 
   const grantedNetworkKeys = new Set(
     grantedNetworkWhitelist.map((entry) => networkKey(entry)),
   );
 
   function handleToggleNetwork(
-    entry: SageNetworkWhitelistEntry,
+    entry: SageNetworkPermissionTarget,
     nextGranted: boolean,
   ) {
-    const requiredEntries = requestedNetwork.filter((item) => item.required);
-    const optionalEntries = requestedNetwork.filter((item) => !item.required);
+    const requiredEntries = requestedRequiredNetwork;
+    const optionalEntries = requestedOptionalNetwork;
 
     const nextOptional = optionalEntries.filter((item) => {
       const key = networkKey(item);
@@ -77,9 +93,9 @@ export function PermissionsEditor({
           <h3 className='text-sm font-medium'>Network access</h3>
 
           <div className='space-y-2 rounded-md border p-3'>
-            {requestedNetwork.map((entry) => {
+            {requestedNetwork.map(({ entry, required }) => {
               const key = networkKey(entry);
-              const checked = entry.required || grantedNetworkKeys.has(key);
+              const checked = required || grantedNetworkKeys.has(key);
 
               return (
                 <label
@@ -89,7 +105,7 @@ export function PermissionsEditor({
                   <div className='min-w-0 font-mono break-all'>{key}</div>
 
                   <div className='shrink-0'>
-                    {entry.required ? (
+                    {required ? (
                       <span className='text-muted-foreground'>required</span>
                     ) : (
                       <input

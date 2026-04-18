@@ -4,6 +4,7 @@ import type {
   InstalledSageApp,
   ListedSageApp,
   SageAppUrlPreview,
+  SageNetworkPermissionTarget,
 } from '@/bindings.ts';
 import {
   buildInitialSandboxState,
@@ -95,7 +96,7 @@ export function useAppsInternal() {
     async (
       zipPath: string,
       permissions: string[],
-      networkWhitelist: import('@/bindings').SageNetworkWhitelistEntry[],
+      networkWhitelist: SageNetworkPermissionTarget[],
     ) => {
       await invoke<InstalledSageApp>('install_app_zip', {
         zipPath,
@@ -111,7 +112,7 @@ export function useAppsInternal() {
     async (
       appUrl: string,
       permissions: string[],
-      networkWhitelist: import('@/bindings').SageNetworkWhitelistEntry[],
+      networkWhitelist: SageNetworkPermissionTarget[],
     ) => {
       await invoke<InstalledSageApp>('install_app_url', {
         appUrl,

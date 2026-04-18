@@ -2,7 +2,7 @@ import type {
   InstalledSageApp,
   SageAppPackageManifest,
   SageAppUrlPreview,
-  SageNetworkWhitelistEntry,
+  SageNetworkPermissionTarget,
 } from '@/bindings';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,9 +31,11 @@ interface Props {
   error: string | null;
   installing: boolean;
   grantedPermissions: string[];
-  grantedNetworkWhitelist: SageNetworkWhitelistEntry[];
+  grantedNetworkWhitelist: SageNetworkPermissionTarget[];
   onGrantedPermissionsChange: (next: string[]) => void;
-  onGrantedNetworkWhitelistChange: (next: SageNetworkWhitelistEntry[]) => void;
+  onGrantedNetworkWhitelistChange: (
+    next: SageNetworkPermissionTarget[],
+  ) => void;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -41,7 +43,7 @@ interface Props {
 function buildPreviewApp(
   manifest: SageAppPackageManifest,
   grantedPermissions: string[],
-  grantedNetworkWhitelist: SageNetworkWhitelistEntry[],
+  grantedNetworkWhitelist: SageNetworkPermissionTarget[],
 ): InstalledSageApp {
   return {
     id: '__install_preview__',
@@ -51,11 +53,23 @@ function buildPreviewApp(
     entryFile: manifest.entry ?? 'index.html',
     iconFile: manifest.icon ?? 'icon.png',
     requestedPermissions: manifest.permissions ?? {
-      required: [],
-      optional: [],
+      network: {
+        whitelist: {
+          required: [],
+          optional: [],
+        },
+      },
+      capabilities: {
+        required: [],
+        optional: [],
+      },
     },
-    grantedPermissions,
-    grantedNetworkWhitelist,
+    grantedPermissions: {
+      capabilities: grantedPermissions,
+      network: {
+        whitelist: grantedNetworkWhitelist,
+      },
+    },
     permissionFlags: {
       hasSecretAccess: false,
       hasExternalAccess: false,

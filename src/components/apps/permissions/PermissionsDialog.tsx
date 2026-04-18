@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { InstalledSageApp } from '@/bindings';
+import type { InstalledSageApp, SageNetworkPermissionTarget } from '@/bindings';
 import React from 'react';
 import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEditor';
 
@@ -18,7 +18,11 @@ interface Props {
   error: string | null;
   submitting: boolean;
   grantedPermissions: string[];
+  grantedNetworkWhitelist: SageNetworkPermissionTarget[];
   onGrantedPermissionsChange: (next: string[]) => void;
+  onGrantedNetworkWhitelistChange: (
+    next: SageNetworkPermissionTarget[],
+  ) => void;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -31,7 +35,9 @@ export function PermissionsDialog({
   error,
   submitting,
   grantedPermissions,
+  grantedNetworkWhitelist,
   onGrantedPermissionsChange,
+  onGrantedNetworkWhitelistChange,
   onCancel,
   onConfirm,
 }: Props) {
@@ -56,7 +62,9 @@ export function PermissionsDialog({
             <PermissionsEditor
               app={app}
               grantedPermissions={grantedPermissions}
+              grantedNetworkWhitelist={grantedNetworkWhitelist}
               onGrantedPermissionsChange={onGrantedPermissionsChange}
+              onGrantedNetworkWhitelistChange={onGrantedNetworkWhitelistChange}
             />
 
             {error ? (

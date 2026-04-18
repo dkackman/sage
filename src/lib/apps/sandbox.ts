@@ -175,13 +175,13 @@ export function getRequiredSandboxCapabilities(
 ): SandboxCapability[] {
   const required: SandboxCapability[] = ['storage_isolation_from_sage'];
 
-  if (app.grantedPermissions.includes('persistent_storage')) {
+  if (app.grantedPermissions.capabilities.includes('persistent_storage')) {
     required.push('storage_persistence_normal');
   } else {
     required.push('storage_non_persistence_incognito');
   }
 
-  if ((app.grantedNetworkWhitelist?.length ?? 0) > 0) {
+  if ((app.grantedPermissions.network.whitelist?.length ?? 0) > 0) {
     required.push('network_allowlist_enforced');
   }
 

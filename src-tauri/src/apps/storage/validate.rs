@@ -7,6 +7,7 @@ use crate::apps::types::InstalledSageApp;
 pub fn ensure_storage_permission(app: &InstalledSageApp) -> AnyResult<()> {
     if !app
         .granted_permissions
+        .capabilities
         .iter()
         .any(|key| key == "persistent_storage")
     {

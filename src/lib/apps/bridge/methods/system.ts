@@ -34,7 +34,9 @@ export const systemBridgeMethods = {
         version: ctx.app.version,
         requestedPermissions: ctx.app.requestedPermissions,
         grantedPermissions: ctx.app.grantedPermissions,
-        network: ctx.app.activeSnapshot.manifest.network?.whitelist ?? [],
+        network:
+          ctx.app.activeSnapshot.manifest.permissions?.network?.whitelist
+            ?.required ?? [],
       };
     },
   },
@@ -42,7 +44,7 @@ export const systemBridgeMethods = {
   'sage.getPermissions': {
     permission: { kind: 'none' },
     async handle({ ctx }) {
-      return ctx.app.grantedPermissions;
+      return ctx.app.grantedPermissions.capabilities;
     },
   },
 } satisfies BridgeMethodRegistry;

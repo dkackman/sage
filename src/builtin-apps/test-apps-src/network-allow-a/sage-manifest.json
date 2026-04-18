@@ -3,17 +3,17 @@
   "version": "1.0.0",
   "icon": "icon.svg",
   "permissions": {
-    "required": [],
-    "optional": []
-  },
-  "network": {
-    "whitelist": [
-      {
-        "scheme": "https",
-        "host": "example.com",
-        "required": true
+    "network": {
+      "whitelist": {
+        "required": [
+          "https://example.com"
+        ]
       }
-    ]
+    },
+    "capabilities": {
+      "required": [],
+      "optional": []
+    }
   },
   "files": []
 }

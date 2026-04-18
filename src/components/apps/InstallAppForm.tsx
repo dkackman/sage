@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type {
   SageAppPackageManifest,
   SageAppUrlPreview,
-  SageNetworkWhitelistEntry,
+  SageNetworkPermissionTarget,
 } from '@/bindings';
 import { formatAppError } from '@/lib/apps/formatAppError.ts';
 import { InstallSourceCard } from './InstallSourceCard';
@@ -19,12 +19,12 @@ interface Props {
   onInstallZip: (
     zipPath: string,
     permissions: string[],
-    networkWhitelist: SageNetworkWhitelistEntry[],
+    networkWhitelist: SageNetworkPermissionTarget[],
   ) => Promise<void>;
   onInstallUrl: (
     appUrl: string,
     permissions: string[],
-    networkWhitelist: SageNetworkWhitelistEntry[],
+    networkWhitelist: SageNetworkPermissionTarget[],
   ) => Promise<void>;
 }
 
@@ -54,7 +54,7 @@ export function InstallAppForm({
     buildFullyForbiddenPermissions(),
   );
   const [grantedNetworkWhitelist, setGrantedNetworkWhitelist] = useState<
-    SageNetworkWhitelistEntry[]
+    SageNetworkPermissionTarget[]
   >([]);
 
   async function handleSelectZipPath(zipPath: string) {

@@ -1,8 +1,8 @@
 import type {
   BridgePermissionPolicy,
+  KnownSageBridgeRequest,
   SageBridgeContext,
   SageBridgeMethod,
-  SageBridgeRequest,
 } from './types';
 
 export class BridgePermissionError extends Error {
@@ -12,21 +12,8 @@ export class BridgePermissionError extends Error {
   }
 }
 
-function snakeToCamelSegment(segment: string): string {
-  return segment.replace(/_([a-z])/g, (_, ch: string) => ch.toUpperCase());
-}
-
 function camelToSnakeSegment(segment: string): string {
   return segment.replace(/[A-Z]/g, (ch) => `_${ch.toLowerCase()}`);
-}
-
-export function permissionKeyToBridgeMethod(permissionKey: string): string {
-  const [group, action] = permissionKey.split('.');
-  if (!group || !action) {
-    throw new Error(`Invalid permission key: ${permissionKey}`);
-  }
-
-  return `${group}.${snakeToCamelSegment(action)}`;
 }
 
 export function bridgeMethodToPermissionKey(method: string): string {
@@ -44,14 +31,14 @@ async function enforcePermissionByMethod(
 ): Promise<void> {
   const permissionKey = bridgeMethodToPermissionKey(method);
 
-  if (!ctx.app.grantedPermissions.includes(permissionKey)) {
+  if (!ctx.app.grantedPermissions.capabilities.includes(permissionKey)) {
     throw new BridgePermissionError(`Permission denied for ${permissionKey}`);
   }
 }
 
 export async function enforcePermissionPolicy(args: {
   ctx: SageBridgeContext;
-  request: SageBridgeRequest;
+  request: KnownSageBridgeRequest;
   policy?: BridgePermissionPolicy;
 }): Promise<void> {
   const { ctx, request, policy } = args;

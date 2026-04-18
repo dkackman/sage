@@ -1,8 +1,29 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use specta::Type;
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SageNetworkPermissionTarget {
+    pub scheme: String,
+    pub host: String,
+}
+
+#[derive(Debug, Clone, Serialize, Type, Default, PartialEq, Eq)]
+pub struct SageRequestedNetworkWhitelist {
+    #[serde(default)]
+    pub required: Vec<SageNetworkPermissionTarget>,
+
+    #[serde(default)]
+    pub optional: Vec<SageNetworkPermissionTarget>,
+}
+
+#[derive(Debug, Clone, Serialize, Type, Default, PartialEq, Eq)]
+pub struct SageRequestedNetworkPermissions {
+    #[serde(default)]
+    pub whitelist: SageRequestedNetworkWhitelist,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq)]
-pub struct SageAppPermissions {
+pub struct SageRequestedCapabilities {
     #[serde(default)]
     pub required: Vec<String>,
 
@@ -10,31 +31,33 @@ pub struct SageAppPermissions {
     pub optional: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SageNetworkWhitelistEntry {
-    pub scheme: String,
-    pub host: String,
+#[derive(Debug, Clone, Serialize, Type, Default, PartialEq, Eq)]
+pub struct SageRequestedPermissions {
+    #[serde(default)]
+    pub network: SageRequestedNetworkPermissions,
 
     #[serde(default)]
-    pub required: bool,
+    pub capabilities: SageRequestedCapabilities,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq)]
-pub struct SageNetworkPermissions {
-    #[serde(default)]
-    pub whitelist: Vec<SageNetworkWhitelistEntry>,
+pub struct SageGrantedNetworkPermissions {
+    pub whitelist: Vec<SageNetworkPermissionTarget>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq)]
+pub struct SageGrantedPermissions {
+    pub capabilities: Vec<String>,
+    pub network: SageGrantedNetworkPermissions,
+}
+
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
 pub struct SageAppPackageManifest {
     pub name: String,
     pub version: String,
 
     #[serde(default)]
-    pub permissions: SageAppPermissions,
-
-    #[serde(default)]
-    pub network: Option<SageNetworkPermissions>,
+    pub permissions: SageRequestedPermissions,
 
     #[serde(default)]
     pub files: Vec<SageAppManifestFile>,
@@ -46,7 +69,7 @@ pub struct SageAppPackageManifest {
     pub icon: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct SageAppUrlPreview {
     #[serde(rename = "appUrl", alias = "app_url")]
     pub app_url: String,
@@ -140,17 +163,10 @@ pub struct InstalledSageApp {
     pub icon_file: String,
 
     #[serde(rename = "requestedPermissions", alias = "requested_permissions")]
-    pub requested_permissions: SageAppPermissions,
+    pub requested_permissions: SageRequestedPermissions,
 
     #[serde(rename = "grantedPermissions", alias = "granted_permissions")]
-    pub granted_permissions: Vec<String>,
-
-    #[serde(
-        rename = "grantedNetworkWhitelist",
-        alias = "granted_network_whitelist",
-        default
-    )]
-    pub granted_network_whitelist: Vec<SageNetworkWhitelistEntry>,
+    pub granted_permissions: SageGrantedPermissions,
 
     #[serde(rename = "permissionFlags", alias = "permission_flags")]
     pub permission_flags: InstalledSageAppPermissionFlags,
@@ -178,4 +194,185 @@ pub struct CorruptedInstalledSageApp {
 pub enum ListedSageApp {
     Installed(InstalledSageApp),
     Corrupted(CorruptedInstalledSageApp),
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct RawStringListBucket {
+    #[serde(default)]
+    required: Vec<String>,
+
+    #[serde(default)]
+    optional: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct RawRequestedNetworkPermissions {
+    #[serde(default)]
+    whitelist: RawStringListBucket,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct RawRequestedPermissions {
+    #[serde(default)]
+    network: RawRequestedNetworkPermissions,
+
+    #[serde(default)]
+    capabilities: Option<SageRequestedCapabilities>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct LegacyRequestedNetworkWhitelistEntry {
+    scheme: String,
+    host: String,
+
+    #[serde(default)]
+    required: bool,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct LegacyRequestedNetworkPermissions {
+    #[serde(default)]
+    whitelist: Vec<LegacyRequestedNetworkWhitelistEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawSageAppPackageManifest {
+    name: String,
+    version: String,
+
+    #[serde(default)]
+    permissions: SageRequestedPermissions,
+
+    #[serde(default)]
+    network: Option<LegacyRequestedNetworkPermissions>,
+
+    #[serde(default)]
+    files: Vec<SageAppManifestFile>,
+
+    #[serde(default)]
+    entry: Option<String>,
+
+    #[serde(default)]
+    icon: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for SageRequestedPermissions {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = <RawRequestedPermissions as Deserialize>::deserialize(deserializer)?;
+
+        let required_network = raw
+            .network
+            .whitelist
+            .required
+            .into_iter()
+            .map(|value| parse_network_permission_target(&value).map_err(serde::de::Error::custom))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let optional_network = raw
+            .network
+            .whitelist
+            .optional
+            .into_iter()
+            .map(|value| parse_network_permission_target(&value).map_err(serde::de::Error::custom))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(SageRequestedPermissions {
+            network: SageRequestedNetworkPermissions {
+                whitelist: SageRequestedNetworkWhitelist { required: required_network, optional: optional_network },
+            },
+            capabilities: raw.capabilities.unwrap_or_default(),
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for SageAppPackageManifest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = <RawSageAppPackageManifest as Deserialize>::deserialize(deserializer)?;
+
+        let mut permissions = raw.permissions;
+
+        if let Some(legacy_network) = raw.network {
+            let legacy_network = legacy_requested_network_to_requested(legacy_network);
+            permissions
+                .network
+                .whitelist
+                .required
+                .extend(legacy_network.whitelist.required);
+            permissions
+                .network
+                .whitelist
+                .optional
+                .extend(legacy_network.whitelist.optional);
+        }
+
+        Ok(SageAppPackageManifest {
+            name: raw.name,
+            version: raw.version,
+            permissions,
+            files: raw.files,
+            entry: raw.entry,
+            icon: raw.icon,
+        })
+    }
+}
+
+fn legacy_requested_network_to_requested(
+    legacy: LegacyRequestedNetworkPermissions,
+) -> SageRequestedNetworkPermissions {
+    let mut required = Vec::new();
+    let mut optional = Vec::new();
+
+    for entry in legacy.whitelist {
+        let item = SageNetworkPermissionTarget {
+            scheme: entry.scheme,
+            host: entry.host,
+        };
+
+        if entry.required {
+            required.push(item);
+        } else {
+            optional.push(item);
+        }
+    }
+
+    SageRequestedNetworkPermissions {
+        whitelist: SageRequestedNetworkWhitelist { required, optional },
+    }
+}
+
+fn parse_network_permission_target(
+    value: &str,
+) -> Result<SageNetworkPermissionTarget, String> {
+    let value = value.trim().to_ascii_lowercase();
+
+    let (scheme, host) = value
+        .split_once("://")
+        .ok_or_else(|| format!("invalid network entry (missing scheme): {}", value))?;
+
+    if scheme != "https" && scheme != "wss" {
+        return Err(format!(
+            "invalid scheme '{}', only https and wss allowed",
+            scheme
+        ));
+    }
+
+    if host.is_empty()
+        || host.contains('/')
+        || host.contains('?')
+        || host.contains('#')
+        || host.contains(' ')
+    {
+        return Err(format!("invalid host in network entry: {}", value));
+    }
+
+    Ok(SageNetworkPermissionTarget {
+        scheme: scheme.to_string(),
+        host: host.to_string(),
+    })
 }

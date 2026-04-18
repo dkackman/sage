@@ -13,11 +13,7 @@ import { useAppPendingApprovals } from '@/hooks/useAppPendingApprovals.ts';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes';
 import { focusRuntime, killRuntime } from '@/lib/apps/runtimeRegistry';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Outlet,
-  useNavigate,
-  useParams,
-} from 'react-router-dom';
+import { Outlet, useNavigate, useParams } from 'react-router-dom';
 
 export function AppsWorkspace() {
   const { appId } = useParams();
@@ -119,10 +115,14 @@ export function AppsWorkspace() {
     try {
       setApplyingUpdate(true);
 
-      await performAppUpdate(activeApp.id, activeApp.grantedPermissions, {
-        restartIfRunning: true,
-        visibleAfterRestart: true,
-      });
+      await performAppUpdate(
+        activeApp.id,
+        activeApp.grantedPermissions.capabilities,
+        {
+          restartIfRunning: true,
+          visibleAfterRestart: true,
+        },
+      );
     } finally {
       setApplyingUpdate(false);
     }

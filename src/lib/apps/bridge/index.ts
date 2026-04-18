@@ -4,6 +4,7 @@ import { bridgeMethods } from './registry';
 import { failure, success } from './responses';
 import type {
   BridgeMethodDefinition,
+  KnownSageBridgeRequest,
   SageBridgeContext,
   SageBridgeHostTools,
   SageBridgeMethod,
@@ -101,16 +102,18 @@ export async function handleBridgeRequest(
       );
     }
 
+    const knownRequest = request as KnownSageBridgeRequest;
+
     await enforcePermissionPolicy({
       ctx,
-      request,
+      request: knownRequest,
       policy: definition.permission,
     });
 
     const approvalRequest = definition.approval
       ? await definition.approval({
           ctx,
-          request: request as never,
+          request: knownRequest as never,
         })
       : null;
 

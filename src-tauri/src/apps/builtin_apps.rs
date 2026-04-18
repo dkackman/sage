@@ -14,6 +14,7 @@ use crate::apps::{
         SageAppPackageManifest,
     },
 };
+use crate::apps::types::{SageGrantedNetworkPermissions, SageGrantedPermissions};
 use crate::error::Result;
 
 pub const BUILTIN_STORAGE_ISOLATION_PERSISTENT_ID: &str =
@@ -158,14 +159,21 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
     manifest.permissions =
         normalize_and_validate_requested_permissions(&manifest.permissions)?;
 
-    let mut granted_permissions = manifest.permissions.required.clone();
-    granted_permissions.extend(manifest.permissions.optional.clone());
-    granted_permissions.sort();
-    granted_permissions.dedup();
+    let mut requested_capabilities = manifest.permissions.capabilities.required.clone();
+    requested_capabilities.extend(manifest.permissions.capabilities.optional.clone());
+    requested_capabilities.sort();
+    requested_capabilities.dedup();
 
-    validate_granted_permissions(&manifest.permissions, &granted_permissions)?;
+    let granted_permissions = SageGrantedPermissions {
+        capabilities: requested_capabilities,
+        network: SageGrantedNetworkPermissions {
+            whitelist: manifest.permissions.network.whitelist.required.clone(),
+        }
+    };
+
+    validate_granted_permissions(&manifest.permissions, &granted_permissions.capabilities)?;
     let permission_flags =
-        resolve_granted_permission_flags(&granted_permissions, None)?;
+        resolve_granted_permission_flags(&granted_permissions.capabilities, None)?;
 
     let entry_file_name = manifest_entry_file(&manifest).to_string();
     let icon_file_name = manifest_icon_file(&manifest).to_string();
@@ -188,12 +196,6 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
 
     let total_bytes = compute_total_bytes(&app_dir)?;
 
-    let granted_network_whitelist = manifest
-        .network
-        .as_ref()
-        .map(|network| network.whitelist.clone())
-        .unwrap_or_default();
-
     let app = InstalledSageApp {
         id: spec.app_id.to_string(),
         name: manifest.name.clone(),
@@ -203,7 +205,6 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
         icon_file: icon_file_name,
         requested_permissions: manifest.permissions.clone(),
         granted_permissions,
-        granted_network_whitelist,
         permission_flags,
         source: InstalledSageAppSource::Zip,
         active_snapshot: InstalledSageAppSnapshot {

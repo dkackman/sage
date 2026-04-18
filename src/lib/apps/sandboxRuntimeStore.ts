@@ -49,6 +49,66 @@ function replaceByAppId<T>(
   return [...withoutSameApp, next];
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object';
+}
+
+function hasStringRunId(
+  value: unknown,
+): value is { runId: string } & Record<string, unknown> {
+  return isObject(value) && typeof value.runId === 'string';
+}
+
+function isClearCycleReport(
+  report: unknown,
+): report is { type: 'clear_cycle'; data: SandboxStorageClearProbeResult } {
+  return (
+    isObject(report) &&
+    report.type === 'clear_cycle' &&
+    hasStringRunId(report.data)
+  );
+}
+
+function isIsolationReport(
+  report: unknown,
+): report is { type: 'isolation'; data: SandboxIsolationProbeResult } {
+  return (
+    isObject(report) &&
+    report.type === 'isolation' &&
+    hasStringRunId(report.data)
+  );
+}
+
+function isPersistenceWriteReport(report: unknown): report is {
+  type: 'persistence_write';
+  data: SandboxPersistenceWriteProbeResult;
+} {
+  return (
+    isObject(report) &&
+    report.type === 'persistence_write' &&
+    hasStringRunId(report.data)
+  );
+}
+
+function isPersistenceReadReport(report: unknown): report is {
+  type: 'persistence_read';
+  data: SandboxPersistenceReadProbeResult;
+} {
+  return (
+    isObject(report) &&
+    report.type === 'persistence_read' &&
+    hasStringRunId(report.data)
+  );
+}
+
+function isNetworkReport(
+  report: unknown,
+): report is { type: 'network'; data: SandboxNetworkProbeResult } {
+  return (
+    isObject(report) && report.type === 'network' && hasStringRunId(report.data)
+  );
+}
+
 export function resetSandboxRun(runId: string) {
   runs.set(runId, createEmptyRunResults());
 }
@@ -73,7 +133,7 @@ export function acceptSandboxBridgeSend(args: {
 
   const report = payload.report;
 
-  if (report.type === 'clear_cycle') {
+  if (isClearCycleReport(report)) {
     const run = getOrCreateRun(report.data.runId);
     run.clearCycle = replaceByAppId(run.clearCycle, {
       appId,
@@ -86,41 +146,41 @@ export function acceptSandboxBridgeSend(args: {
     return false;
   }
 
-  switch (report.type) {
-    case 'isolation': {
-      const run = getOrCreateRun(report.data.runId);
-      run.isolation = replaceByAppId(run.isolation, {
-        appId,
-        data: report.data,
-      });
-      return true;
-    }
-
-    case 'persistence_write': {
-      const run = getOrCreateRun(report.data.runId);
-      run.persistenceWrite = replaceByAppId(run.persistenceWrite, {
-        appId,
-        data: report.data,
-      });
-      return true;
-    }
-
-    case 'persistence_read': {
-      const run = getOrCreateRun(report.data.runId);
-      run.persistenceRead = replaceByAppId(run.persistenceRead, {
-        appId,
-        data: report.data,
-      });
-      return true;
-    }
-
-    case 'network': {
-      const run = getOrCreateRun(report.data.runId);
-      run.network = replaceByAppId(run.network, {
-        appId,
-        data: report.data,
-      });
-      return true;
-    }
+  if (isIsolationReport(report)) {
+    const run = getOrCreateRun(report.data.runId);
+    run.isolation = replaceByAppId(run.isolation, {
+      appId,
+      data: report.data,
+    });
+    return true;
   }
+
+  if (isPersistenceWriteReport(report)) {
+    const run = getOrCreateRun(report.data.runId);
+    run.persistenceWrite = replaceByAppId(run.persistenceWrite, {
+      appId,
+      data: report.data,
+    });
+    return true;
+  }
+
+  if (isPersistenceReadReport(report)) {
+    const run = getOrCreateRun(report.data.runId);
+    run.persistenceRead = replaceByAppId(run.persistenceRead, {
+      appId,
+      data: report.data,
+    });
+    return true;
+  }
+
+  if (isNetworkReport(report)) {
+    const run = getOrCreateRun(report.data.runId);
+    run.network = replaceByAppId(run.network, {
+      appId,
+      data: report.data,
+    });
+    return true;
+  }
+
+  return false;
 }

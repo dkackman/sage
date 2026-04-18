@@ -12,7 +12,7 @@ import {
 import {
   SageAppPackageManifest,
   SageAppUrlPreview,
-  SageNetworkWhitelistEntry,
+  SageNetworkPermissionTarget,
 } from '@/bindings.ts';
 import { invoke } from '@tauri-apps/api/core';
 import { useApps } from '@/contexts/AppsContext.tsx';
@@ -112,7 +112,7 @@ export function Apps() {
     string[]
   >([]);
   const [editingGrantedNetworkWhitelist, setEditingGrantedNetworkWhitelist] =
-    useState<SageNetworkWhitelistEntry[]>([]);
+    useState<SageNetworkPermissionTarget[]>([]);
 
   const {
     apps,
@@ -222,8 +222,10 @@ export function Apps() {
 
   function openPermissionsDialog(app: InstalledEntry) {
     setPermissionsDialogApp(app);
-    setEditingGrantedPermissions(app.grantedPermissions ?? []);
-    setEditingGrantedNetworkWhitelist(app.grantedNetworkWhitelist ?? []);
+    setEditingGrantedPermissions(app.grantedPermissions?.capabilities);
+    setEditingGrantedNetworkWhitelist(
+      app.grantedPermissions?.network?.whitelist ?? [],
+    );
     setPermissionsDialogBusy(false);
     setPermissionsDialogError(null);
     setPendingPermissionsRetry(null);
@@ -294,7 +296,7 @@ export function Apps() {
     async (
       app: InstalledEntry,
       nextPermissions: string[],
-      nextNetworkWhitelist: SageNetworkWhitelistEntry[],
+      nextNetworkWhitelist: SageNetworkPermissionTarget[],
     ) => {
       setPermissionsDialogBusy(true);
       setPermissionsDialogError(null);
@@ -675,7 +677,7 @@ export function Apps() {
 
             void performAppUpdate(
               contextMenu.app.id,
-              contextMenu.app.grantedPermissions,
+              contextMenu.app.grantedPermissions?.capabilities,
               {
                 restartIfRunning: true,
                 visibleAfterRestart: contextMenuAppIsRunning,

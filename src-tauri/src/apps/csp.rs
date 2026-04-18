@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
-use crate::apps::types::{InstalledSageApp, SageNetworkWhitelistEntry};
+
+use crate::apps::types::{InstalledSageApp, SageNetworkPermissionTarget};
 
 fn csp_source_list(items: &[String]) -> String {
     items.join(" ")
@@ -10,7 +11,7 @@ fn is_allowed_scheme(s: &str) -> bool {
 }
 
 fn network_permission_to_csp_source(
-    permission: &SageNetworkWhitelistEntry,
+    permission: &SageNetworkPermissionTarget,
 ) -> Option<String> {
     let scheme = permission.scheme.trim().to_ascii_lowercase();
     let host = permission.host.trim().to_ascii_lowercase();
@@ -62,7 +63,7 @@ pub fn build_app_csp(app: &InstalledSageApp) -> String {
 
     let mut connect_sources = BTreeSet::from(["'self'".to_string()]);
 
-    for entry in &app.granted_network_whitelist {
+    for entry in &app.granted_permissions.network.whitelist {
         if let Some(source) = network_permission_to_csp_source(entry) {
             connect_sources.insert(source);
         }

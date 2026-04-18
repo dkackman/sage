@@ -6,9 +6,9 @@ use crate::apps::{
     limits::{
         MAX_APP_FILE_COUNT, MAX_APP_PATH_LENGTH, MAX_APP_TOTAL_SIZE_BYTES,
     },
+    permissions::normalize_and_validate_requested_permissions,
     types::{SageAppManifestFile, SageAppPackageManifest},
 };
-use crate::apps::permissions::normalize_and_validate_requested_permissions;
 
 pub fn validate_manifest_file_path(path: &str) -> AnyResult<()> {
     if path.is_empty() {

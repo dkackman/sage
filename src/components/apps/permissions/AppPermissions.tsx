@@ -1,9 +1,9 @@
-import type { SageAppPermissions } from '@/bindings';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AppPermissionGroup,
   type AppPermissionTreeNode,
 } from './AppPermissionGroup';
+import { SageRequestedPermissions } from '@sage-app/sdk';
 
 type Tone = 'default' | 'added' | 'removed' | 'warning';
 
@@ -14,7 +14,7 @@ interface PermissionEntry {
 }
 
 interface Props {
-  permissions: SageAppPermissions | null | undefined;
+  permissions: SageRequestedPermissions | null | undefined;
   grantedPermissions?: string[];
   editable?: boolean;
   tone?: Tone;
@@ -22,25 +22,29 @@ interface Props {
 }
 
 function buildEntries(
-  permissions: SageAppPermissions | null | undefined,
+  permissions: SageRequestedPermissions | null | undefined,
   grantedPermissions: string[],
 ): PermissionEntry[] {
   const grantedSet = new Set(grantedPermissions);
 
-  const requiredEntries = (permissions?.required ?? []).map((key) => ({
-    key,
-    required: true,
-    granted: grantedSet.has(key),
-  }));
+  const requiredEntries = (permissions?.capabilities?.required ?? []).map(
+    (key) => ({
+      key,
+      required: true,
+      granted: grantedSet.has(key),
+    }),
+  );
 
-  const optionalEntries = (permissions?.optional ?? []).map((key) => ({
-    key,
-    required: false,
-    granted: grantedSet.has(key),
-  }));
+  const optionalEntries = (permissions?.capabilities?.optional ?? []).map(
+    (key) => ({
+      key,
+      required: false,
+      granted: grantedSet.has(key),
+    }),
+  );
 
   return [...requiredEntries, ...optionalEntries].sort((a, b) =>
-    a.key.localeCompare(b),
+    a.key.localeCompare(b.key),
   );
 }
 
@@ -140,7 +144,7 @@ export function AppPermissions({
         prevSet.delete(fullKey);
       }
 
-      const requiredKeys = new Set(permissions?.required ?? []);
+      const requiredKeys = new Set(permissions?.capabilities?.required ?? []);
 
       for (const key of requiredKeys) {
         prevSet.add(key);

@@ -135,8 +135,9 @@ export function dataStoreIdFor(appId: string): number[] {
 }
 
 export function shouldUseIncognito(app: InstalledSageApp): boolean {
-  const hasPersistentStorage =
-    app.grantedPermissions.includes('persistent_storage');
+  const hasPersistentStorage = (
+    app.grantedPermissions.capabilities
+  ).includes('persistent_storage');
 
   if (!hasPersistentStorage) {
     return true;

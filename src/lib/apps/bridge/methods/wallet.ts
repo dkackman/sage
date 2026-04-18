@@ -2,10 +2,15 @@ import { invoke } from '@tauri-apps/api/core';
 import type { TransactionResponse } from '@/bindings';
 import type { BridgeMethodRegistry } from '../types';
 
-export const walletBridgeMethods = {
+export const walletBridgeMethods: BridgeMethodRegistry = {
   'wallet.sendXch': {
     approval: async ({ ctx, request }) => {
-      if (ctx.app.grantedPermissions.includes('wallet.send_xch_auto_submit')) {
+      if (
+        ctx.app.grantedPermissions.capabilities.includes(
+          'wallet.send_xch_auto_submit',
+
+        )
+      ) {
         return null;
       }
 

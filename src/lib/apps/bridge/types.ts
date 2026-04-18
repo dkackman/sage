@@ -1,5 +1,17 @@
 import type { InstalledSageApp } from '@/bindings';
-import {
+
+export type {
+  SageBridgeVersion,
+  SageBridgeRequest,
+  SageBridgeResponse,
+  SageBridgeSuccessResponse,
+  SageBridgeErrorResponse,
+  SageBridgeEventPayload,
+  SageBridgeSendPayload,
+  SageWalletSendXchRequest,
+} from '@sage-app/sdk';
+
+import type {
   SageBridgeRequest,
   SageBridgeSendPayload,
   SageWalletSendXchRequest,

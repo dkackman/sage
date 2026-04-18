@@ -7,8 +7,28 @@ export type SageNetworkPermission = {
 };
 
 export type SageRequestedPermissions = {
-  required: string[];
-  optional: string[];
+  network?: SageRequestedNetworkPermissions;
+  capabilities?: SageRequestedCapabilities;
+};
+export type SageNetworkWhitelistEntry = {
+  scheme: string;
+  host: string;
+  required?: boolean;
+};
+export type SageRequestedCapabilities = {
+  required?: string[];
+  optional?: string[];
+};
+export type SageRequestedNetworkPermissions = {
+  whitelist?: SageRequestedNetworkWhitelist;
+};
+export type SageRequestedNetworkWhitelist = {
+  required?: SageRequestedNetworkWhitelistEntry[];
+  optional?: SageRequestedNetworkWhitelistEntry[];
+};
+export type SageRequestedNetworkWhitelistEntry = {
+  scheme: string;
+  host: string;
 };
 
 export type SageAppInfo = {

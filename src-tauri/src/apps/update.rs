@@ -18,11 +18,12 @@ use crate::{
         snapshot::download_url_snapshot,
         types::{
             InstalledSageApp, InstalledSageAppPendingUpdate,
-            InstalledSageAppSource, SageAppUrlPreview, SageNetworkWhitelistEntry,
+            InstalledSageAppSource, SageAppUrlPreview,
         },
     },
     error::Result,
 };
+use crate::apps::types::SageGrantedPermissions;
 
 #[command]
 #[specta::specta]
@@ -137,7 +138,7 @@ pub async fn download_app_update(
 pub async fn apply_app_update(
     state: State<'_, AppState>,
     app_id: String,
-    granted_permissions: Vec<String>,
+    granted_permissions: SageGrantedPermissions,
 ) -> Result<InstalledSageApp> {
     let base_path = {
         let state = state.lock().await;
@@ -157,7 +158,7 @@ pub async fn apply_app_update(
 
     validate_granted_permissions(
         &pending.manifest.permissions,
-        &granted_permissions,
+        &granted_permissions.capabilities,
     )
         .map_err(|err| {
             io::Error::other(format!(
@@ -166,8 +167,8 @@ pub async fn apply_app_update(
         })?;
 
     let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
-        pending.manifest.network.as_ref(),
-        &app.granted_network_whitelist,
+        &pending.manifest.permissions.network,
+        &app.granted_permissions.network.whitelist,
     )
         .map_err(|err| {
             io::Error::other(format!(
@@ -176,7 +177,7 @@ pub async fn apply_app_update(
         })?;
 
     let permission_flags = resolve_granted_permission_flags(
-        &granted_permissions,
+        &granted_permissions.capabilities,
         Some(&app.permission_flags),
     )
         .map_err(|err| {
@@ -204,7 +205,6 @@ pub async fn apply_app_update(
     app.version = pending.manifest.version.clone();
     app.requested_permissions = pending.manifest.permissions.clone();
     app.granted_permissions = granted_permissions;
-    app.granted_network_whitelist = granted_network_whitelist;
     app.permission_flags = permission_flags;
     app.active_snapshot = snapshot;
     app.entry_file = manifest_entry_file(&app.active_snapshot.manifest).to_string();
@@ -226,8 +226,7 @@ pub async fn apply_app_update(
 pub async fn apps_update_permissions(
     state: State<'_, AppState>,
     app_id: String,
-    granted_permissions: Vec<String>,
-    granted_network_whitelist: Vec<SageNetworkWhitelistEntry>,
+    granted_permissions: SageGrantedPermissions,
     clear_storage_taint: bool,
 ) -> Result<()> {
     let base_path = {
@@ -238,17 +237,17 @@ pub async fn apps_update_permissions(
     let mut app = read_installed_app_by_id(&base_path, &app_id)
         .map_err(|err| io::Error::other(format!("failed to read app {app_id}: {err}")))?;
 
-    validate_granted_permissions(&app.requested_permissions, &granted_permissions)
+    validate_granted_permissions(&app.requested_permissions, &granted_permissions.capabilities)
         .map_err(|err| io::Error::other(format!("invalid granted permissions: {err}")))?;
 
     let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
-        app.active_snapshot.manifest.network.as_ref(),
-        &granted_network_whitelist,
+        &app.active_snapshot.manifest.permissions.network,
+        &granted_permissions.network.whitelist,
     )
         .map_err(|err| io::Error::other(format!("invalid granted network whitelist: {err}")))?;
 
     let mut permission_flags = resolve_granted_permission_flags(
-        &app.granted_permissions,
+        &granted_permissions.capabilities,
         Some(&app.permission_flags),
     )
         .map_err(|err| io::Error::other(err.to_string()))?;
@@ -258,9 +257,8 @@ pub async fn apps_update_permissions(
     }
 
     app.granted_permissions = granted_permissions;
-    app.granted_network_whitelist = granted_network_whitelist;
     app.permission_flags = resolve_granted_permission_flags(
-        &app.granted_permissions,
+        &app.granted_permissions.capabilities,
         Some(&permission_flags),
     )
         .map_err(|err| io::Error::other(err.to_string()))?;

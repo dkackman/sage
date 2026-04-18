@@ -3,8 +3,10 @@
   "version": "1.0.0",
   "icon": "icon.svg",
   "permissions": {
-    "required": ["persistent_storage"],
-    "optional": []
+    "capabilities": {
+      "required": ["persistent_storage"],
+      "optional": []
+    }
   },
   "files": []
 }

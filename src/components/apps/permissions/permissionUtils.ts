@@ -1,11 +1,11 @@
 import type {
   SageAppPackageManifest,
-  SageNetworkWhitelistEntry,
+  SageNetworkPermissionTarget,
 } from '@/bindings';
 
 function sortNetworkEntries(
-  entries: SageNetworkWhitelistEntry[],
-): SageNetworkWhitelistEntry[] {
+  entries: SageNetworkPermissionTarget[],
+): SageNetworkPermissionTarget[] {
   return [...entries].sort((a, b) => {
     const aKey = `${a.scheme}://${a.host}`;
     const bKey = `${b.scheme}://${b.host}`;
@@ -20,15 +20,15 @@ export function buildFullyForbiddenPermissions(): string[] {
 export function buildInitialGrantedPermissions(
   manifest: SageAppPackageManifest,
 ): string[] {
-  return [...(manifest.permissions?.required ?? [])].sort((a, b) =>
-    a.localeCompare(b),
+  return [...(manifest.permissions?.capabilities?.required ?? [])].sort(
+    (a, b) => a.localeCompare(b),
   );
 }
 
 export function buildInitialGrantedNetworkWhitelist(
   manifest: SageAppPackageManifest,
-): SageNetworkWhitelistEntry[] {
+): SageNetworkPermissionTarget[] {
   return sortNetworkEntries(
-    (manifest.network?.whitelist ?? []).filter((entry) => entry.required),
+    manifest.permissions?.network?.whitelist?.required ?? [],
   );
 }

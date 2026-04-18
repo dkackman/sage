@@ -51,15 +51,23 @@ function buildFallbackAppInfo(): SageAppInfo {
         'unknown-app';
 
     return {
-        id: appId,
-        name: document.title || appId,
-        version: '0.0.0',
-        requestedPermissions: {
+      id: appId,
+      name: document.title || appId,
+      version: '0.0.0',
+      requestedPermissions: {
+        network: {
+          whitelist: {
             required: [],
             optional: [],
+          }
         },
-        grantedPermissions: [],
-        network: [],
+        capabilities: {
+          required: [],
+          optional: [],
+        },
+      },
+      grantedPermissions: [],
+      network: []
     };
 }
 

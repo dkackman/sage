@@ -3,8 +3,12 @@ use std::collections::BTreeSet;
 
 use crate::apps::{
     permission_registry::get_permission_definition,
-    types::{InstalledSageAppPermissionFlags, SageAppPermissions},
+    types::{
+        InstalledSageAppPermissionFlags, SageRequestedPermissions,
+        SageRequestedCapabilities, SageRequestedNetworkPermissions,
+    },
 };
+use crate::apps::types::SageNetworkPermissionTarget;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PermissionSummary {
@@ -13,9 +17,9 @@ pub struct PermissionSummary {
     pub persistent_storage: bool,
 }
 
-pub fn normalize_and_validate_requested_permissions(
-    permissions: &SageAppPermissions,
-) -> AnyResult<SageAppPermissions> {
+fn normalize_capability_keys(
+    permissions: &SageRequestedCapabilities,
+) -> SageRequestedCapabilities {
     let mut required = BTreeSet::new();
     let mut optional = BTreeSet::new();
 
@@ -31,9 +35,84 @@ pub fn normalize_and_validate_requested_permissions(
         }
     }
 
-    let normalized = SageAppPermissions {
+    SageRequestedCapabilities {
         required: required.into_iter().collect(),
         optional: optional.into_iter().collect(),
+    }
+}
+
+pub fn normalize_network_key(scheme: &str, host: &str) -> AnyResult<(String, String)> {
+    let scheme = scheme.trim().to_ascii_lowercase();
+    let host = host.trim().to_ascii_lowercase();
+
+    if scheme.is_empty() {
+        return Err(anyhow!("network whitelist entry is missing scheme"));
+    }
+
+    if host.is_empty() {
+        return Err(anyhow!("network whitelist entry is missing host"));
+    }
+
+    Ok((scheme, host))
+}
+
+fn normalize_requested_network_entries(
+    entries: &[SageNetworkPermissionTarget],
+) -> AnyResult<Vec<SageNetworkPermissionTarget>> {
+    let mut seen = BTreeSet::new();
+    let mut normalized = Vec::new();
+
+    for entry in entries {
+        let (scheme, host) = normalize_network_key(&entry.scheme, &entry.host)?;
+        if seen.insert((scheme.clone(), host.clone())) {
+            normalized.push(SageNetworkPermissionTarget { scheme, host });
+        }
+    }
+
+    normalized.sort_by(|a, b| {
+        let a_key = format!("{}://{}", a.scheme, a.host);
+        let b_key = format!("{}://{}", b.scheme, b.host);
+        a_key.cmp(&b_key)
+    });
+
+    Ok(normalized)
+}
+
+fn normalize_requested_network_permissions(
+    permissions: &SageRequestedNetworkPermissions,
+) -> AnyResult<SageRequestedNetworkPermissions> {
+    let required = normalize_requested_network_entries(
+        &permissions.whitelist.required,
+    )?;
+
+    let required_keys: BTreeSet<_> = required
+        .iter()
+        .map(|entry| (entry.scheme.clone(), entry.host.clone()))
+        .collect();
+
+    let optional = normalize_requested_network_entries(
+        &permissions.whitelist.optional,
+    )?
+    .into_iter()
+    .filter(|entry| {
+        !required_keys.contains(&(entry.scheme.clone(), entry.host.clone()))
+    })
+    .collect();
+
+    Ok(SageRequestedNetworkPermissions {
+        whitelist: crate::apps::types::SageRequestedNetworkWhitelist {
+            required,
+            optional,
+        },
+    })
+}
+
+pub fn normalize_and_validate_requested_permissions(
+    permissions: &SageRequestedPermissions,
+) -> AnyResult<SageRequestedPermissions> {
+    let normalized = SageRequestedPermissions {
+        network: normalize_requested_network_permissions(&permissions.network)?,
+        capabilities: normalize_capability_keys(&permissions.capabilities),
     };
 
     validate_requested_permission_policy(&normalized)?;
@@ -41,12 +120,12 @@ pub fn normalize_and_validate_requested_permissions(
 }
 
 pub fn validate_granted_permissions(
-    permissions: &SageAppPermissions,
+    permissions: &SageRequestedPermissions,
     granted: &[String],
 ) -> AnyResult<()> {
     let mut allowed = BTreeSet::new();
-    allowed.extend(permissions.required.iter().cloned());
-    allowed.extend(permissions.optional.iter().cloned());
+    allowed.extend(permissions.capabilities.required.iter().cloned());
+    allowed.extend(permissions.capabilities.optional.iter().cloned());
 
     let granted_set: BTreeSet<_> = granted.iter().cloned().collect();
 
@@ -59,7 +138,7 @@ pub fn validate_granted_permissions(
         }
     }
 
-    for key in &permissions.required {
+    for key in &permissions.capabilities.required {
         if !granted_set.contains(key) {
             return Err(anyhow!("missing required permission: {}", key));
         }
@@ -84,11 +163,11 @@ pub fn summarize_permissions(keys: &[String]) -> AnyResult<PermissionSummary> {
 }
 
 pub fn validate_requested_permission_policy(
-    permissions: &SageAppPermissions,
+    permissions: &SageRequestedPermissions,
 ) -> AnyResult<()> {
     let mut requested = Vec::new();
-    requested.extend(permissions.required.iter().cloned());
-    requested.extend(permissions.optional.iter().cloned());
+    requested.extend(permissions.capabilities.required.iter().cloned());
+    requested.extend(permissions.capabilities.optional.iter().cloned());
 
     let summary = summarize_permissions(&requested)?;
 

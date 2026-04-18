@@ -368,11 +368,11 @@ async previewAppZip(zipPath: string) : Promise<SageAppPackageManifest> {
 async previewAppUrl(appUrl: string) : Promise<SageAppUrlPreview> {
     return await TAURI_INVOKE("preview_app_url", { appUrl });
 },
-async installAppZip(zipPath: string, grantedPermissions: string[], grantedNetworkWhitelist: SageNetworkWhitelistEntry[]) : Promise<InstalledSageApp> {
-    return await TAURI_INVOKE("install_app_zip", { zipPath, grantedPermissions, grantedNetworkWhitelist });
+async installAppZip(zipPath: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
+    return await TAURI_INVOKE("install_app_zip", { zipPath, grantedPermissions });
 },
-async installAppUrl(appUrl: string, grantedPermissions: string[], grantedNetworkWhitelist: SageNetworkWhitelistEntry[]) : Promise<InstalledSageApp> {
-    return await TAURI_INVOKE("install_app_url", { appUrl, grantedPermissions, grantedNetworkWhitelist });
+async installAppUrl(appUrl: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
+    return await TAURI_INVOKE("install_app_url", { appUrl, grantedPermissions });
 },
 async uninstallApp(appId: string) : Promise<null> {
     return await TAURI_INVOKE("uninstall_app", { appId });
@@ -386,11 +386,11 @@ async checkAppUpdate(appId: string) : Promise<SageAppUrlPreview | null> {
 async downloadAppUpdate(appId: string) : Promise<InstalledSageApp> {
     return await TAURI_INVOKE("download_app_update", { appId });
 },
-async applyAppUpdate(appId: string, grantedPermissions: string[]) : Promise<InstalledSageApp> {
+async applyAppUpdate(appId: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
     return await TAURI_INVOKE("apply_app_update", { appId, grantedPermissions });
 },
-async appsUpdatePermissions(appId: string, grantedPermissions: string[], grantedNetworkWhitelist: SageNetworkWhitelistEntry[], clearStorageTaint: boolean) : Promise<null> {
-    return await TAURI_INVOKE("apps_update_permissions", { appId, grantedPermissions, grantedNetworkWhitelist, clearStorageTaint });
+async appsUpdatePermissions(appId: string, grantedPermissions: SageGrantedPermissions, clearStorageTaint: boolean) : Promise<null> {
+    return await TAURI_INVOKE("apps_update_permissions", { appId, grantedPermissions, clearStorageTaint });
 },
 async appsMarkStorageMayContainSecrets(appId: string) : Promise<null> {
     return await TAURI_INVOKE("apps_mark_storage_may_contain_secrets", { appId });
@@ -1731,7 +1731,7 @@ index: number }
  */
 export type IncreaseDerivationIndexResponse = Record<string, never>
 export type InheritedNetwork = "mainnet" | "testnet11"
-export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageAppPermissions; grantedPermissions: string[]; grantedNetworkWhitelist?: SageNetworkWhitelistEntry[]; permissionFlags: InstalledSageAppPermissionFlags; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot; pendingUpdate: InstalledSageAppPendingUpdate | null }
+export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; permissionFlags: InstalledSageAppPermissionFlags; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot; pendingUpdate: InstalledSageAppPendingUpdate | null }
 export type InstalledSageAppPendingUpdate = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type InstalledSageAppPermissionFlags = { hasSecretAccess: boolean; hasExternalAccess: boolean; storageMayContainSecrets: boolean; isolated: boolean }
 export type InstalledSageAppSnapshot = { manifestHash: string; snapshotDir: string; totalBytes: number; manifest: SageAppPackageManifest }
@@ -2199,11 +2199,15 @@ export type ResyncCatResponse = Record<string, never>
  */
 export type ResyncResponse = Record<string, never>
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
-export type SageAppPackageManifest = { name: string; version: string; permissions?: SageAppPermissions; network?: SageNetworkPermissions | null; files?: SageAppManifestFile[]; entry?: string | null; icon?: string | null }
-export type SageAppPermissions = { required?: string[]; optional?: string[] }
+export type SageAppPackageManifest = { name: string; version: string; permissions?: SageRequestedPermissions; files?: SageAppManifestFile[]; entry?: string | null; icon?: string | null }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
-export type SageNetworkPermissions = { whitelist?: SageNetworkWhitelistEntry[] }
-export type SageNetworkWhitelistEntry = { scheme: string; host: string; required?: boolean }
+export type SageGrantedNetworkPermissions = { whitelist: SageNetworkPermissionTarget[] }
+export type SageGrantedPermissions = { capabilities: string[]; network: SageGrantedNetworkPermissions }
+export type SageNetworkPermissionTarget = { scheme: string; host: string }
+export type SageRequestedCapabilities = { required?: string[]; optional?: string[] }
+export type SageRequestedNetworkPermissions = { whitelist?: SageRequestedNetworkWhitelist }
+export type SageRequestedNetworkWhitelist = { required?: SageNetworkPermissionTarget[]; optional?: SageNetworkPermissionTarget[] }
+export type SageRequestedPermissions = { network?: SageRequestedNetworkPermissions; capabilities?: SageRequestedCapabilities }
 /**
  * Save a theme NFT to the wallet
  */
