@@ -5,11 +5,17 @@ import type {
   SandboxPersistenceReadProbeResult,
   SandboxPersistenceWriteProbeResult,
 } from '@/lib/apps/sandbox';
+
+export interface SandboxAppResult<T> {
+  appId: string;
+  data: T;
+}
+
 export interface SandboxRunResults {
-  isolation: SandboxIsolationProbeResult[];
-  persistenceWrite: SandboxPersistenceWriteProbeResult[];
-  persistenceRead: SandboxPersistenceReadProbeResult[];
-  network: SandboxNetworkProbeResult[];
+  isolation: SandboxAppResult<SandboxIsolationProbeResult>[];
+  persistenceWrite: SandboxAppResult<SandboxPersistenceWriteProbeResult>[];
+  persistenceRead: SandboxAppResult<SandboxPersistenceReadProbeResult>[];
+  network: SandboxAppResult<SandboxNetworkProbeResult>[];
 }
 
 const runs = new Map<string, SandboxRunResults>();
@@ -32,9 +38,12 @@ function getOrCreateRun(runId: string): SandboxRunResults {
   return existing;
 }
 
-function replaceByMode<T extends { mode: string }>(items: T[], next: T): T[] {
-  const withoutSameMode = items.filter((item) => item.mode !== next.mode);
-  return [...withoutSameMode, next];
+function replaceByAppId<T>(
+  items: SandboxAppResult<T>[],
+  next: SandboxAppResult<T>,
+): SandboxAppResult<T>[] {
+  const withoutSameApp = items.filter((item) => item.appId !== next.appId);
+  return [...withoutSameApp, next];
 }
 
 export function resetSandboxRun(runId: string) {
@@ -68,25 +77,37 @@ export function acceptSandboxBridgeSend(args: {
   switch (report.type) {
     case 'isolation': {
       const run = getOrCreateRun(report.data.runId);
-      run.isolation = replaceByMode(run.isolation, report.data);
+      run.isolation = replaceByAppId(run.isolation, {
+        appId,
+        data: report.data,
+      });
       return true;
     }
 
     case 'persistence_write': {
       const run = getOrCreateRun(report.data.runId);
-      run.persistenceWrite = replaceByMode(run.persistenceWrite, report.data);
+      run.persistenceWrite = replaceByAppId(run.persistenceWrite, {
+        appId,
+        data: report.data,
+      });
       return true;
     }
 
     case 'persistence_read': {
       const run = getOrCreateRun(report.data.runId);
-      run.persistenceRead = replaceByMode(run.persistenceRead, report.data);
+      run.persistenceRead = replaceByAppId(run.persistenceRead, {
+        appId,
+        data: report.data,
+      });
       return true;
     }
 
     case 'network': {
       const run = getOrCreateRun(report.data.runId);
-      run.network = replaceByMode(run.network, report.data);
+      run.network = replaceByAppId(run.network, {
+        appId,
+        data: report.data,
+      });
       return true;
     }
   }

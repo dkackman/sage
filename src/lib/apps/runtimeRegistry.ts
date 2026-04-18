@@ -40,6 +40,18 @@ const runtimes = new Map<string, RuntimeInternalRecord>();
 const runtimeByAppId = new Map<string, string>();
 const listeners = new Set<RuntimeListener>();
 
+function isBuiltinTestApp(app: InstalledSageApp): boolean {
+  return app.id.startsWith('__sage_test_');
+}
+
+function shouldDebugTestAppWindows(app: InstalledSageApp): boolean {
+  return (
+    import.meta.env.DEV &&
+    import.meta.env.VITE_SAGE_DEBUG_TEST_APPS === '1' &&
+    isBuiltinTestApp(app)
+  );
+}
+
 function emitChange() {
   const snapshot = Array.from(runtimes.values()).map(stripInternal);
   for (const listener of listeners) {
@@ -201,21 +213,23 @@ async function createInlineRuntime(
   }
 
   const isIncognito = shouldUseIncognito(app);
+  const debug = shouldDebugTestAppWindows(app);
 
   const webview = new Webview(hostWindow, webviewLabel, {
     url: entrySrc,
-    x: 0,
-    y: 0,
-    width: 1,
-    height: 1,
-    focus: !!options?.visible,
+    x: debug ? 80 : 0,
+    y: debug ? 80 : 0,
+    width: debug ? 200 : 1,
+    height: debug ? 200 : 1,
+    focus: debug || !!options?.visible,
     incognito: isIncognito,
     dataStoreIdentifier: dataStoreIdFor(app.id),
   });
 
   await waitForWebviewCreated(webview);
 
-  if (!options?.visible) {
+  // Only hide if NOT debugging
+  if (!options?.visible && !debug) {
     await webview.hide();
   }
 

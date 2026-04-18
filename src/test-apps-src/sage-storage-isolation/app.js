@@ -93,8 +93,6 @@ import { createSageClient } from './sdk.js';
 
   await report({
     runId,
-    mode: 'persistent',
-    persistentStorage: true,
     localStorageVisible,
     indexedDbVisible,
     error,
@@ -110,8 +108,6 @@ import { createSageClient } from './sdk.js';
         type: 'isolation',
         data: {
           runId: params.get('runId'),
-          mode: 'persistent',
-          persistentStorage: true,
           localStorageVisible: false,
           indexedDbVisible: false,
           error: err instanceof Error ? err.message : String(err),

@@ -159,8 +159,6 @@ import { createSageClient } from './sdk.js';
 
     await reportWrite({
       runId,
-      mode: 'incognito',
-      persistentStorage: false,
       localStorageWrote,
       indexedDbWrote,
       error,
@@ -188,8 +186,6 @@ import { createSageClient } from './sdk.js';
 
   await reportRead({
     runId,
-    mode: 'incognito',
-    persistentStorage: false,
     localStoragePresent,
     indexedDbPresent,
     error,
@@ -207,8 +203,6 @@ import { createSageClient } from './sdk.js';
           type: 'persistence_write',
           data: {
             runId: params.get('runId'),
-            mode: 'incognito',
-            persistentStorage: false,
             localStorageWrote: false,
             indexedDbWrote: false,
             error: err instanceof Error ? err.message : String(err),
@@ -224,8 +218,6 @@ import { createSageClient } from './sdk.js';
         type: 'persistence_read',
         data: {
           runId: params.get('runId'),
-          mode: 'incognito',
-          persistentStorage: false,
           localStoragePresent: false,
           indexedDbPresent: false,
           error: err instanceof Error ? err.message : String(err),

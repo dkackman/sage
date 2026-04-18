@@ -4,6 +4,7 @@ import {
   closeAppRuntime,
 } from '@/lib/apps/runtimeRegistry';
 import { getBuiltinApp } from '@/lib/apps/registry';
+import type { SandboxAppResult } from '@/lib/apps/sandboxRuntimeStore';
 import type {
   SandboxIsolationProbeResult,
   SandboxNetworkProbeResult,
@@ -42,7 +43,45 @@ function formatUnknownError(err: unknown): string {
   }
 }
 
+function labelForAppId(appId: string): string {
+  switch (appId) {
+    case TEST_APP_IDS.storageIsolationPersistent:
+      return 'persistent isolation';
+    case TEST_APP_IDS.storageIsolationIncognito:
+      return 'incognito isolation';
+    case TEST_APP_IDS.persistencePersistent:
+      return 'persistent write/read';
+    case TEST_APP_IDS.persistenceIncognito:
+      return 'incognito write/read';
+    case TEST_APP_IDS.networkAllowA:
+      return 'network allow-a';
+    case TEST_APP_IDS.networkAllowB:
+      return 'network allow-b';
+    default:
+      return appId;
+  }
+}
+
+function shouldKeepFailedTestAppsOpen(): boolean {
+  return (
+    import.meta.env.DEV && import.meta.env.VITE_SAGE_DEBUG_TEST_APPS === '1'
+  );
+}
+
+async function stopTestAppsOnSuccess(appIds: string[]): Promise<void> {
+  await stopTestApps(appIds);
+}
+
+async function stopTestAppsOnFailure(appIds: string[]): Promise<void> {
+  if (shouldKeepFailedTestAppsOpen()) {
+    return;
+  }
+
+  await stopTestApps(appIds);
+}
+
 function formatPersistenceWriteFailure(
+  label: string,
   result: SandboxPersistenceWriteProbeResult,
 ): string {
   const failed: string[] = [];
@@ -56,13 +95,14 @@ function formatPersistenceWriteFailure(
   }
 
   if (failed.length === 0) {
-    return `${result.mode} write probe failed for unknown reason.`;
+    return `${label} write probe failed for unknown reason.`;
   }
 
-  return `${result.mode} write probe could not write: ${failed.join(', ')}.`;
+  return `${label} write probe could not write: ${failed.join(', ')}.`;
 }
 
 function formatPersistenceReadFailure(
+  label: string,
   result: SandboxPersistenceReadProbeResult,
   expectedPresent: boolean,
 ): string {
@@ -81,10 +121,17 @@ function formatPersistenceReadFailure(
   }
 
   if (mismatches.length === 0) {
-    return `${result.mode} read probe failed for unknown reason.`;
+    return `${label} read probe failed for unknown reason.`;
   }
 
-  return `${result.mode} read probe mismatch: ${mismatches.join(', ')}.`;
+  return `${label} read probe mismatch: ${mismatches.join(', ')}.`;
+}
+
+function findByAppId<T>(
+  items: SandboxAppResult<T>[],
+  appId: string,
+): T | undefined {
+  return items.find((item) => item.appId === appId)?.data;
 }
 
 async function writeSageProbeIndexedDb(runId: string): Promise<void> {
@@ -199,7 +246,9 @@ async function runIsolationTest(): Promise<{
       startTestApp(TEST_APP_IDS.storageIsolationIncognito, { runId }),
     ]);
 
-    const results = await pollResults<SandboxIsolationProbeResult>({
+    const results = await pollResults<
+      SandboxAppResult<SandboxIsolationProbeResult>
+    >({
       runId,
       expectedCount: 2,
       timeoutMs: 10000,
@@ -207,46 +256,55 @@ async function runIsolationTest(): Promise<{
       read: () => getSandboxRunResults(runId).isolation,
     });
 
-    if (results.length !== 2) {
+    const persistent = findByAppId(
+      results,
+      TEST_APP_IDS.storageIsolationPersistent,
+    );
+    const incognito = findByAppId(
+      results,
+      TEST_APP_IDS.storageIsolationIncognito,
+    );
+
+    if (!persistent || !incognito) {
+      await stopTestAppsOnFailure(appIds);
       return {
         passed: false,
-        details: `Expected 2 isolation probe results, got ${results.length}.`,
+        details: 'Isolation probe returned incomplete app result set.',
       };
     }
 
-    const modes = new Set(results.map((result) => result.mode));
-    if (!modes.has('persistent') || !modes.has('incognito')) {
-      return {
-        passed: false,
-        details: 'Isolation probe returned incomplete or malformed mode set.',
-      };
-    }
+    for (const [appId, result] of [
+      [TEST_APP_IDS.storageIsolationPersistent, persistent],
+      [TEST_APP_IDS.storageIsolationIncognito, incognito],
+    ] as const) {
+      const label = labelForAppId(appId);
 
-    for (const result of results) {
       if (result.runId !== runId) {
+        await stopTestAppsOnFailure(appIds);
         return {
           passed: false,
-          details: `Isolation probe ${result.mode} reported mismatched run id.`,
+          details: `${label} probe reported mismatched run id.`,
         };
       }
 
       if (result.error) {
+        await stopTestAppsOnFailure(appIds);
         return {
           passed: false,
-          details: `Isolation probe ${result.mode} reported error: ${result.error}`,
+          details: `${label} probe reported error: ${result.error}`,
         };
       }
 
-      if (
-        result.localStorageVisible ||
-        result.indexedDbVisible
-      ) {
+      if (result.localStorageVisible || result.indexedDbVisible) {
+        await stopTestAppsOnFailure(appIds);
         return {
           passed: false,
-          details: `Isolation probe ${result.mode} was able to observe Sage probe data.`,
+          details: `${label} probe was able to observe Sage probe data.`,
         };
       }
     }
+
+    await stopTestAppsOnSuccess(appIds);
 
     return {
       passed: true,
@@ -254,12 +312,11 @@ async function runIsolationTest(): Promise<{
         'Both sandbox probe modes were unable to observe Sage probe data.',
     };
   } catch (err) {
+    await stopTestAppsOnFailure(appIds);
     return {
       passed: false,
       details: formatUnknownError(err),
     };
-  } finally {
-    await stopTestApps(appIds);
   }
 }
 
@@ -288,7 +345,9 @@ async function runPersistenceTest(): Promise<{
       }),
     ]);
 
-    const writeResults = await pollResults<SandboxPersistenceWriteProbeResult>({
+    const writeResults = await pollResults<
+      SandboxAppResult<SandboxPersistenceWriteProbeResult>
+    >({
       runId,
       expectedCount: 2,
       timeoutMs: 10000,
@@ -296,18 +355,17 @@ async function runPersistenceTest(): Promise<{
       read: () => getSandboxRunResults(runId).persistenceWrite,
     });
 
-    if (writeResults.length !== 2) {
-      const details = `Expected 2 persistence write results, got ${writeResults.length}.`;
-      return {
-        persistentNormal: { passed: false, details },
-        persistenceIncognito: { passed: false, details },
-      };
-    }
-
-    const persistentWrite = writeResults.find((r) => r.mode === 'persistent');
-    const incognitoWrite = writeResults.find((r) => r.mode === 'incognito');
+    const persistentWrite = findByAppId(
+      writeResults,
+      TEST_APP_IDS.persistencePersistent,
+    );
+    const incognitoWrite = findByAppId(
+      writeResults,
+      TEST_APP_IDS.persistenceIncognito,
+    );
 
     if (!persistentWrite || !incognitoWrite) {
+      await stopTestAppsOnFailure(appIds);
       return {
         persistentNormal: {
           passed: false,
@@ -321,6 +379,7 @@ async function runPersistenceTest(): Promise<{
     }
 
     if (persistentWrite.runId !== runId || incognitoWrite.runId !== runId) {
+      await stopTestAppsOnFailure(appIds);
       return {
         persistentNormal: {
           passed: false,
@@ -334,6 +393,7 @@ async function runPersistenceTest(): Promise<{
     }
 
     if (persistentWrite.error) {
+      await stopTestAppsOnFailure(appIds);
       return {
         persistentNormal: {
           passed: false,
@@ -346,25 +406,21 @@ async function runPersistenceTest(): Promise<{
       };
     }
 
-    if (
-      !persistentWrite.localStorageWrote ||
-      !persistentWrite.indexedDbWrote
-    ) {
-      const details = formatPersistenceWriteFailure(persistentWrite);
+    if (!persistentWrite.localStorageWrote || !persistentWrite.indexedDbWrote) {
+      const details = formatPersistenceWriteFailure(
+        'persistent',
+        persistentWrite,
+      );
 
+      await stopTestAppsOnFailure(appIds);
       return {
-        persistentNormal: {
-          passed: false,
-          details,
-        },
-        persistenceIncognito: {
-          passed: false,
-          details,
-        },
+        persistentNormal: { passed: false, details },
+        persistenceIncognito: { passed: false, details },
       };
     }
 
     if (incognitoWrite.error) {
+      await stopTestAppsOnFailure(appIds);
       return {
         persistentNormal: {
           passed: false,
@@ -377,21 +433,16 @@ async function runPersistenceTest(): Promise<{
       };
     }
 
-    if (
-      !incognitoWrite.localStorageWrote ||
-      !incognitoWrite.indexedDbWrote
-    ) {
-      const details = formatPersistenceWriteFailure(incognitoWrite);
+    if (!incognitoWrite.localStorageWrote || !incognitoWrite.indexedDbWrote) {
+      const details = formatPersistenceWriteFailure(
+        'incognito',
+        incognitoWrite,
+      );
 
+      await stopTestAppsOnFailure(appIds);
       return {
-        persistentNormal: {
-          passed: false,
-          details,
-        },
-        persistenceIncognito: {
-          passed: false,
-          details,
-        },
+        persistentNormal: { passed: false, details },
+        persistenceIncognito: { passed: false, details },
       };
     }
 
@@ -408,7 +459,9 @@ async function runPersistenceTest(): Promise<{
       }),
     ]);
 
-    const readResults = await pollResults<SandboxPersistenceReadProbeResult>({
+    const readResults = await pollResults<
+      SandboxAppResult<SandboxPersistenceReadProbeResult>
+    >({
       runId,
       expectedCount: 2,
       timeoutMs: 10000,
@@ -416,18 +469,17 @@ async function runPersistenceTest(): Promise<{
       read: () => getSandboxRunResults(runId).persistenceRead,
     });
 
-    if (readResults.length !== 2) {
-      const details = `Expected 2 persistence read results, got ${readResults.length}.`;
-      return {
-        persistentNormal: { passed: false, details },
-        persistenceIncognito: { passed: false, details },
-      };
-    }
-
-    const persistentRead = readResults.find((r) => r.mode === 'persistent');
-    const incognitoRead = readResults.find((r) => r.mode === 'incognito');
+    const persistentRead = findByAppId(
+      readResults,
+      TEST_APP_IDS.persistencePersistent,
+    );
+    const incognitoRead = findByAppId(
+      readResults,
+      TEST_APP_IDS.persistenceIncognito,
+    );
 
     if (!persistentRead || !incognitoRead) {
+      await stopTestAppsOnFailure(appIds);
       return {
         persistentNormal: {
           passed: false,
@@ -441,6 +493,7 @@ async function runPersistenceTest(): Promise<{
     }
 
     if (persistentRead.runId !== runId || incognitoRead.runId !== runId) {
+      await stopTestAppsOnFailure(appIds);
       return {
         persistentNormal: {
           passed: false,
@@ -463,14 +516,14 @@ async function runPersistenceTest(): Promise<{
       !incognitoRead.localStoragePresent &&
       !incognitoRead.indexedDbPresent;
 
-    return {
+    const result = {
       persistentNormal: {
         passed: persistentPassed,
         details: persistentPassed
           ? 'Persistent mode retained localStorage and IndexedDB across reopen.'
           : persistentRead.error
             ? `Persistent read probe reported error: ${persistentRead.error}`
-            : formatPersistenceReadFailure(persistentRead, true),
+            : formatPersistenceReadFailure('persistent', persistentRead, true),
       },
       persistenceIncognito: {
         passed: incognitoPassed,
@@ -478,18 +531,25 @@ async function runPersistenceTest(): Promise<{
           ? 'Incognito mode did not retain localStorage or IndexedDB across reopen.'
           : incognitoRead.error
             ? `Incognito read probe reported error: ${incognitoRead.error}`
-            : formatPersistenceReadFailure(incognitoRead, false),
+            : formatPersistenceReadFailure('incognito', incognitoRead, false),
       },
     };
+
+    if (result.persistentNormal.passed && result.persistenceIncognito.passed) {
+      await stopTestAppsOnSuccess(appIds);
+    } else {
+      await stopTestAppsOnFailure(appIds);
+    }
+
+    return result;
   } catch (err) {
+    await stopTestAppsOnFailure(appIds);
     const message = formatUnknownError(err);
 
     return {
       persistentNormal: { passed: false, details: message },
       persistenceIncognito: { passed: false, details: message },
     };
-  } finally {
-    await stopTestApps(appIds);
   }
 }
 
@@ -509,7 +569,9 @@ async function runNetworkTest(): Promise<{
       startTestApp(TEST_APP_IDS.networkAllowB, { runId }),
     ]);
 
-    const results = await pollResults<SandboxNetworkProbeResult>({
+    const results = await pollResults<
+      SandboxAppResult<SandboxNetworkProbeResult>
+    >({
       runId,
       expectedCount: 2,
       timeoutMs: 12000,
@@ -517,50 +579,57 @@ async function runNetworkTest(): Promise<{
       read: () => getSandboxRunResults(runId).network,
     });
 
-    if (results.length !== 2) {
+    const allowA = findByAppId(results, TEST_APP_IDS.networkAllowA);
+    const allowB = findByAppId(results, TEST_APP_IDS.networkAllowB);
+
+    if (!allowA || !allowB) {
+      await stopTestAppsOnFailure(appIds);
       return {
         passed: false,
-        details: `Expected 2 network probe results, got ${results.length}.`,
+        details: 'Network probe returned incomplete app result set.',
       };
     }
 
-    const modes = new Set(results.map((result) => result.mode));
-    if (!modes.has('allow-a') || !modes.has('allow-b')) {
-      return {
-        passed: false,
-        details: 'Network probe returned incomplete or malformed mode set.',
-      };
-    }
+    for (const [appId, result] of [
+      [TEST_APP_IDS.networkAllowA, allowA],
+      [TEST_APP_IDS.networkAllowB, allowB],
+    ] as const) {
+      const label = labelForAppId(appId);
 
-    for (const result of results) {
       if (result.runId !== runId) {
+        await stopTestAppsOnFailure(appIds);
         return {
           passed: false,
-          details: `Network probe ${result.mode} reported mismatched run id.`,
+          details: `${label} probe reported mismatched run id.`,
         };
       }
 
       if (result.error) {
+        await stopTestAppsOnFailure(appIds);
         return {
           passed: false,
-          details: `Network probe ${result.mode} reported error: ${result.error}`,
+          details: `${label} probe reported error: ${result.error}`,
         };
       }
 
       if (!result.allowedOk) {
+        await stopTestAppsOnFailure(appIds);
         return {
           passed: false,
-          details: `Network probe ${result.mode} could not reach its allowed URL ${result.allowedUrl}.`,
+          details: `${label} probe could not reach its allowed URL ${result.allowedUrl}.`,
         };
       }
 
       if (result.blockedOk) {
+        await stopTestAppsOnFailure(appIds);
         return {
           passed: false,
-          details: `Network probe ${result.mode} was able to reach blocked URL ${result.blockedUrl}.`,
+          details: `${label} probe was able to reach blocked URL ${result.blockedUrl}.`,
         };
       }
     }
+
+    await stopTestAppsOnSuccess(appIds);
 
     return {
       passed: true,
@@ -568,12 +637,11 @@ async function runNetworkTest(): Promise<{
         'Network allowlist probes succeeded for allowed URLs and failed for blocked URLs in both flipped configurations.',
     };
   } catch (err) {
+    await stopTestAppsOnFailure(appIds);
     return {
       passed: false,
       details: formatUnknownError(err),
     };
-  } finally {
-    await stopTestApps(appIds);
   }
 }
 

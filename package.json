@@ -6,7 +6,11 @@
   "packageManager": "pnpm@10.13.1",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build:sdk": "pnpm --filter @sage-app/sdk build",
+    "build:test-apps": "pnpm build:sdk && node ./scripts/build-test-apps.mjs",
+    "build": "pnpm build:test-apps && tsc -b && vite build",
+    "tauri:dev": "pnpm build:test-apps && tauri dev",
+    "tauri:build": "pnpm build:test-apps && tauri build",
     "lint": "eslint .",
     "preview": "vite preview",
     "prettier": "prettier --write .",

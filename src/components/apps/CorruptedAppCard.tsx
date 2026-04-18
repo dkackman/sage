@@ -21,7 +21,7 @@ export function CorruptedAppCard({ app, onRemove }: Props) {
           </CardTitle>
 
           <div className='text-xs text-muted-foreground break-all'>
-            Install dir: {app.install_dir}
+            Install dir: {app.installDir}
           </div>
         </div>
 

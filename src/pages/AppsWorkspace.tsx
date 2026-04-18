@@ -16,17 +16,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Outlet,
   useNavigate,
-  useOutletContext,
   useParams,
 } from 'react-router-dom';
-
-export interface AppsWorkspaceOutletContext {
-  requestApproval: ReturnType<typeof useAppPendingApprovals>['requestApproval'];
-}
-
-export function useAppsWorkspaceOutletContext() {
-  return useOutletContext<AppsWorkspaceOutletContext>();
-}
 
 export function AppsWorkspace() {
   const { appId } = useParams();
@@ -128,7 +119,7 @@ export function AppsWorkspace() {
     try {
       setApplyingUpdate(true);
 
-      await performAppUpdate(activeApp.id, {
+      await performAppUpdate(activeApp.id, activeApp.grantedPermissions, {
         restartIfRunning: true,
         visibleAfterRestart: true,
       });
