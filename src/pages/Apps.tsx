@@ -19,7 +19,8 @@ import { useApps } from '@/contexts/AppsContext.tsx';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
 import { clearAppDataStore } from '@/lib/apps/storageClearCycle';
 import { formatCapabilityLabel } from '@/lib/apps/sandbox';
-import { LayoutGrid, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { AppsPageActionsMenu } from '@/components/apps/AppsPageActionsMenu';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEditor.tsx';
@@ -113,8 +114,8 @@ export function Apps() {
   >([]);
   const [editingGrantedNetworkWhitelist, setEditingGrantedNetworkWhitelist] =
     useState<SageNetworkPermissionTarget[]>([]);
-  const showSandboxDebugUi =
-      import.meta.env.DEV && import.meta.env.VITE_SAGE_DEBUG_TEST_APPS === '1';
+  const showSandboxDebugResults =
+    import.meta.env.DEV && import.meta.env.VITE_SAGE_DEBUG_TEST_APPS === '1';
 
   const {
     apps,
@@ -299,7 +300,7 @@ export function Apps() {
       app: InstalledEntry,
       nextPermissions: string[],
       nextNetworkWhitelist: SageNetworkPermissionTarget[],
-    ) => {
+    ): Promise<void> => {
       setPermissionsDialogBusy(true);
       setPermissionsDialogError(null);
       setPendingPermissionsRetry(null);
@@ -369,8 +370,12 @@ export function Apps() {
 
       await invoke('apps_update_permissions', {
         appId: permissionsDialogApp.id,
-        grantedPermissions: pendingPermissionsRetry.nextPermissions,
-        grantedNetworkWhitelist: editingGrantedNetworkWhitelist,
+        grantedPermissions: {
+          capabilities: pendingPermissionsRetry.nextPermissions,
+          network: {
+            whitelist: editingGrantedNetworkWhitelist,
+          },
+        },
         clearStorageTaint: true,
       });
 
@@ -482,7 +487,6 @@ export function Apps() {
               Launch and manage installed Sage apps.
             </p>
           </div>
-
           <div className='flex items-center gap-2'>
             <Button
               variant='outline'
@@ -494,31 +498,26 @@ export function Apps() {
               Install App
             </Button>
 
-            <Button
-              variant='outline'
-              onClick={() => {
+            <AppsPageActionsMenu
+              showSandboxDebugUi
+              sandboxTestsRunning={
+                sandboxState.overallCriticalStatus === 'running'
+              }
+              onTaskManager={() => {
                 navigate('/apps/task-manager');
               }}
-            >
-              <LayoutGrid className='mr-2 h-4 w-4' />
-              Task Manager
-            </Button>
-            <Button
-              variant='outline'
-              disabled={sandboxState.overallCriticalStatus === 'running'}
-              onClick={() => {
+              onRerunSandboxTests={() => {
                 void rerunSandboxTests();
               }}
-            >
-              {sandboxState.overallCriticalStatus === 'running'
-                ? 'Running sandbox tests...'
-                : 'Re-run sandbox tests'}
-            </Button>
+              onClose={() => {
+                //
+              }}
+            />
           </div>
         </div>
 
         <div className='mx-auto w-full max-w-7xl flex-1 min-h-0 overflow-auto px-4 pb-4 md:px-6 md:pb-6'>
-          {showSandboxDebugUi ? (
+          {showSandboxDebugResults ? (
             <Alert className='mb-6'>
               <AlertTitle>
                 {sandboxState.overallCriticalStatus === 'running'
