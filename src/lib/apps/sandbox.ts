@@ -192,15 +192,29 @@ export function evaluateAppLaunchGate(
   app: InstalledSageApp,
   sandbox: SandboxState,
 ): AppLaunchGateResult {
-  if (
-    sandbox.overallCriticalStatus === 'pending' ||
-    sandbox.overallCriticalStatus === 'running'
-  ) {
+  const isolation = sandbox.capabilities.storage_isolation_from_sage;
+
+  if (isolation.status === 'pending' || isolation.status === 'running') {
     return {
       allowed: false,
       kind: 'running',
-      capability: null,
-      message: 'Sandbox tests are still running.',
+      capability: 'storage_isolation_from_sage',
+      message: `Sandbox tests are still running for ${formatCapabilityLabel(
+        'storage_isolation_from_sage',
+      )}.`,
+    };
+  }
+
+  if (isolation.status === 'failed') {
+    return {
+      allowed: false,
+      kind: 'failed',
+      capability: 'storage_isolation_from_sage',
+      message:
+        isolation.details ??
+        `Sandbox test failed for ${formatCapabilityLabel(
+          'storage_isolation_from_sage',
+        )}.`,
     };
   }
 
