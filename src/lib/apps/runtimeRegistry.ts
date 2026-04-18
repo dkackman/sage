@@ -385,7 +385,7 @@ export async function clearAppRuntimeBrowsingData(
   }
 
   const clearingWebview = new Webview(hostWindow, webviewLabel, {
-    url: `sage-app://${app.id}/__sage/blank`,
+    url: `sage-app://${app.id}/__sage/clear`,
     x: 0,
     y: 0,
     width: 1,

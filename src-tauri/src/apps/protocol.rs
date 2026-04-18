@@ -10,17 +10,18 @@ use crate::apps::{
     snapshot::read_snapshot_file,
 };
 
-fn build_blank_internal_response() -> AnyResult<Response<Vec<u8>>> {
+fn build_clear_internal_response() -> AnyResult<Response<Vec<u8>>> {
     Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "text/html; charset=utf-8")
         .header("Cache-Control", "no-store")
+        .header("Clear-Site-Data", "*")
         .header("X-Content-Type-Options", "nosniff")
         .body(
             b"<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>"
                 .to_vec(),
         )
-        .map_err(|err| anyhow!("failed to build blank internal response: {err}"))
+        .map_err(|err| anyhow!("failed to build clear internal response: {err}"))
 }
 
 fn handle_builtin_test_app_request(
@@ -32,8 +33,8 @@ fn handle_builtin_test_app_request(
 
     let request_path = request.uri().path();
 
-    if request_path == "/__sage/blank" {
-        return build_blank_internal_response();
+    if request_path == "/__sage/clear" {
+        return build_clear_internal_response();
     }
 
     let app_dir = builtin_test_app_dir(app_id)?
@@ -88,8 +89,8 @@ pub fn handle_app_protocol_request(
     let app = read_installed_app_by_id(base_path, host)?;
     let request_path = uri.path();
 
-    if request_path == "/__sage/blank" {
-        return build_blank_internal_response();
+    if request_path == "/__sage/clear" {
+        return build_clear_internal_response();
     }
 
     let snapshot_dir = Path::new(&app.active_snapshot.snapshot_dir);
@@ -104,6 +105,7 @@ pub fn handle_app_protocol_request(
             .status(StatusCode::OK)
             .header("Content-Type", "text/html; charset=utf-8")
             .header("Content-Security-Policy", &csp)
+            .header("Clear-Site-Data", "*")
             .header("X-Content-Type-Options", "nosniff")
             .body(html.into_bytes())
             .map_err(|err| anyhow!("failed to build protocol response: {err}"));
@@ -119,6 +121,7 @@ pub fn handle_app_protocol_request(
         .status(StatusCode::OK)
         .header("Content-Type", mime)
         .header("Content-Security-Policy", csp)
+        .header("Clear-Site-Data", "*")
         .header("X-Content-Type-Options", "nosniff")
         .body(bytes)
         .map_err(|err| anyhow!("failed to build protocol response: {err}"))
