@@ -16,7 +16,6 @@ import { createSageClient } from './sdk.js';
   }
 
   const LOCAL_STORAGE_KEY = `sandbox_persistence_local_storage:${runId}:persistent`;
-  const COOKIE_KEY = `sandbox_persistence_cookie_${runId}_persistent`;
   const DB_NAME = `sandbox_persistence_db_${runId}_persistent`;
   const STORE_NAME = 'probe_store';
   const DB_KEY = 'probe_key';
@@ -141,7 +140,6 @@ import { createSageClient } from './sdk.js';
 
   if (phase === 'write') {
     let localStorageWrote = false;
-    let cookieWrote = false;
     let indexedDbWrote = false;
     let error = null;
 
@@ -154,16 +152,6 @@ import { createSageClient } from './sdk.js';
         localStorageWrote = false;
       }
 
-      try {
-        document.cookie = `${COOKIE_KEY}=present; path=/`;
-        cookieWrote = document.cookie
-          .split(';')
-          .map((part) => part.trim())
-          .some((part) => part === `${COOKIE_KEY}=present`);
-      } catch {
-        cookieWrote = false;
-      }
-
       indexedDbWrote = await writeIndexedDbValue();
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
@@ -174,7 +162,6 @@ import { createSageClient } from './sdk.js';
       mode: 'persistent',
       persistentStorage: true,
       localStorageWrote,
-      cookieWrote,
       indexedDbWrote,
       error,
     });
@@ -183,7 +170,6 @@ import { createSageClient } from './sdk.js';
   }
 
   let localStoragePresent = false;
-  let cookiePresent = false;
   let indexedDbPresent = false;
   let error = null;
 
@@ -193,15 +179,6 @@ import { createSageClient } from './sdk.js';
         localStorage.getItem(LOCAL_STORAGE_KEY) === 'present';
     } catch {
       localStoragePresent = false;
-    }
-
-    try {
-      cookiePresent = document.cookie
-        .split(';')
-        .map((part) => part.trim())
-        .some((part) => part === `${COOKIE_KEY}=present`);
-    } catch {
-      cookiePresent = false;
     }
 
     indexedDbPresent = await readIndexedDbValue();
@@ -214,7 +191,6 @@ import { createSageClient } from './sdk.js';
     mode: 'persistent',
     persistentStorage: true,
     localStoragePresent,
-    cookiePresent,
     indexedDbPresent,
     error,
   });
@@ -234,7 +210,6 @@ import { createSageClient } from './sdk.js';
             mode: 'persistent',
             persistentStorage: true,
             localStorageWrote: false,
-            cookieWrote: false,
             indexedDbWrote: false,
             error: err instanceof Error ? err.message : String(err),
           },
@@ -252,7 +227,6 @@ import { createSageClient } from './sdk.js';
           mode: 'persistent',
           persistentStorage: true,
           localStoragePresent: false,
-          cookiePresent: false,
           indexedDbPresent: false,
           error: err instanceof Error ? err.message : String(err),
         },

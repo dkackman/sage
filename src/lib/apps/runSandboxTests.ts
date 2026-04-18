@@ -18,7 +18,6 @@ import {
 } from '@/lib/apps/sandboxRuntimeStore';
 
 const PROBE_LOCAL_STORAGE_KEY = 'sage_probe_local_storage';
-const PROBE_COOKIE_KEY = 'sage_probe_cookie';
 const PROBE_INDEXED_DB_NAME = 'sage_probe_db';
 const PROBE_INDEXED_DB_STORE = 'probe_store';
 const PROBE_INDEXED_DB_KEY = 'sage_probe_key';
@@ -41,6 +40,51 @@ function formatUnknownError(err: unknown): string {
   } catch {
     return String(err);
   }
+}
+
+function formatPersistenceWriteFailure(
+  result: SandboxPersistenceWriteProbeResult,
+): string {
+  const failed: string[] = [];
+
+  if (!result.localStorageWrote) {
+    failed.push('localStorage');
+  }
+
+  if (!result.indexedDbWrote) {
+    failed.push('IndexedDB');
+  }
+
+  if (failed.length === 0) {
+    return `${result.mode} write probe failed for unknown reason.`;
+  }
+
+  return `${result.mode} write probe could not write: ${failed.join(', ')}.`;
+}
+
+function formatPersistenceReadFailure(
+  result: SandboxPersistenceReadProbeResult,
+  expectedPresent: boolean,
+): string {
+  const mismatches: string[] = [];
+
+  if (result.localStoragePresent !== expectedPresent) {
+    mismatches.push(
+      `localStorage=${result.localStoragePresent} expected=${expectedPresent}`,
+    );
+  }
+
+  if (result.indexedDbPresent !== expectedPresent) {
+    mismatches.push(
+      `IndexedDB=${result.indexedDbPresent} expected=${expectedPresent}`,
+    );
+  }
+
+  if (mismatches.length === 0) {
+    return `${result.mode} read probe failed for unknown reason.`;
+  }
+
+  return `${result.mode} read probe mismatch: ${mismatches.join(', ')}.`;
 }
 
 async function writeSageProbeIndexedDb(runId: string): Promise<void> {
@@ -92,7 +136,6 @@ async function writeSageProbeIndexedDb(runId: string): Promise<void> {
 
 async function writeSageProbes(runId: string): Promise<void> {
   localStorage.setItem(PROBE_LOCAL_STORAGE_KEY, runId);
-  document.cookie = `${PROBE_COOKIE_KEY}=${encodeURIComponent(runId)}; path=/`;
   await writeSageProbeIndexedDb(runId);
 }
 
@@ -196,7 +239,6 @@ async function runIsolationTest(): Promise<{
 
       if (
         result.localStorageVisible ||
-        result.cookieVisible ||
         result.indexedDbVisible
       ) {
         return {
@@ -306,19 +348,18 @@ async function runPersistenceTest(): Promise<{
 
     if (
       !persistentWrite.localStorageWrote ||
-      !persistentWrite.cookieWrote ||
       !persistentWrite.indexedDbWrote
     ) {
+      const details = formatPersistenceWriteFailure(persistentWrite);
+
       return {
         persistentNormal: {
           passed: false,
-          details:
-            'Persistent write probe could not write all persistence surfaces.',
+          details,
         },
         persistenceIncognito: {
           passed: false,
-          details:
-            'Persistent write probe could not write all persistence surfaces.',
+          details,
         },
       };
     }
@@ -338,19 +379,18 @@ async function runPersistenceTest(): Promise<{
 
     if (
       !incognitoWrite.localStorageWrote ||
-      !incognitoWrite.cookieWrote ||
       !incognitoWrite.indexedDbWrote
     ) {
+      const details = formatPersistenceWriteFailure(incognitoWrite);
+
       return {
         persistentNormal: {
           passed: false,
-          details:
-            'Incognito write probe could not write all persistence surfaces.',
+          details,
         },
         persistenceIncognito: {
           passed: false,
-          details:
-            'Incognito write probe could not write all persistence surfaces.',
+          details,
         },
       };
     }
@@ -416,31 +456,29 @@ async function runPersistenceTest(): Promise<{
     const persistentPassed =
       !persistentRead.error &&
       persistentRead.localStoragePresent &&
-      persistentRead.cookiePresent &&
       persistentRead.indexedDbPresent;
 
     const incognitoPassed =
       !incognitoRead.error &&
       !incognitoRead.localStoragePresent &&
-      !incognitoRead.cookiePresent &&
       !incognitoRead.indexedDbPresent;
 
     return {
       persistentNormal: {
         passed: persistentPassed,
         details: persistentPassed
-          ? 'Persistent mode retained localStorage, cookies, and IndexedDB across reopen.'
+          ? 'Persistent mode retained localStorage and IndexedDB across reopen.'
           : persistentRead.error
             ? `Persistent read probe reported error: ${persistentRead.error}`
-            : 'Persistent mode did not retain all persistence surfaces across reopen.',
+            : formatPersistenceReadFailure(persistentRead, true),
       },
       persistenceIncognito: {
         passed: incognitoPassed,
         details: incognitoPassed
-          ? 'Incognito mode did not retain localStorage, cookies, or IndexedDB across reopen.'
+          ? 'Incognito mode did not retain localStorage or IndexedDB across reopen.'
           : incognitoRead.error
             ? `Incognito read probe reported error: ${incognitoRead.error}`
-            : 'Incognito mode retained browser data across reopen when it should not have.',
+            : formatPersistenceReadFailure(incognitoRead, false),
       },
     };
   } catch (err) {

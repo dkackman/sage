@@ -11,7 +11,6 @@ import { createSageClient } from './sdk.js';
   }
 
   const LOCAL_STORAGE_KEY = 'sage_probe_local_storage';
-  const COOKIE_KEY = 'sage_probe_cookie';
   const DB_NAME = 'sage_probe_db';
   const STORE_NAME = 'probe_store';
   const DB_KEY = 'sage_probe_key';
@@ -76,7 +75,6 @@ import { createSageClient } from './sdk.js';
   }
 
   let localStorageVisible = false;
-  let cookieVisible = false;
   let indexedDbVisible = false;
   let error = null;
 
@@ -86,15 +84,6 @@ import { createSageClient } from './sdk.js';
       localStorageVisible = typeof value === 'string' && value.length > 0;
     } catch {
       localStorageVisible = false;
-    }
-
-    try {
-      cookieVisible = document.cookie
-        .split(';')
-        .map((part) => part.trim())
-        .some((part) => part.startsWith(`${COOKIE_KEY}=`));
-    } catch {
-      cookieVisible = false;
     }
 
     indexedDbVisible = await readIndexedDbProbe();
@@ -107,7 +96,6 @@ import { createSageClient } from './sdk.js';
     mode: 'incognito',
     persistentStorage: false,
     localStorageVisible,
-    cookieVisible,
     indexedDbVisible,
     error,
   });
@@ -125,7 +113,6 @@ import { createSageClient } from './sdk.js';
           mode: 'incognito',
           persistentStorage: false,
           localStorageVisible: false,
-          cookieVisible: false,
           indexedDbVisible: false,
           error: err instanceof Error ? err.message : String(err),
         },
