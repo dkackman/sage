@@ -261,14 +261,8 @@ pub async fn install_app_zip(
             name: manifest.name.clone(),
             version: manifest.version.clone(),
             install_dir: install_dir.to_string_lossy().to_string(),
-            entry_file: Path::new(&snapshot.snapshot_dir)
-                .join("index.html")
-                .to_string_lossy()
-                .to_string(),
-            icon_file: Path::new(&snapshot.snapshot_dir)
-                .join("icon.png")
-                .to_string_lossy()
-                .to_string(),
+            entry_file: "index.html".to_string(),
+            icon_file: "icon.png".to_string(),
             requested_permissions: manifest.permissions.clone(),
             granted_permissions,
             permission_flags,
@@ -388,14 +382,8 @@ pub async fn install_app_url(
         name: preview.manifest.name.clone(),
         version: preview.manifest.version.clone(),
         install_dir: install_dir.to_string_lossy().to_string(),
-        entry_file: Path::new(&snapshot.snapshot_dir)
-            .join("index.html")
-            .to_string_lossy()
-            .to_string(),
-        icon_file: Path::new(&snapshot.snapshot_dir)
-            .join("icon.png")
-            .to_string_lossy()
-            .to_string(),
+        entry_file: "index.html".to_string(),
+        icon_file: "icon.png".to_string(),
         requested_permissions: preview.manifest.permissions.clone(),
         granted_permissions,
         permission_flags,

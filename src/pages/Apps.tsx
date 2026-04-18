@@ -13,6 +13,7 @@ import { SageAppPackageManifest, SageAppUrlPreview } from '@/bindings.ts';
 import { invoke } from '@tauri-apps/api/core';
 import { useApps } from '@/contexts/AppsContext.tsx';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
+import { clearAppDataStore } from '@/lib/apps/storageClearCycle';
 import { formatCapabilityLabel } from '@/lib/apps/sandbox';
 import { LayoutGrid, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -28,6 +29,11 @@ type AppContextMenuState = {
   app: InstalledEntry;
   x: number;
   y: number;
+} | null;
+
+type PendingPermissionsRetry = {
+  appId: string;
+  nextPermissions: string[];
 } | null;
 
 function clampContextMenuPosition(args: {
@@ -52,6 +58,28 @@ function clampContextMenuPosition(args: {
   };
 }
 
+function formatErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+
+  if (typeof err === 'string') {
+    return err;
+  }
+
+  try {
+    return JSON.stringify(err, null, 2);
+  } catch {
+    return String(err);
+  }
+}
+
+function isStorageTaintPermissionError(message: string): boolean {
+  return message.includes(
+    'before you can grant externally observable permissions, you need to clear storage that may contain cached secrets',
+  );
+}
+
 export function Apps() {
   const navigate = useNavigate();
   const [installOpen, setInstallOpen] = useState(false);
@@ -69,6 +97,12 @@ export function Apps() {
   >({});
   const [permissionsDialogApp, setPermissionsDialogApp] =
     useState<InstalledEntry | null>(null);
+  const [permissionsDialogBusy, setPermissionsDialogBusy] = useState(false);
+  const [permissionsDialogError, setPermissionsDialogError] = useState<
+    string | null
+  >(null);
+  const [pendingPermissionsRetry, setPendingPermissionsRetry] =
+    useState<PendingPermissionsRetry>(null);
 
   const {
     apps,
@@ -80,7 +114,6 @@ export function Apps() {
     uninstallApp,
     checkForUpdate,
     performAppUpdate,
-    clearAppStorage,
     updateAvailability,
     busyAppIds,
     sandboxState,
@@ -103,18 +136,6 @@ export function Apps() {
     () => apps.filter((entry) => entry.kind === 'corrupted'),
     [apps],
   );
-
-  const clearCapability = sandboxState.capabilities.storage_clear_cycle;
-  const clearDataEnabled = clearCapability.status === 'passed';
-  const clearDataDisabledReason =
-    clearCapability.status === 'failed'
-      ? (clearCapability.details ??
-        'Clear data is disabled because the storage clear capability failed.')
-      : clearCapability.status === 'running'
-        ? 'Clear data is disabled while sandbox tests are running.'
-        : clearCapability.status === 'pending'
-          ? 'Clear data is disabled until sandbox tests complete.'
-          : null;
 
   const contextMenuPreview = contextMenu
     ? updateAvailability[contextMenu.app.id]
@@ -172,10 +193,16 @@ export function Apps() {
 
   function openPermissionsDialog(app: InstalledEntry) {
     setPermissionsDialogApp(app);
+    setPermissionsDialogBusy(false);
+    setPermissionsDialogError(null);
+    setPendingPermissionsRetry(null);
   }
 
   function closePermissionsDialog() {
     setPermissionsDialogApp(null);
+    setPermissionsDialogBusy(false);
+    setPermissionsDialogError(null);
+    setPendingPermissionsRetry(null);
   }
 
   const handleClearData = useCallback(
@@ -190,7 +217,13 @@ export function Apps() {
       }));
 
       try {
-        await clearAppStorage(app.id);
+        const result = await clearAppDataStore(app);
+
+        if (!result.passed) {
+          throw new Error(
+            result.details ?? 'Storage clear verification failed for this app.',
+          );
+        }
 
         if (reopen) {
           closeContextMenu();
@@ -207,7 +240,7 @@ export function Apps() {
 
         await refresh();
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = formatErrorMessage(err);
 
         setClearDataErrorByAppId((prev) => ({
           ...prev,
@@ -221,30 +254,102 @@ export function Apps() {
         );
       }
     },
-    [clearAppStorage, navigate, refresh, closeContextMenu],
+    [navigate, refresh, closeContextMenu],
   );
 
   const handleApplyPermissions = useCallback(
     async (app: InstalledEntry, nextPermissions: string[]) => {
+      setPermissionsDialogBusy(true);
+      setPermissionsDialogError(null);
+      setPendingPermissionsRetry(null);
+
+      try {
+        await invoke('apps_update_permissions', {
+          appId: app.id,
+          grantedPermissions: nextPermissions,
+          clearStorageTaint: false,
+        });
+
+        const isRunning = runningAppIds.has(app.id);
+        if (isRunning) {
+          const { restartAppRuntime } =
+            await import('@/lib/apps/restartAppRuntime');
+
+          await restartAppRuntime(app, { visible: true });
+          navigate(`/apps/${app.id}`);
+        }
+
+        await refresh();
+        closePermissionsDialog();
+      } catch (err) {
+        const message = formatErrorMessage(err);
+
+        if (isStorageTaintPermissionError(message)) {
+          setPendingPermissionsRetry({
+            appId: app.id,
+            nextPermissions,
+          });
+          setPermissionsDialogError(
+            'This app storage may still contain cached secrets from a previous persistent run. Clear the app storage with verification to apply these permissions.',
+          );
+        } else {
+          setPermissionsDialogError(message);
+        }
+      } finally {
+        setPermissionsDialogBusy(false);
+      }
+    },
+    [runningAppIds, navigate, refresh],
+  );
+
+  const handleClearStorageAndApplyPending = useCallback(async () => {
+    if (!permissionsDialogApp || !pendingPermissionsRetry) {
+      return;
+    }
+
+    setPermissionsDialogBusy(true);
+    setPermissionsDialogError(null);
+
+    try {
+      const clearResult = await clearAppDataStore(permissionsDialogApp);
+
+      if (!clearResult.passed) {
+        setPermissionsDialogError(
+          clearResult.details ??
+            'Storage clear verification failed. The app remains tainted and isolated.',
+        );
+        return;
+      }
+
       await invoke('apps_update_permissions', {
-        appId: app.id,
-        grantedPermissions: nextPermissions,
+        appId: permissionsDialogApp.id,
+        grantedPermissions: pendingPermissionsRetry.nextPermissions,
+        clearStorageTaint: true,
       });
 
-      const isRunning = runningAppIds.has(app.id);
+      const isRunning = runningAppIds.has(permissionsDialogApp.id);
       if (isRunning) {
         const { restartAppRuntime } =
           await import('@/lib/apps/restartAppRuntime');
 
-        await restartAppRuntime(app, { visible: true });
-        navigate(`/apps/${app.id}`);
+        await restartAppRuntime(permissionsDialogApp, { visible: true });
+        navigate(`/apps/${permissionsDialogApp.id}`);
       }
 
       await refresh();
       closePermissionsDialog();
-    },
-    [runningAppIds, navigate, refresh, closePermissionsDialog],
-  );
+    } catch (err) {
+      setPermissionsDialogError(formatErrorMessage(err));
+    } finally {
+      setPermissionsDialogBusy(false);
+    }
+  }, [
+    permissionsDialogApp,
+    pendingPermissionsRetry,
+    runningAppIds,
+    navigate,
+    refresh,
+  ]);
 
   useEffect(() => {
     if (!contextMenu || contextMenuCheckState !== 'up_to_date') {
@@ -544,8 +649,6 @@ export function Apps() {
           updateCheckState={contextMenuCheckState}
           clearDataBusy={contextMenuClearDataBusy}
           clearDataError={contextMenuClearDataError}
-          clearDataEnabled={clearDataEnabled}
-          clearDataDisabledReason={clearDataDisabledReason}
           onClose={closeContextMenu}
           onOpen={() => {
             if (!contextMenu) {
@@ -588,7 +691,7 @@ export function Apps() {
             openPermissionsDialog(contextMenu.app);
           }}
           onClearData={() => {
-            if (!contextMenu || !clearDataEnabled) {
+            if (!contextMenu) {
               return;
             }
 
@@ -647,13 +750,22 @@ export function Apps() {
       <Dialog
         open={!!permissionsDialogApp}
         onOpenChange={(open) => {
-          if (!open) closePermissionsDialog();
+          if (!open && !permissionsDialogBusy) {
+            closePermissionsDialog();
+          }
         }}
       >
         <DialogContent className='max-w-md'>
           <DialogHeader>
             <DialogTitle>Change permissions</DialogTitle>
           </DialogHeader>
+
+          {permissionsDialogError ? (
+            <Alert className='mb-4'>
+              <AlertTitle>Permission update blocked</AlertTitle>
+              <AlertDescription>{permissionsDialogError}</AlertDescription>
+            </Alert>
+          ) : null}
 
           {permissionsDialogApp ? (
             <PermissionsEditor
@@ -663,6 +775,29 @@ export function Apps() {
                 handleApplyPermissions(permissionsDialogApp, next)
               }
             />
+          ) : null}
+
+          {pendingPermissionsRetry && permissionsDialogApp ? (
+            <div className='mt-4 flex items-center justify-end gap-2'>
+              <Button
+                variant='outline'
+                disabled={permissionsDialogBusy}
+                onClick={closePermissionsDialog}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                disabled={permissionsDialogBusy}
+                onClick={() => {
+                  void handleClearStorageAndApplyPending();
+                }}
+              >
+                {permissionsDialogBusy
+                  ? 'Clearing and applying...'
+                  : 'Clear storage and apply'}
+              </Button>
+            </div>
           ) : null}
         </DialogContent>
       </Dialog>

@@ -123,9 +123,7 @@ pub fn resolve_granted_permission_flags(
     }
 
     if has_external_access && storage_may_contain_secrets {
-        return Err(anyhow!(
-            "before you can grant externally observable permissions, you need to clear storage that may contain cached secrets"
-        ));
+        return Err(anyhow!("STORAGE_TAINTED"));
     }
 
     Ok(InstalledSageAppPermissionFlags {
