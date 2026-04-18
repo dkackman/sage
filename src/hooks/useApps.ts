@@ -91,10 +91,15 @@ export function useAppsInternal() {
   }, [refresh]);
 
   const installApp = useCallback(
-    async (zipPath: string, permissions: string[]) => {
+    async (
+      zipPath: string,
+      permissions: string[],
+      networkWhitelist: import('@/bindings').SageNetworkWhitelistEntry[],
+    ) => {
       await invoke<InstalledSageApp>('install_app_zip', {
         zipPath,
         grantedPermissions: permissions,
+        grantedNetworkWhitelist: networkWhitelist,
       });
       await refresh();
     },
@@ -102,10 +107,15 @@ export function useAppsInternal() {
   );
 
   const installUrlApp = useCallback(
-    async (appUrl: string, permissions: string[]) => {
+    async (
+      appUrl: string,
+      permissions: string[],
+      networkWhitelist: import('@/bindings').SageNetworkWhitelistEntry[],
+    ) => {
       await invoke<InstalledSageApp>('install_app_url', {
         appUrl,
         grantedPermissions: permissions,
+        grantedNetworkWhitelist: networkWhitelist,
       });
       await refresh();
     },

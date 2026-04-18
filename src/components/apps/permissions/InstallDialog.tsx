@@ -1,3 +1,9 @@
+import type {
+  InstalledSageApp,
+  SageAppPackageManifest,
+  SageAppUrlPreview,
+  SageNetworkWhitelistEntry,
+} from '@/bindings';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -6,9 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { SageAppPackageManifest, SageAppUrlPreview } from '@/bindings';
-import React from 'react';
-import { AppPermissions } from '@/components/apps/permissions/AppPermissions';
+import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEditor';
 
 type InstallSource =
   | {
@@ -27,9 +31,46 @@ interface Props {
   error: string | null;
   installing: boolean;
   grantedPermissions: string[];
-  onGrantedPermissionsChange: React.Dispatch<React.SetStateAction<string[]>>;
+  grantedNetworkWhitelist: SageNetworkWhitelistEntry[];
+  onGrantedPermissionsChange: (next: string[]) => void;
+  onGrantedNetworkWhitelistChange: (next: SageNetworkWhitelistEntry[]) => void;
   onCancel: () => void;
   onConfirm: () => void;
+}
+
+function buildPreviewApp(
+  manifest: SageAppPackageManifest,
+  grantedPermissions: string[],
+  grantedNetworkWhitelist: SageNetworkWhitelistEntry[],
+): InstalledSageApp {
+  return {
+    id: '__install_preview__',
+    name: manifest.name,
+    version: manifest.version,
+    installDir: '',
+    entryFile: manifest.entry ?? 'index.html',
+    iconFile: manifest.icon ?? 'icon.png',
+    requestedPermissions: manifest.permissions ?? {
+      required: [],
+      optional: [],
+    },
+    grantedPermissions,
+    grantedNetworkWhitelist,
+    permissionFlags: {
+      hasSecretAccess: false,
+      hasExternalAccess: false,
+      storageMayContainSecrets: false,
+      isolated: false,
+    },
+    source: { kind: 'zip' },
+    activeSnapshot: {
+      manifestHash: '__install_preview__',
+      snapshotDir: '',
+      totalBytes: 0,
+      manifest,
+    },
+    pendingUpdate: null,
+  };
 }
 
 export function InstallPermissionsDialog({
@@ -37,76 +78,59 @@ export function InstallPermissionsDialog({
   error,
   installing,
   grantedPermissions,
+  grantedNetworkWhitelist,
   onGrantedPermissionsChange,
+  onGrantedNetworkWhitelistChange,
   onCancel,
   onConfirm,
 }: Props) {
-  const manifest =
-    source?.kind === 'zip'
-      ? source.manifest
-      : (source?.preview.manifest ?? null);
+  const open = !!source;
 
-  const networkEntries = manifest?.network?.whitelist ?? [];
+  if (!source) {
+    return (
+      <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onCancel()}>
+        <DialogContent />
+      </Dialog>
+    );
+  }
+
+  const manifest =
+    source.kind === 'zip' ? source.manifest : source.preview.manifest;
+
+  const previewApp = buildPreviewApp(
+    manifest,
+    grantedPermissions,
+    grantedNetworkWhitelist,
+  );
 
   return (
-    <Dialog open={!!manifest} onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onCancel()}>
+      <DialogContent className='max-w-md'>
         <DialogHeader>
-          <DialogTitle>Install {manifest?.name}</DialogTitle>
+          <DialogTitle>Install app</DialogTitle>
         </DialogHeader>
 
-        {manifest ? (
-          <div className='space-y-5'>
-            <div className='space-y-1 text-sm text-muted-foreground'>
-              <div>v{manifest.version}</div>
-
-              {source?.kind === 'url' ? (
-                <>
-                  <div className='break-all'>URL: {source.preview.appUrl}</div>
-                  <div className='break-all'>
-                    Manifest: {source.preview.manifestUrl}
-                  </div>
-                </>
-              ) : null}
-            </div>
-
-            <div className='space-y-3'>
-              <h3 className='text-sm font-medium'>Permissions</h3>
-
-              <AppPermissions
-                permissions={manifest.permissions}
-                grantedPermissions={grantedPermissions}
-                editable
-                onGrantedPermissionsChange={onGrantedPermissionsChange}
-              />
-            </div>
-
-            {networkEntries.length > 0 ? (
-              <div className='space-y-2'>
-                <div className='text-sm font-medium'>Network allowlist</div>
-
-                <div className='space-y-2 rounded-md border p-3'>
-                  {networkEntries.map((entry) => (
-                    <div
-                      key={`${entry.scheme}://${entry.host}`}
-                      className='text-xs font-mono'
-                    >
-                      {entry.scheme}://{entry.host}
-                      {entry.required ? ' (required)' : ''}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {error ? (
-              <div className='text-sm text-destructive'>{error}</div>
-            ) : null}
+        <div className='space-y-5'>
+          <div className='space-y-1 text-sm text-muted-foreground'>
+            <div>{manifest.name}</div>
+            <div>v{manifest.version}</div>
           </div>
-        ) : null}
+
+          <PermissionsEditor
+            app={previewApp}
+            grantedPermissions={grantedPermissions}
+            grantedNetworkWhitelist={grantedNetworkWhitelist}
+            onGrantedPermissionsChange={onGrantedPermissionsChange}
+            onGrantedNetworkWhitelistChange={onGrantedNetworkWhitelistChange}
+          />
+
+          {error ? (
+            <div className='text-sm text-destructive'>{error}</div>
+          ) : null}
+        </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={onCancel}>
+          <Button variant='outline' onClick={onCancel} disabled={installing}>
             Cancel
           </Button>
 

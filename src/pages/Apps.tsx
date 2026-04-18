@@ -9,7 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { SageAppPackageManifest, SageAppUrlPreview } from '@/bindings.ts';
+import {
+  SageAppPackageManifest,
+  SageAppUrlPreview,
+  SageNetworkWhitelistEntry,
+} from '@/bindings.ts';
 import { invoke } from '@tauri-apps/api/core';
 import { useApps } from '@/contexts/AppsContext.tsx';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
@@ -19,7 +23,7 @@ import { LayoutGrid, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEditor.tsx';
-import { AppTile } from '@/components/apps/AppTile.tsx';
+import { AppTile } from '@/components/apps/AppTile';
 
 type InstalledEntry = ReturnType<typeof useApps>['apps'][number] & {
   kind: 'installed';
@@ -103,6 +107,11 @@ export function Apps() {
   >(null);
   const [pendingPermissionsRetry, setPendingPermissionsRetry] =
     useState<PendingPermissionsRetry>(null);
+  const [editingGrantedPermissions, setEditingGrantedPermissions] = useState<
+    string[]
+  >([]);
+  const [editingGrantedNetworkWhitelist, setEditingGrantedNetworkWhitelist] =
+    useState<SageNetworkWhitelistEntry[]>([]);
 
   const {
     apps,
@@ -193,6 +202,8 @@ export function Apps() {
 
   function openPermissionsDialog(app: InstalledEntry) {
     setPermissionsDialogApp(app);
+    setEditingGrantedPermissions(app.grantedPermissions ?? []);
+    setEditingGrantedNetworkWhitelist(app.grantedNetworkWhitelist ?? []);
     setPermissionsDialogBusy(false);
     setPermissionsDialogError(null);
     setPendingPermissionsRetry(null);
@@ -200,6 +211,8 @@ export function Apps() {
 
   function closePermissionsDialog() {
     setPermissionsDialogApp(null);
+    setEditingGrantedPermissions([]);
+    setEditingGrantedNetworkWhitelist([]);
     setPermissionsDialogBusy(false);
     setPermissionsDialogError(null);
     setPendingPermissionsRetry(null);
@@ -258,7 +271,11 @@ export function Apps() {
   );
 
   const handleApplyPermissions = useCallback(
-    async (app: InstalledEntry, nextPermissions: string[]) => {
+    async (
+      app: InstalledEntry,
+      nextPermissions: string[],
+      nextNetworkWhitelist: SageNetworkWhitelistEntry[],
+    ) => {
       setPermissionsDialogBusy(true);
       setPermissionsDialogError(null);
       setPendingPermissionsRetry(null);
@@ -267,6 +284,7 @@ export function Apps() {
         await invoke('apps_update_permissions', {
           appId: app.id,
           grantedPermissions: nextPermissions,
+          grantedNetworkWhitelist: nextNetworkWhitelist,
           clearStorageTaint: false,
         });
 
@@ -324,6 +342,7 @@ export function Apps() {
       await invoke('apps_update_permissions', {
         appId: permissionsDialogApp.id,
         grantedPermissions: pendingPermissionsRetry.nextPermissions,
+        grantedNetworkWhitelist: editingGrantedNetworkWhitelist,
         clearStorageTaint: true,
       });
 
@@ -346,6 +365,7 @@ export function Apps() {
   }, [
     permissionsDialogApp,
     pendingPermissionsRetry,
+    editingGrantedNetworkWhitelist,
     runningAppIds,
     navigate,
     refresh,
@@ -694,12 +714,12 @@ export function Apps() {
             onPreviewUrl={(appUrl: string) =>
               invoke<SageAppUrlPreview>('preview_app_url', { appUrl })
             }
-            onInstallZip={async (zipPath, permissions) => {
-              await installApp(zipPath, permissions);
+            onInstallZip={async (zipPath, permissions, networkWhitelist) => {
+              await installApp(zipPath, permissions, networkWhitelist);
               setInstallOpen(false);
             }}
-            onInstallUrl={async (appUrl, permissions) => {
-              await installUrlApp(appUrl, permissions);
+            onInstallUrl={async (appUrl, permissions, networkWhitelist) => {
+              await installUrlApp(appUrl, permissions, networkWhitelist);
               setInstallOpen(false);
             }}
           />
@@ -719,43 +739,64 @@ export function Apps() {
             <DialogTitle>Change permissions</DialogTitle>
           </DialogHeader>
 
-          {permissionsDialogError ? (
-            <Alert className='mb-4'>
-              <AlertTitle>Permission update blocked</AlertTitle>
-              <AlertDescription>{permissionsDialogError}</AlertDescription>
-            </Alert>
-          ) : null}
-
           {permissionsDialogApp ? (
-            <PermissionsEditor
-              app={permissionsDialogApp}
-              onCancel={closePermissionsDialog}
-              onApply={(next) =>
-                handleApplyPermissions(permissionsDialogApp, next)
-              }
-            />
-          ) : null}
+            <div className='space-y-4'>
+              {permissionsDialogError ? (
+                <Alert>
+                  <AlertTitle>Permission update blocked</AlertTitle>
+                  <AlertDescription>{permissionsDialogError}</AlertDescription>
+                </Alert>
+              ) : null}
 
-          {pendingPermissionsRetry && permissionsDialogApp ? (
-            <div className='mt-4 flex items-center justify-end gap-2'>
-              <Button
-                variant='outline'
-                disabled={permissionsDialogBusy}
-                onClick={closePermissionsDialog}
-              >
-                Cancel
-              </Button>
+              <PermissionsEditor
+                app={permissionsDialogApp}
+                grantedPermissions={editingGrantedPermissions}
+                grantedNetworkWhitelist={editingGrantedNetworkWhitelist}
+                onGrantedPermissionsChange={setEditingGrantedPermissions}
+                onGrantedNetworkWhitelistChange={
+                  setEditingGrantedNetworkWhitelist
+                }
+              />
 
-              <Button
-                disabled={permissionsDialogBusy}
-                onClick={() => {
-                  void handleClearStorageAndApplyPending();
-                }}
-              >
-                {permissionsDialogBusy
-                  ? 'Clearing and applying...'
-                  : 'Clear storage and apply'}
-              </Button>
+              <div className='flex items-center justify-end gap-2'>
+                <Button
+                  variant='outline'
+                  disabled={permissionsDialogBusy}
+                  onClick={closePermissionsDialog}
+                >
+                  Cancel
+                </Button>
+
+                {pendingPermissionsRetry ? (
+                  <Button
+                    disabled={permissionsDialogBusy}
+                    onClick={() => {
+                      void handleClearStorageAndApplyPending();
+                    }}
+                  >
+                    {permissionsDialogBusy
+                      ? 'Clearing and applying...'
+                      : 'Clear storage and apply'}
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={permissionsDialogBusy}
+                    onClick={() => {
+                      if (!permissionsDialogApp) {
+                        return;
+                      }
+
+                      void handleApplyPermissions(
+                        permissionsDialogApp,
+                        editingGrantedPermissions,
+                        editingGrantedNetworkWhitelist,
+                      );
+                    }}
+                  >
+                    {permissionsDialogBusy ? 'Saving...' : 'Save'}
+                  </Button>
+                )}
+              </div>
             </div>
           ) : null}
         </DialogContent>

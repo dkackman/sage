@@ -18,7 +18,7 @@ interface Props {
   grantedPermissions?: string[];
   editable?: boolean;
   tone?: Tone;
-  onGrantedPermissionsChange?: React.Dispatch<React.SetStateAction<string[]>>;
+  onGrantedPermissionsChange?: (next: string[]) => void;
 }
 
 function buildEntries(
@@ -40,7 +40,7 @@ function buildEntries(
   }));
 
   return [...requiredEntries, ...optionalEntries].sort((a, b) =>
-    a.key.localeCompare(b.key),
+    a.key.localeCompare(b),
   );
 }
 

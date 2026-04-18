@@ -145,6 +145,13 @@ pub struct InstalledSageApp {
     #[serde(rename = "grantedPermissions", alias = "granted_permissions")]
     pub granted_permissions: Vec<String>,
 
+    #[serde(
+        rename = "grantedNetworkWhitelist",
+        alias = "granted_network_whitelist",
+        default
+    )]
+    pub granted_network_whitelist: Vec<SageNetworkWhitelistEntry>,
+
     #[serde(rename = "permissionFlags", alias = "permission_flags")]
     pub permission_flags: InstalledSageAppPermissionFlags,
 

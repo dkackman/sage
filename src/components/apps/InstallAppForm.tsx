@@ -1,9 +1,14 @@
 import { useState } from 'react';
-import type { SageAppPackageManifest, SageAppUrlPreview } from '@/bindings';
+import type {
+  SageAppPackageManifest,
+  SageAppUrlPreview,
+  SageNetworkWhitelistEntry,
+} from '@/bindings';
 import { formatAppError } from '@/lib/apps/formatAppError.ts';
 import { InstallSourceCard } from './InstallSourceCard';
 import {
   buildFullyForbiddenPermissions,
+  buildInitialGrantedNetworkWhitelist,
   buildInitialGrantedPermissions,
 } from '@/components/apps/permissions/permissionUtils.ts';
 import { InstallPermissionsDialog } from '@/components/apps/permissions/InstallDialog.tsx';
@@ -11,8 +16,16 @@ import { InstallPermissionsDialog } from '@/components/apps/permissions/InstallD
 interface Props {
   onPreviewZip: (zipPath: string) => Promise<SageAppPackageManifest>;
   onPreviewUrl: (appUrl: string) => Promise<SageAppUrlPreview>;
-  onInstallZip: (zipPath: string, permissions: string[]) => Promise<void>;
-  onInstallUrl: (appUrl: string, permissions: string[]) => Promise<void>;
+  onInstallZip: (
+    zipPath: string,
+    permissions: string[],
+    networkWhitelist: SageNetworkWhitelistEntry[],
+  ) => Promise<void>;
+  onInstallUrl: (
+    appUrl: string,
+    permissions: string[],
+    networkWhitelist: SageNetworkWhitelistEntry[],
+  ) => Promise<void>;
 }
 
 type InstallSource =
@@ -40,6 +53,9 @@ export function InstallAppForm({
   const [grantedPermissions, setGrantedPermissions] = useState<string[]>(
     buildFullyForbiddenPermissions(),
   );
+  const [grantedNetworkWhitelist, setGrantedNetworkWhitelist] = useState<
+    SageNetworkWhitelistEntry[]
+  >([]);
 
   async function handleSelectZipPath(zipPath: string) {
     try {
@@ -54,6 +70,9 @@ export function InstallAppForm({
       });
 
       setGrantedPermissions(buildInitialGrantedPermissions(nextManifest));
+      setGrantedNetworkWhitelist(
+        buildInitialGrantedNetworkWhitelist(nextManifest),
+      );
     } catch (err) {
       setError(formatAppError(err));
     }
@@ -72,6 +91,9 @@ export function InstallAppForm({
       });
 
       setGrantedPermissions(buildInitialGrantedPermissions(preview.manifest));
+      setGrantedNetworkWhitelist(
+        buildInitialGrantedNetworkWhitelist(preview.manifest),
+      );
     } catch (err) {
       setError(formatAppError(err));
     }
@@ -87,13 +109,22 @@ export function InstallAppForm({
       setError(null);
 
       if (source.kind === 'zip') {
-        await onInstallZip(source.zipPath, grantedPermissions);
+        await onInstallZip(
+          source.zipPath,
+          grantedPermissions,
+          grantedNetworkWhitelist,
+        );
       } else {
-        await onInstallUrl(source.appUrl, grantedPermissions);
+        await onInstallUrl(
+          source.appUrl,
+          grantedPermissions,
+          grantedNetworkWhitelist,
+        );
       }
 
       setSource(null);
       setGrantedPermissions(buildFullyForbiddenPermissions());
+      setGrantedNetworkWhitelist([]);
       setUrlInput('');
     } catch (err) {
       setError(formatAppError(err));
@@ -105,6 +136,7 @@ export function InstallAppForm({
   function resetDialog() {
     setSource(null);
     setGrantedPermissions(buildFullyForbiddenPermissions());
+    setGrantedNetworkWhitelist([]);
     setError(null);
   }
 
@@ -124,7 +156,9 @@ export function InstallAppForm({
         error={error}
         installing={installing}
         grantedPermissions={grantedPermissions}
+        grantedNetworkWhitelist={grantedNetworkWhitelist}
         onGrantedPermissionsChange={setGrantedPermissions}
+        onGrantedNetworkWhitelistChange={setGrantedNetworkWhitelist}
         onCancel={resetDialog}
         onConfirm={confirmInstall}
       />

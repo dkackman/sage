@@ -188,6 +188,12 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
 
     let total_bytes = compute_total_bytes(&app_dir)?;
 
+    let granted_network_whitelist = manifest
+        .network
+        .as_ref()
+        .map(|network| network.whitelist.clone())
+        .unwrap_or_default();
+
     let app = InstalledSageApp {
         id: spec.app_id.to_string(),
         name: manifest.name.clone(),
@@ -197,6 +203,7 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
         icon_file: icon_file_name,
         requested_permissions: manifest.permissions.clone(),
         granted_permissions,
+        granted_network_whitelist,
         permission_flags,
         source: InstalledSageAppSource::Zip,
         active_snapshot: InstalledSageAppSnapshot {

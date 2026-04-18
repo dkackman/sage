@@ -23,13 +23,6 @@ fn network_permission_to_csp_source(
         return None;
     }
 
-    // CSP source expressions should be origins / host-source patterns, not paths.
-    // Examples:
-    //   https://api.coinset.org
-    //   https://*.google.com
-    //   wss://relay.walletconnect.com
-    //
-    // Reject obviously dangerous / malformed host values.
     if host.contains('/') || host.contains('?') || host.contains('#') || host.contains(' ') {
         return None;
     }
@@ -67,15 +60,11 @@ pub fn build_app_csp(app: &InstalledSageApp) -> String {
     let form_action = csp_source_list(&vec!["'none'".to_string()]);
     let worker_src = csp_source_list(&vec!["'self'".to_string()]);
 
-    let mut connect_sources = BTreeSet::from([
-        "'self'".to_string(),
-    ]);
+    let mut connect_sources = BTreeSet::from(["'self'".to_string()]);
 
-    if let Some(network) = &app.active_snapshot.manifest.network {
-        for entry in &network.whitelist {
-            if let Some(source) = network_permission_to_csp_source(entry) {
-                connect_sources.insert(source);
-            }
+    for entry in &app.granted_network_whitelist {
+        if let Some(source) = network_permission_to_csp_source(entry) {
+            connect_sources.insert(source);
         }
     }
 

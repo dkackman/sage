@@ -181,7 +181,7 @@ export function getRequiredSandboxCapabilities(
     required.push('storage_non_persistence_incognito');
   }
 
-  if ((app.activeSnapshot.manifest.network?.whitelist?.length ?? 0) > 0) {
+  if ((app.grantedNetworkWhitelist?.length ?? 0) > 0) {
     required.push('network_allowlist_enforced');
   }
 

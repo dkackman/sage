@@ -2,7 +2,10 @@ use std::{io, path::PathBuf};
 
 use tauri::{command, State};
 
-use crate::apps::install::{manifest_entry_file, manifest_icon_file, preview_app_url_internal};
+use crate::apps::install::{
+    manifest_entry_file, manifest_icon_file, normalize_and_validate_granted_network_whitelist,
+    preview_app_url_internal,
+};
 
 use crate::{
     app_state::AppState,
@@ -15,7 +18,7 @@ use crate::{
         snapshot::download_url_snapshot,
         types::{
             InstalledSageApp, InstalledSageAppPendingUpdate,
-            InstalledSageAppSource, SageAppUrlPreview,
+            InstalledSageAppSource, SageAppUrlPreview, SageNetworkWhitelistEntry,
         },
     },
     error::Result,
@@ -153,6 +156,16 @@ pub async fn apply_app_update(
             ))
         })?;
 
+    let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
+        pending.manifest.network.as_ref(),
+        &app.granted_network_whitelist,
+    )
+        .map_err(|err| {
+            io::Error::other(format!(
+                "invalid granted network whitelist for update: {err}"
+            ))
+        })?;
+
     let permission_flags = resolve_granted_permission_flags(
         &granted_permissions,
         Some(&app.permission_flags),
@@ -182,6 +195,7 @@ pub async fn apply_app_update(
     app.version = pending.manifest.version.clone();
     app.requested_permissions = pending.manifest.permissions.clone();
     app.granted_permissions = granted_permissions;
+    app.granted_network_whitelist = granted_network_whitelist;
     app.permission_flags = permission_flags;
     app.active_snapshot = snapshot;
     app.entry_file = manifest_entry_file(&app.active_snapshot.manifest).to_string();
@@ -204,9 +218,9 @@ pub async fn apps_update_permissions(
     state: State<'_, AppState>,
     app_id: String,
     granted_permissions: Vec<String>,
+    granted_network_whitelist: Vec<SageNetworkWhitelistEntry>,
     clear_storage_taint: bool,
 ) -> Result<()> {
-
     let base_path = {
         let state = state.lock().await;
         state.path.clone()
@@ -217,6 +231,12 @@ pub async fn apps_update_permissions(
 
     validate_granted_permissions(&app.requested_permissions, &granted_permissions)
         .map_err(|err| io::Error::other(format!("invalid granted permissions: {err}")))?;
+
+    let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
+        app.active_snapshot.manifest.network.as_ref(),
+        &granted_network_whitelist,
+    )
+        .map_err(|err| io::Error::other(format!("invalid granted network whitelist: {err}")))?;
 
     let mut permission_flags = resolve_granted_permission_flags(
         &app.granted_permissions,
@@ -229,6 +249,7 @@ pub async fn apps_update_permissions(
     }
 
     app.granted_permissions = granted_permissions;
+    app.granted_network_whitelist = granted_network_whitelist;
     app.permission_flags = resolve_granted_permission_flags(
         &app.granted_permissions,
         Some(&permission_flags),
