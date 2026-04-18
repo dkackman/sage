@@ -1,6 +1,6 @@
 import { TEST_APP_IDS } from '@/lib/apps/testApps';
 import { getBuiltinApp } from '@/lib/apps/registry';
-import { runStorageClearCycle } from '@/lib/apps/storageClearCycle';
+import { clearAppDataStore } from '@/lib/apps/storageClearCycle';
 
 export async function runStorageClearCycleCapabilityTest(): Promise<{
   passed: boolean;
@@ -16,5 +16,5 @@ export async function runStorageClearCycleCapabilityTest(): Promise<{
     };
   }
 
-  return runStorageClearCycle(app);
+  return clearAppDataStore(app);
 }

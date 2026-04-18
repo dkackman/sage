@@ -61,11 +61,16 @@ fn handle_builtin_test_app_request(
         .ok_or_else(|| anyhow!("unknown builtin test app {}", app_id))?;
 
     let request_path = request.uri().path();
+    let csp = build_app_csp(&app);
+
+    if request_path.starts_with("/__sage/runtime-apps/") {
+        return serve_runtime_app_asset(request_path, &csp);
+    }
+
     let app_dir = builtin_test_app_dir(app_id)?
         .ok_or_else(|| anyhow!("missing builtin test app dir for {}", app_id))?;
 
     let file_path = read_snapshot_file(&app_dir, request_path)?;
-    let csp = build_app_csp(&app);
 
     if request_path.is_empty() || request_path == "/" || request_path == "/index.html" {
         let html = fs::read_to_string(&file_path)?;

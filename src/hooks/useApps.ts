@@ -14,7 +14,7 @@ import {
   type SandboxState,
 } from '@/lib/apps/sandbox';
 import { runSandboxTests } from '@/lib/apps/sandbox-tests';
-import { runStorageClearCycle } from '@/lib/apps/storageClearCycle';
+import { clearAppDataStore } from '@/lib/apps/storageClearCycle';
 
 type UpdateAvailabilityMap = Record<string, SageAppUrlPreview | null>;
 
@@ -296,7 +296,7 @@ export function useAppsInternal() {
 
       try {
         setBusy(appId, true);
-        const result = await runStorageClearCycle(app);
+        const result = await clearAppDataStore(app);
 
         if (!result.passed) {
           throw new Error(result.details ?? 'Storage clear cycle failed.');

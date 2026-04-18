@@ -1,5 +1,8 @@
 import type { InstalledSageApp } from '@/bindings';
-import type { SandboxStorageClearProbePhase } from '@/lib/apps/sandbox';
+import type {
+  SandboxStorageClearProbePhase,
+  SandboxStorageClearProbeResult,
+} from '@/lib/apps/sandbox';
 import {
   clearAppRuntimeBrowsingData,
   closeAppRuntime,
@@ -22,7 +25,7 @@ async function pollPhase(
   runId: string,
   phase: SandboxStorageClearProbePhase,
   timeoutMs = 10000,
-) {
+): Promise<SandboxStorageClearProbeResult> {
   const startedAt = Date.now();
 
   for (;;) {
@@ -47,7 +50,11 @@ async function runProbePhase(
   app: InstalledSageApp,
   runId: string,
   phase: SandboxStorageClearProbePhase,
-) {
+): Promise<SandboxStorageClearProbeResult> {
+  await closeAppRuntime(app.id, { timeoutMs: 8000 }).catch(() => {
+    //
+  });
+
   await startInternalInlineRuntime(app, {
     path: STORAGE_CLEAR_PROBE_PATH,
     query: {
@@ -56,12 +63,16 @@ async function runProbePhase(
     },
   });
 
-  const result = await pollPhase(app.id, runId, phase);
-  await closeAppRuntime(app.id, { timeoutMs: 8000 });
-  return result;
+  try {
+    return await pollPhase(app.id, runId, phase);
+  } finally {
+    await closeAppRuntime(app.id, { timeoutMs: 8000 }).catch(() => {
+      //
+    });
+  }
 }
 
-export async function runStorageClearCycle(app: InstalledSageApp): Promise<{
+export async function clearAppDataStore(app: InstalledSageApp): Promise<{
   passed: boolean;
   details: string | null;
 }> {
@@ -78,6 +89,14 @@ export async function runStorageClearCycle(app: InstalledSageApp): Promise<{
       return {
         passed: false,
         details: `Storage clear write probe failed: ${writeResult.error}`,
+      };
+    }
+
+    if (!writeResult.localStoragePresent || !writeResult.indexedDbPresent) {
+      return {
+        passed: false,
+        details:
+          'Storage clear write probe did not observe both localStorage and IndexedDB immediately after writing.',
       };
     }
 
