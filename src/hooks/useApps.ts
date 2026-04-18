@@ -14,6 +14,7 @@ import {
 } from '@/lib/apps/sandbox';
 import { clearAppDataStore } from '@/lib/apps/storageClearCycle';
 import { runSandboxTestsIncremental } from '@/lib/apps/sandbox-tests';
+import { formatAppError } from '@/lib/apps/formatAppError.ts';
 
 type UpdateAvailabilityMap = Record<string, SageAppUrlPreview | null>;
 
@@ -192,6 +193,7 @@ export function useAppsInternal() {
     async (appId: string) => {
       try {
         setBusy(appId, true);
+
         const installed = await invoke<InstalledSageApp>(
           'download_app_update',
           {
@@ -206,6 +208,12 @@ export function useAppsInternal() {
 
         await refresh();
         return installed;
+      } catch (err) {
+        const message = formatAppError(err);
+
+        throw new Error(
+          `Failed to download app update for ${appId}: ${message}`,
+        );
       } finally {
         setBusy(appId, false);
       }

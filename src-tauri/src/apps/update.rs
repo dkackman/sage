@@ -56,12 +56,21 @@ pub async fn check_app_update(
             io::Error::other(format!("failed to preview app URL: {err}"))
         })?;
 
-    if preview.manifest_hash == app.active_snapshot.manifest_hash {
+    let same_manifest_hash =
+        preview.manifest_hash == app.active_snapshot.manifest_hash;
+
+    let same_manifest_content =
+        preview.manifest == app.active_snapshot.manifest;
+
+    if same_manifest_hash && same_manifest_content {
         return Ok(None);
     }
 
     if let Some(pending) = &app.pending_update {
-        if pending.manifest_hash == preview.manifest_hash {
+        let same_pending_hash = pending.manifest_hash == preview.manifest_hash;
+        let same_pending_manifest = pending.manifest == preview.manifest;
+
+        if same_pending_hash && same_pending_manifest {
             return Ok(None);
         }
     }

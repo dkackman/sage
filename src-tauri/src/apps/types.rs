@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq)]
 pub struct SageAppPermissions {
     #[serde(default)]
     pub required: Vec<String>,
@@ -19,13 +19,13 @@ pub struct SageNetworkWhitelistEntry {
     pub required: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq)]
 pub struct SageNetworkPermissions {
     #[serde(default)]
     pub whitelist: Vec<SageNetworkWhitelistEntry>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 pub struct SageAppPackageManifest {
     pub name: String,
     pub version: String,
@@ -60,7 +60,7 @@ pub struct SageAppUrlPreview {
     pub manifest: SageAppPackageManifest,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 pub struct SageAppManifestFile {
     pub path: String,
     pub sha256: String,

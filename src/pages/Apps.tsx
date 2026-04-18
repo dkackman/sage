@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEditor.tsx';
 import { AppTile } from '@/components/apps/AppTile';
+import { formatAppError } from '@/lib/apps/formatAppError.ts';
 
 type InstalledEntry = ReturnType<typeof useApps>['apps'][number] & {
   kind: 'installed';
@@ -190,12 +191,31 @@ export function Apps() {
       [appId]: 'checking',
     }));
 
+    setClearDataErrorByAppId((prev) => ({
+      ...prev,
+      [appId]: null,
+    }));
+
     try {
-      await checkForUpdate(appId);
-    } finally {
+      const preview = await checkForUpdate(appId);
+
       setUpdateCheckStateByAppId((prev) => ({
         ...prev,
-        [appId]: 'up_to_date',
+        [appId]: preview ? 'idle' : 'up_to_date',
+      }));
+    } catch (err) {
+      const message = formatAppError(err);
+
+      console.error('checkForUpdate failed:', err);
+
+      setUpdateCheckStateByAppId((prev) => ({
+        ...prev,
+        [appId]: 'idle',
+      }));
+
+      setClearDataErrorByAppId((prev) => ({
+        ...prev,
+        [appId]: `Update check failed: ${message}`,
       }));
     }
   }
