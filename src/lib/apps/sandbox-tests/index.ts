@@ -30,13 +30,15 @@ export async function runSandboxTestsIncremental(
   const state = buildRunningSandboxState();
   onUpdate({ ...state });
 
-  // --- isolation ---
+  // --- isolation (must be first) ---
   const isolation = await runIsolationTest();
+
   setCapability(state, 'storage_isolation_from_sage', {
     status: isolation.passed ? 'passed' : 'failed',
     checkedAt: Date.now(),
     details: isolation.details,
   });
+
   onUpdate({ ...state });
 
   if (!isolation.passed) {
@@ -46,40 +48,55 @@ export async function runSandboxTestsIncremental(
     return state;
   }
 
-  // --- persistence ---
-  const persistence = await runPersistenceTest();
+  // --- parallel phase ---
+  const persistencePromise = runPersistenceTest();
+  const clearCyclePromise = runStorageClearCycleCapabilityTest();
+  const networkPromise = runNetworkTest();
 
-  setCapability(state, 'storage_persistence_normal', {
-    status: persistence.persistentNormal.passed ? 'passed' : 'failed',
-    checkedAt: Date.now(),
-    details: persistence.persistentNormal.details,
-  });
+  // update each as it finishes (not waiting all)
+  await Promise.all([
+    (async () => {
+      const persistence = await persistencePromise;
 
-  setCapability(state, 'storage_non_persistence_incognito', {
-    status: persistence.persistenceIncognito.passed ? 'passed' : 'failed',
-    checkedAt: Date.now(),
-    details: persistence.persistenceIncognito.details,
-  });
+      setCapability(state, 'storage_persistence_normal', {
+        status: persistence.persistentNormal.passed ? 'passed' : 'failed',
+        checkedAt: Date.now(),
+        details: persistence.persistentNormal.details,
+      });
 
-  onUpdate({ ...state });
+      setCapability(state, 'storage_non_persistence_incognito', {
+        status: persistence.persistenceIncognito.passed ? 'passed' : 'failed',
+        checkedAt: Date.now(),
+        details: persistence.persistenceIncognito.details,
+      });
 
-  // --- clear cycle ---
-  const clearCycle = await runStorageClearCycleCapabilityTest();
-  setCapability(state, 'storage_clear_cycle', {
-    status: clearCycle.passed ? 'passed' : 'failed',
-    checkedAt: Date.now(),
-    details: clearCycle.details,
-  });
+      onUpdate({ ...state });
+    })(),
 
-  onUpdate({ ...state });
+    (async () => {
+      const clearCycle = await clearCyclePromise;
 
-  // --- network ---
-  const network = await runNetworkTest();
-  setCapability(state, 'network_allowlist_enforced', {
-    status: network.passed ? 'passed' : 'failed',
-    checkedAt: Date.now(),
-    details: network.details,
-  });
+      setCapability(state, 'storage_clear_cycle', {
+        status: clearCycle.passed ? 'passed' : 'failed',
+        checkedAt: Date.now(),
+        details: clearCycle.details,
+      });
+
+      onUpdate({ ...state });
+    })(),
+
+    (async () => {
+      const network = await networkPromise;
+
+      setCapability(state, 'network_allowlist_enforced', {
+        status: network.passed ? 'passed' : 'failed',
+        checkedAt: Date.now(),
+        details: network.details,
+      });
+
+      onUpdate({ ...state });
+    })(),
+  ]);
 
   // --- finalize ---
   state.overallCriticalStatus = 'passed';
