@@ -148,8 +148,11 @@ pub async fn apps_create_inline_runtime(
     let is_builtin_test_app = installed.id.starts_with("__sage_test_");
 
     if !args.internal && !is_builtin_test_app {
-        let sandbox = apps_state.sandbox.state.lock().await.clone();
-        let gate = crate::apps::sandbox::evaluate_app_launch_gate(&installed, &sandbox);
+        let baseline = apps_state.sandbox.baseline.lock().await.clone();
+        let current_run = apps_state.sandbox.current_run.lock().await.clone();
+        let effective =
+            crate::apps::sandbox::state_view::build_effective_state(&baseline, current_run.as_ref());
+        let gate = crate::apps::sandbox::evaluate_app_launch_gate(&installed, &effective);
 
         if !gate.allowed {
             return Err(

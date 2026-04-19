@@ -6,7 +6,7 @@ import {
   SageAppUrlPreview,
   SageGrantedPermissions,
   SageNetworkPermissionTarget,
-  SandboxState,
+  SandboxStateView,
 } from '@/bindings.ts';
 import { formatAppError } from '@/lib/apps/formatAppError.ts';
 
@@ -19,7 +19,9 @@ export function useAppsInternal() {
   const [updateAvailability, setUpdateAvailability] =
     useState<UpdateAvailabilityMap>({});
   const [busyAppIds, setBusyAppIds] = useState<Record<string, boolean>>({});
-  const [sandboxState, setSandboxState] = useState<SandboxState | null>(null);
+  const [sandboxState, setSandboxState] = useState<SandboxStateView | null>(
+    null,
+  );
 
   const setBusy = useCallback((appId: string, busy: boolean) => {
     setBusyAppIds((prev) => {
@@ -47,12 +49,12 @@ export function useAppsInternal() {
   }, []);
 
   const refreshSandboxState = useCallback(async () => {
-    const next = await invoke<SandboxState>('apps_get_sandbox_state');
+    const next = await invoke<SandboxStateView>('apps_get_sandbox_state');
     setSandboxState(next);
   }, []);
 
   const rerunSandboxTests = useCallback(async () => {
-    const next = await invoke<SandboxState>('apps_rerun_sandbox_tests');
+    const next = await invoke<SandboxStateView>('apps_rerun_sandbox_tests');
     setSandboxState(next);
   }, []);
 
@@ -62,13 +64,14 @@ export function useAppsInternal() {
   }, [refresh, refreshSandboxState]);
 
   useEffect(() => {
+    let disposed = false;
     let unlisten: (() => void) | null = null;
 
     const mount = async () => {
-      const { getCurrentWebview } = await import('@tauri-apps/api/webview');
-      const webview = getCurrentWebview();
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const currentWindow = getCurrentWindow();
 
-      unlisten = await webview.listen<SandboxState>(
+      const nextUnlisten = await currentWindow.listen<SandboxStateView>(
         'apps:sandbox-state-updated',
         ({ payload }) => {
           if (payload) {
@@ -76,12 +79,21 @@ export function useAppsInternal() {
           }
         },
       );
+
+      if (disposed) {
+        nextUnlisten();
+        return;
+      }
+
+      unlisten = nextUnlisten;
     };
 
     void mount();
 
     return () => {
+      disposed = true;
       unlisten?.();
+      unlisten = null;
     };
   }, []);
 

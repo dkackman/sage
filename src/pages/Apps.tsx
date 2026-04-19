@@ -20,6 +20,9 @@ import { useApps } from '@/contexts/AppsContext.tsx';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
 import {
   formatCapabilityLabel,
+  getBaselineSandboxState,
+  getEffectiveSandboxState,
+  getLiveSandboxState,
   listSandboxCapabilities,
 } from '@/lib/apps/sandbox';
 import { Plus } from 'lucide-react';
@@ -147,6 +150,9 @@ export function Apps() {
     sandboxState,
     rerunSandboxTests,
   } = useApps();
+  const liveSandboxState = getLiveSandboxState(sandboxState);
+  const effectiveSandboxState = getEffectiveSandboxState(sandboxState);
+  const baselineSandboxState = getBaselineSandboxState(sandboxState);
 
   const runningAppIds = useMemo(() => {
     return new Set(runtimes.map((runtime) => runtime.appId));
@@ -555,7 +561,8 @@ export function Apps() {
             <AppsPageActionsMenu
               showSandboxDebugUi
               sandboxTestsRunning={
-                sandboxState?.overallCriticalStatus === 'running'
+                sandboxState?.currentRun?.state?.overallCriticalStatus ===
+                'running'
               }
               onTaskManager={() => {
                 navigate('/apps/task-manager');
@@ -574,13 +581,14 @@ export function Apps() {
           {showSandboxDebugResults ? (
             <Alert className='mb-6'>
               <AlertTitle>
-                {!sandboxState
+                {!liveSandboxState && !effectiveSandboxState
                   ? 'Sandbox tests are pending'
-                  : sandboxState.overallCriticalStatus === 'running'
+                  : liveSandboxState?.overallCriticalStatus === 'running'
                     ? 'Sandbox tests are running'
-                    : sandboxState.overallCriticalStatus === 'passed'
+                    : effectiveSandboxState?.overallCriticalStatus === 'passed'
                       ? 'Sandbox tests passed'
-                      : sandboxState.overallCriticalStatus === 'failed'
+                      : effectiveSandboxState?.overallCriticalStatus ===
+                          'failed'
                         ? 'Sandbox tests failed'
                         : 'Sandbox tests are pending'}
               </AlertTitle>
@@ -591,11 +599,49 @@ export function Apps() {
                   capabilities have passed.
                 </div>
 
-                {sandboxState ? (
+                {liveSandboxState ? (
                   <div className='space-y-1 text-xs text-muted-foreground'>
-                    {listSandboxCapabilities(sandboxState).map(
+                    <div className='font-medium text-foreground'>
+                      Current run
+                    </div>
+
+                    {listSandboxCapabilities(liveSandboxState).map(
                       ([capability, result]) => (
-                        <div key={capability}>
+                        <div key={`live-${capability}`}>
+                          {formatCapabilityLabel(capability)} — {result.status}
+                          {result.details ? ` — ${result.details}` : ''}
+                        </div>
+                      ),
+                    )}
+                  </div>
+                ) : null}
+
+                {effectiveSandboxState ? (
+                  <div className='space-y-1 text-xs text-muted-foreground'>
+                    <div className='font-medium text-foreground'>
+                      Effective gate state
+                    </div>
+
+                    {listSandboxCapabilities(effectiveSandboxState).map(
+                      ([capability, result]) => (
+                        <div key={`effective-${capability}`}>
+                          {formatCapabilityLabel(capability)} — {result.status}
+                          {result.details ? ` — ${result.details}` : ''}
+                        </div>
+                      ),
+                    )}
+                  </div>
+                ) : null}
+
+                {baselineSandboxState ? (
+                  <div className='space-y-1 text-xs text-muted-foreground'>
+                    <div className='font-medium text-foreground'>
+                      Previous completed baseline
+                    </div>
+
+                    {listSandboxCapabilities(baselineSandboxState).map(
+                      ([capability, result]) => (
+                        <div key={`baseline-${capability}`}>
                           {formatCapabilityLabel(capability)} — {result.status}
                           {result.details ? ` — ${result.details}` : ''}
                         </div>

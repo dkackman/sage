@@ -374,13 +374,13 @@ async appsHandleBridgeRequest(sourceLabel: string, request: RustBridgeRequest) :
 async appsResolveBridgeApproval(args: ResolveBridgeApprovalArgs) : Promise<RustBridgeResponse> {
     return await TAURI_INVOKE("apps_resolve_bridge_approval", { args });
 },
-async appsGetSandboxState() : Promise<SandboxState> {
+async appsGetSandboxState() : Promise<SandboxStateView> {
     return await TAURI_INVOKE("apps_get_sandbox_state");
 },
 async appsGetAppLaunchGate(appId: string) : Promise<AppLaunchGateResult> {
     return await TAURI_INVOKE("apps_get_app_launch_gate", { appId });
 },
-async appsRerunSandboxTests() : Promise<SandboxState> {
+async appsRerunSandboxTests() : Promise<SandboxStateView> {
     return await TAURI_INVOKE("apps_rerun_sandbox_tests");
 },
 async listInstalledApps() : Promise<ListedSageApp[]> {
@@ -2246,7 +2246,9 @@ export type SageRequestedPermissions = { network: SageRequestedNetworkPermission
 export type SandboxCapability = "storage_isolation_from_sage" | "storage_persistence_normal" | "storage_non_persistence_incognito" | "storage_clear_cycle" | "network_allowlist_enforced"
 export type SandboxCapabilityResult = { status: SandboxCapabilityStatus; checkedAt: number | null; details: string | null }
 export type SandboxCapabilityStatus = "pending" | "running" | "passed" | "failed"
+export type SandboxRunState = { runId: string; state: SandboxState }
 export type SandboxState = { overallCriticalStatus: SandboxCapabilityStatus; storageIsolationFromSage: SandboxCapabilityResult; storagePersistenceNormal: SandboxCapabilityResult; storageNonPersistenceIncognito: SandboxCapabilityResult; storageClearCycle: SandboxCapabilityResult; networkAllowlistEnforced: SandboxCapabilityResult; startedAt: number | null; finishedAt: number | null }
+export type SandboxStateView = { baseline: SandboxState; currentRun: SandboxRunState | null; effective: SandboxState }
 /**
  * Save a theme NFT to the wallet
  */

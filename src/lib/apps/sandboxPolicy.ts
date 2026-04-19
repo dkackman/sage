@@ -1,5 +1,8 @@
-import type { InstalledSageApp, SandboxState } from '@/bindings';
-import { evaluateAppLaunchGate } from '@/lib/apps/sandbox';
+import type { InstalledSageApp, SandboxStateView } from '@/bindings';
+import {
+  evaluateAppLaunchGate,
+  getEffectiveSandboxState,
+} from '@/lib/apps/sandbox';
 
 export interface SandboxLaunchDecision {
   allowed: boolean;
@@ -9,11 +12,13 @@ export interface SandboxLaunchDecision {
 
 export function getSandboxLaunchDecision(args: {
   app: InstalledSageApp;
-  sandboxState: SandboxState | null | undefined;
+  sandboxState: SandboxStateView | null | undefined;
 }): SandboxLaunchDecision {
   const { app, sandboxState } = args;
 
-  if (!sandboxState) {
+  const effectiveSandboxState = getEffectiveSandboxState(sandboxState);
+
+  if (!effectiveSandboxState) {
     return {
       allowed: false,
       title: 'Sandbox tests are still running',
@@ -22,7 +27,7 @@ export function getSandboxLaunchDecision(args: {
     };
   }
 
-  const gate = evaluateAppLaunchGate(app, sandboxState);
+  const gate = evaluateAppLaunchGate(app, effectiveSandboxState);
 
   if (gate.allowed) {
     return {

@@ -1,10 +1,9 @@
-import type { InstalledSageApp } from '@/bindings';
-import type { SandboxState } from '@/bindings';
+import type { InstalledSageApp, SandboxStateView } from '@/bindings';
 import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
 
 interface Props {
   app: InstalledSageApp;
-  sandboxState: SandboxState | null;
+  sandboxState: SandboxStateView | null;
   onOpen: () => void;
   onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }
@@ -17,8 +16,7 @@ export function AppTile({ app, sandboxState, onOpen, onContextMenu }: Props) {
   });
 
   const isChecking =
-    !decision.allowed &&
-    decision.title === 'Sandbox tests are still running';
+    !decision.allowed && decision.title === 'Sandbox tests are still running';
 
   const isBlocked = !decision.allowed && !isChecking;
 

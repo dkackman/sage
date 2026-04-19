@@ -1,0 +1,244 @@
+use tauri::{AppHandle, Emitter, Manager, State};
+
+use crate::apps::state::AppsHostState;
+
+use super::probes::{
+    run_clear_cycle_test, run_isolation_test, run_network_test, run_persistence_test,
+};
+use super::runtime::now_ms;
+use super::state_view::{build_effective_state, build_state_view};
+use super::types::{
+    SandboxCapability, SandboxCapabilityStatus, SandboxRunState, SandboxState,
+    build_running_sandbox_state, mark_cap,
+};
+
+async fn emit_state_view(app: &AppHandle, apps_state: &State<'_, AppsHostState>) {
+    let baseline = apps_state.sandbox.baseline.lock().await.clone();
+    let current_run = apps_state.sandbox.current_run.lock().await.clone();
+    let view = build_state_view(&baseline, current_run.as_ref());
+
+    if let Some(window) = app.get_window("main") {
+        let _ = window.emit("apps:sandbox-state-updated", view);
+    }
+}
+
+pub async fn begin_sandbox_run(
+    app: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+) -> Result<super::types::SandboxStateView, String> {
+    {
+        let mut running = apps_state.sandbox.running.lock().await;
+        if *running {
+            let baseline = apps_state.sandbox.baseline.lock().await.clone();
+            let current_run = apps_state.sandbox.current_run.lock().await.clone();
+            return Ok(build_state_view(&baseline, current_run.as_ref()));
+        }
+        *running = true;
+    }
+
+    {
+        let mut runs = apps_state.sandbox.runs.lock().await;
+        runs.clear();
+    }
+
+    let run_state = SandboxRunState {
+        run_id: super::runtime::unique_run_id("sandbox-run"),
+        state: build_running_sandbox_state(now_ms()),
+    };
+
+    *apps_state.sandbox.current_run.lock().await = Some(run_state);
+
+    emit_state_view(app, apps_state).await;
+
+    let baseline = apps_state.sandbox.baseline.lock().await.clone();
+    let current_run = apps_state.sandbox.current_run.lock().await.clone();
+    Ok(build_state_view(&baseline, current_run.as_ref()))
+}
+
+async fn update_current_run_state(
+    app: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+    state: SandboxState,
+) {
+    if let Some(current_run) = apps_state.sandbox.current_run.lock().await.as_mut() {
+        current_run.state = state;
+    }
+    emit_state_view(app, apps_state).await;
+}
+
+pub async fn sandbox_runner(app: AppHandle) {
+    let apps_state = app.state::<AppsHostState>();
+
+    let mut current_state = {
+        let current_run = apps_state.sandbox.current_run.lock().await.clone();
+        current_run
+            .map(|r| r.state)
+            .unwrap_or_else(|| build_running_sandbox_state(now_ms()))
+    };
+
+    let isolation_fut = run_isolation_test(&app, &apps_state);
+    let persistence_fut = run_persistence_test(&app, &apps_state);
+    let clear_cycle_fut = run_clear_cycle_test(&app, &apps_state);
+    let network_fut = run_network_test(&app, &apps_state);
+
+    tokio::pin!(isolation_fut);
+    tokio::pin!(persistence_fut);
+    tokio::pin!(clear_cycle_fut);
+    tokio::pin!(network_fut);
+
+    let mut isolation_done = false;
+    let mut persistence_done = false;
+    let mut clear_cycle_done = false;
+    let mut network_done = false;
+
+    while !(isolation_done && persistence_done && clear_cycle_done && network_done) {
+        tokio::select! {
+            res = &mut isolation_fut, if !isolation_done => {
+                isolation_done = true;
+
+                match res {
+                    Ok((passed, details)) => {
+                        mark_cap(
+                            &mut current_state,
+                            SandboxCapability::StorageIsolationFromSage,
+                            if passed { SandboxCapabilityStatus::Passed } else { SandboxCapabilityStatus::Failed },
+                            details,
+                            now_ms(),
+                        );
+                    }
+                    Err(err) => {
+                        mark_cap(
+                            &mut current_state,
+                            SandboxCapability::StorageIsolationFromSage,
+                            SandboxCapabilityStatus::Failed,
+                            Some(err),
+                            now_ms(),
+                        );
+                    }
+                }
+
+                update_current_run_state(&app, &apps_state, current_state.clone()).await;
+            }
+
+            res = &mut persistence_fut, if !persistence_done => {
+                persistence_done = true;
+
+                match res {
+                    Ok((normal, incog)) => {
+                        mark_cap(
+                            &mut current_state,
+                            SandboxCapability::StoragePersistenceNormal,
+                            if normal.0 { SandboxCapabilityStatus::Passed } else { SandboxCapabilityStatus::Failed },
+                            normal.1,
+                            now_ms(),
+                        );
+
+                        mark_cap(
+                            &mut current_state,
+                            SandboxCapability::StorageNonPersistenceIncognito,
+                            if incog.0 { SandboxCapabilityStatus::Passed } else { SandboxCapabilityStatus::Failed },
+                            incog.1,
+                            now_ms(),
+                        );
+                    }
+                    Err(err) => {
+                        mark_cap(
+                            &mut current_state,
+                            SandboxCapability::StoragePersistenceNormal,
+                            SandboxCapabilityStatus::Failed,
+                            Some(err.clone()),
+                            now_ms(),
+                        );
+
+                        mark_cap(
+                            &mut current_state,
+                            SandboxCapability::StorageNonPersistenceIncognito,
+                            SandboxCapabilityStatus::Failed,
+                            Some(err),
+                            now_ms(),
+                        );
+                    }
+                }
+
+                update_current_run_state(&app, &apps_state, current_state.clone()).await;
+            }
+
+            res = &mut clear_cycle_fut, if !clear_cycle_done => {
+                clear_cycle_done = true;
+
+                match res {
+                    Ok((passed, details)) => {
+                        mark_cap(
+                            &mut current_state,
+                            SandboxCapability::StorageClearCycle,
+                            if passed { SandboxCapabilityStatus::Passed } else { SandboxCapabilityStatus::Failed },
+                            details,
+                            now_ms(),
+                        );
+                    }
+                    Err(err) => {
+                        mark_cap(
+                            &mut current_state,
+                            SandboxCapability::StorageClearCycle,
+                            SandboxCapabilityStatus::Failed,
+                            Some(err),
+                            now_ms(),
+                        );
+                    }
+                }
+
+                update_current_run_state(&app, &apps_state, current_state.clone()).await;
+            }
+
+            res = &mut network_fut, if !network_done => {
+                network_done = true;
+
+                match res {
+                    Ok((passed, details)) => {
+                        mark_cap(
+                            &mut current_state,
+                            SandboxCapability::NetworkAllowlistEnforced,
+                            if passed { SandboxCapabilityStatus::Passed } else { SandboxCapabilityStatus::Failed },
+                            details,
+                            now_ms(),
+                        );
+                    }
+                    Err(err) => {
+                        mark_cap(
+                            &mut current_state,
+                            SandboxCapability::NetworkAllowlistEnforced,
+                            SandboxCapabilityStatus::Failed,
+                            Some(err),
+                            now_ms(),
+                        );
+                    }
+                }
+
+                update_current_run_state(&app, &apps_state, current_state.clone()).await;
+            }
+        }
+    }
+
+    let effective = {
+        let baseline = apps_state.sandbox.baseline.lock().await.clone();
+        let temp_run = SandboxRunState {
+            run_id: "finalize".into(),
+            state: current_state.clone(),
+        };
+        build_effective_state(&baseline, Some(&temp_run))
+    };
+
+    current_state.overall_critical_status =
+        if effective.storage_isolation_from_sage.status == SandboxCapabilityStatus::Failed {
+            SandboxCapabilityStatus::Failed
+        } else {
+            SandboxCapabilityStatus::Passed
+        };
+    current_state.finished_at = Some(now_ms());
+
+    *apps_state.sandbox.baseline.lock().await = current_state.clone();
+    *apps_state.sandbox.current_run.lock().await = None;
+    *apps_state.sandbox.running.lock().await = false;
+
+    emit_state_view(&app, &apps_state).await;
+}

@@ -23,7 +23,6 @@ pub fn run() {
 
     let builder = Builder::<tauri::Wry>::new()
         .error_handling(ErrorHandlingMode::Throw)
-        // Then register them (separated by a comma)
         .commands(collect_commands![
             commands::initialize,
             commands::login,
@@ -148,9 +147,9 @@ pub fn run() {
             apps::runtime::apps_clear_runtime_browsing_data,
             apps::bridge::apps_handle_bridge_request,
             apps::bridge::apps_resolve_bridge_approval,
-            apps::sandbox::apps_get_sandbox_state,
-            apps::sandbox::apps_get_app_launch_gate,
-            apps::sandbox::apps_rerun_sandbox_tests,
+            apps::sandbox::commands::apps_get_sandbox_state,
+            apps::sandbox::commands::apps_get_app_launch_gate,
+            apps::sandbox::commands::apps_rerun_sandbox_tests,
             apps::install::list_installed_apps,
             apps::install::preview_app_zip,
             apps::install::preview_app_url,
@@ -166,7 +165,6 @@ pub fn run() {
         ])
         .events(collect_events![SyncEvent]);
 
-    // On mobile or release mode we should not export the TypeScript bindings
     #[cfg(all(debug_assertions, not(mobile)))]
     builder
         .export(
@@ -200,21 +198,20 @@ pub fn run() {
 
     tauri_builder
         .register_uri_scheme_protocol("sage-app", move |ctx, request| {
-                let app_handle = ctx.app_handle();
+            let app_handle = ctx.app_handle();
 
-                let base_path: PathBuf = app_handle
-                    .path()
-                    .app_data_dir()
-                    .expect("failed to resolve app data dir");
+            let base_path: PathBuf = app_handle
+                .path()
+                .app_data_dir()
+                .expect("failed to resolve app data dir");
 
-                apps::handle_app_protocol_request(&base_path, &request)
-                    .unwrap_or_else(|err| {
-                            tauri::http::Response::builder()
-                                .status(404)
-                                .header("Content-Type", "text/plain; charset=utf-8")
-                                .body(format!("sage-app error: {err}").into_bytes())
-                                .expect("failed to build error response")
-                    })
+            apps::handle_app_protocol_request(&base_path, &request).unwrap_or_else(|err| {
+                tauri::http::Response::builder()
+                    .status(404)
+                    .header("Content-Type", "text/plain; charset=utf-8")
+                    .body(format!("sage-app error: {err}").into_bytes())
+                    .expect("failed to build error response")
+            })
         })
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {

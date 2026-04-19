@@ -2,6 +2,7 @@ import type {
   InstalledSageApp,
   SandboxCapabilityResult,
   SandboxState,
+  SandboxStateView,
 } from '@/bindings';
 
 export type SandboxCapability =
@@ -146,4 +147,22 @@ export function evaluateAppLaunchGate(
     capability: null,
     message: null,
   };
+}
+
+export function getLiveSandboxState(
+  sandboxView: SandboxStateView | null | undefined,
+): SandboxState | null {
+  return sandboxView?.currentRun?.state ?? null;
+}
+
+export function getEffectiveSandboxState(
+  sandboxView: SandboxStateView | null | undefined,
+): SandboxState | null {
+  return sandboxView?.effective ?? null;
+}
+
+export function getBaselineSandboxState(
+  sandboxView: SandboxStateView | null | undefined,
+): SandboxState | null {
+  return sandboxView?.baseline ?? null;
 }
