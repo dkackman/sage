@@ -13,7 +13,7 @@ export function AppsProvider({ children }: { children: React.ReactNode }) {
   const { requestApproval } = useAppPendingApprovals();
   const startedInitialSandboxRunRef = useRef(false);
 
-  useBridgeHost({
+  const { isReady: bridgeHostReady } = useBridgeHost({
     requestApproval,
   });
 
@@ -25,20 +25,18 @@ export function AppsProvider({ children }: { children: React.ReactNode }) {
   }, [value.sandboxState]);
 
   useEffect(() => {
+    if (!bridgeHostReady) {
+      return;
+    }
+
     if (startedInitialSandboxRunRef.current) {
       return;
     }
 
     startedInitialSandboxRunRef.current = true;
 
-    const timeoutId = window.setTimeout(() => {
-      void value.rerunSandboxTests();
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [value, value.rerunSandboxTests]);
+    void value.rerunSandboxTests();
+  }, [bridgeHostReady, value.rerunSandboxTests]);
 
   return <AppsContext.Provider value={value}>{children}</AppsContext.Provider>;
 }

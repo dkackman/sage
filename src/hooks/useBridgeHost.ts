@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import {
@@ -63,9 +63,11 @@ function toSdkBridgeResponse(response: RustBridgeResponse): SageBridgeResponse {
 
 export function useBridgeHost({ requestApproval }: Args) {
   const hostWebview = getCurrentWebview();
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     let unlistenRequest: (() => void) | null = null;
+    let disposed = false;
 
     const mount = async () => {
       unlistenRequest = await hostWebview.listen<SageBridgeEventPayload>(
@@ -137,6 +139,10 @@ export function useBridgeHost({ requestApproval }: Args) {
           });
         },
       );
+
+      if (!disposed) {
+        setIsReady(true);
+      }
     };
 
     void mount().catch((err) => {
@@ -144,8 +150,11 @@ export function useBridgeHost({ requestApproval }: Args) {
     });
 
     return () => {
+      disposed = true;
+      setIsReady(false);
       unlistenRequest?.();
     };
   }, [hostWebview, requestApproval]);
-}
 
+  return { isReady };
+}

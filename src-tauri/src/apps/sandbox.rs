@@ -12,16 +12,15 @@ use crate::apps::runtime;
 use crate::apps::runtime::resolve_app;
 use crate::apps::state::AppsHostState;
 use crate::apps::types::InstalledSageApp;
-
-const TEST_APP_STORAGE_ISOLATION_PERSISTENT: &str =
-    "__sage_test_storage_isolation_persistent";
-const TEST_APP_STORAGE_ISOLATION_INCOGNITO: &str =
-    "__sage_test_storage_isolation_incognito";
-const TEST_APP_PERSISTENCE_PERSISTENT: &str = "__sage_test_persistence_persistent";
-const TEST_APP_PERSISTENCE_INCOGNITO: &str = "__sage_test_persistence_incognito";
-const TEST_APP_STORAGE_CLEAR_PERSISTENT: &str = "__sage_test_storage_clear_persistent";
-const TEST_APP_NETWORK_ALLOW_A: &str = "__sage_test_network_allow_a";
-const TEST_APP_NETWORK_ALLOW_B: &str = "__sage_test_network_allow_b";
+use crate::apps::builtin_apps::{
+    BUILTIN_NETWORK_ALLOW_A_ID,
+    BUILTIN_NETWORK_ALLOW_B_ID,
+    BUILTIN_PERSISTENCE_INCOGNITO_ID,
+    BUILTIN_PERSISTENCE_PERSISTENT_ID,
+    BUILTIN_STORAGE_CLEAR_PERSISTENT_ID,
+    BUILTIN_STORAGE_ISOLATION_INCOGNITO_ID,
+    BUILTIN_STORAGE_ISOLATION_PERSISTENT_ID,
+};
 
 const STORAGE_CLEAR_PROBE_PATH: &str =
     "/__sage/runtime-apps/storage-clear-probe/index.html";
@@ -628,17 +627,19 @@ fn mark_cap(state: &mut SandboxState, cap: SandboxCapability, status: SandboxCap
 async fn run_isolation_test(app: &AppHandle, apps_state: &State<'_, AppsHostState>) -> Result<(bool, Option<String>), String> {
     let run_id = unique_run_id("sandbox-isolation");
     let app_ids = [
-        TEST_APP_STORAGE_ISOLATION_PERSISTENT,
-        TEST_APP_STORAGE_ISOLATION_INCOGNITO,
+        BUILTIN_STORAGE_ISOLATION_PERSISTENT_ID,
+        BUILTIN_STORAGE_ISOLATION_INCOGNITO_ID,
     ];
 
     stop_test_apps(app, apps_state, &app_ids).await;
 
-    // We no longer write Sage-side probes from TS. For now just test that the app cannot see host data.
+    // Isolation check verifies that sandboxed app storage is isolated from the host
+    // environment. The probe app reports only what it can observe from inside its own
+    // storage context.
     start_test_app(
         app,
         apps_state,
-        TEST_APP_STORAGE_ISOLATION_PERSISTENT,
+        BUILTIN_STORAGE_ISOLATION_PERSISTENT_ID,
         &[("runId", run_id.clone())],
         None,
     )
@@ -646,7 +647,7 @@ async fn run_isolation_test(app: &AppHandle, apps_state: &State<'_, AppsHostStat
     start_test_app(
         app,
         apps_state,
-        TEST_APP_STORAGE_ISOLATION_INCOGNITO,
+        BUILTIN_STORAGE_ISOLATION_INCOGNITO_ID,
         &[("runId", run_id.clone())],
         None,
     )
@@ -656,8 +657,12 @@ async fn run_isolation_test(app: &AppHandle, apps_state: &State<'_, AppsHostStat
 
     stop_test_apps(app, apps_state, &app_ids).await;
 
-    let persistent = results.iter().find(|r| r.app_id == TEST_APP_STORAGE_ISOLATION_PERSISTENT);
-    let incognito = results.iter().find(|r| r.app_id == TEST_APP_STORAGE_ISOLATION_INCOGNITO);
+    let persistent = results
+        .iter()
+        .find(|r| r.app_id == BUILTIN_STORAGE_ISOLATION_PERSISTENT_ID);
+    let incognito = results
+        .iter()
+        .find(|r| r.app_id == BUILTIN_STORAGE_ISOLATION_INCOGNITO_ID);
 
     let Some(persistent) = persistent else {
         return Ok((false, Some("Missing persistent isolation result.".into())));
@@ -686,14 +691,14 @@ async fn run_isolation_test(app: &AppHandle, apps_state: &State<'_, AppsHostStat
 
 async fn run_persistence_test(app: &AppHandle, apps_state: &State<'_, AppsHostState>) -> Result<((bool, Option<String>), (bool, Option<String>)), String> {
     let run_id = unique_run_id("sandbox-persistence");
-    let app_ids = [TEST_APP_PERSISTENCE_PERSISTENT, TEST_APP_PERSISTENCE_INCOGNITO];
+    let app_ids = [BUILTIN_PERSISTENCE_PERSISTENT_ID, BUILTIN_PERSISTENCE_INCOGNITO_ID];
 
     stop_test_apps(app, apps_state, &app_ids).await;
 
     start_test_app(
         app,
         apps_state,
-        TEST_APP_PERSISTENCE_PERSISTENT,
+        BUILTIN_PERSISTENCE_PERSISTENT_ID,
         &[("runId", run_id.clone()), ("phase", "write".into())],
         None,
     )
@@ -701,7 +706,7 @@ async fn run_persistence_test(app: &AppHandle, apps_state: &State<'_, AppsHostSt
     start_test_app(
         app,
         apps_state,
-        TEST_APP_PERSISTENCE_INCOGNITO,
+        BUILTIN_PERSISTENCE_INCOGNITO_ID,
         &[("runId", run_id.clone()), ("phase", "write".into())],
         None,
     )
@@ -710,8 +715,8 @@ async fn run_persistence_test(app: &AppHandle, apps_state: &State<'_, AppsHostSt
     let write_results = poll_persistence_write(apps_state, &run_id, 2, 10_000).await?;
     stop_test_apps(app, apps_state, &app_ids).await;
 
-    let persistent_write = write_results.iter().find(|r| r.app_id == TEST_APP_PERSISTENCE_PERSISTENT);
-    let incognito_write = write_results.iter().find(|r| r.app_id == TEST_APP_PERSISTENCE_INCOGNITO);
+    let persistent_write = write_results.iter().find(|r| r.app_id == BUILTIN_PERSISTENCE_PERSISTENT_ID);
+    let incognito_write = write_results.iter().find(|r| r.app_id == BUILTIN_PERSISTENCE_INCOGNITO_ID);
 
     let Some(persistent_write) = persistent_write else {
         return Ok(((false, Some("Missing persistent write result.".into())), (false, Some("Missing incognito write result.".into()))));
@@ -779,7 +784,7 @@ async fn run_persistence_test(app: &AppHandle, apps_state: &State<'_, AppsHostSt
     start_test_app(
         app,
         apps_state,
-        TEST_APP_PERSISTENCE_PERSISTENT,
+        BUILTIN_PERSISTENCE_PERSISTENT_ID,
         &[("runId", run_id.clone()), ("phase", "read".into())],
         None,
     )
@@ -787,7 +792,7 @@ async fn run_persistence_test(app: &AppHandle, apps_state: &State<'_, AppsHostSt
     start_test_app(
         app,
         apps_state,
-        TEST_APP_PERSISTENCE_INCOGNITO,
+        BUILTIN_PERSISTENCE_INCOGNITO_ID,
         &[("runId", run_id.clone()), ("phase", "read".into())],
         None,
     )
@@ -796,8 +801,8 @@ async fn run_persistence_test(app: &AppHandle, apps_state: &State<'_, AppsHostSt
     let read_results = poll_persistence_read(apps_state, &run_id, 2, 10_000).await?;
     stop_test_apps(app, apps_state, &app_ids).await;
 
-    let persistent_read = read_results.iter().find(|r| r.app_id == TEST_APP_PERSISTENCE_PERSISTENT);
-    let incognito_read = read_results.iter().find(|r| r.app_id == TEST_APP_PERSISTENCE_INCOGNITO);
+    let persistent_read = read_results.iter().find(|r| r.app_id == BUILTIN_PERSISTENCE_PERSISTENT_ID);
+    let incognito_read = read_results.iter().find(|r| r.app_id == BUILTIN_PERSISTENCE_INCOGNITO_ID);
 
     let Some(persistent_read) = persistent_read else {
         return Ok(((false, Some("Missing persistent read result.".into())), (false, Some("Missing incognito read result.".into()))));
@@ -844,14 +849,14 @@ async fn run_persistence_test(app: &AppHandle, apps_state: &State<'_, AppsHostSt
 
 async fn run_network_test(app: &AppHandle, apps_state: &State<'_, AppsHostState>) -> Result<(bool, Option<String>), String> {
     let run_id = unique_run_id("sandbox-network");
-    let app_ids = [TEST_APP_NETWORK_ALLOW_A, TEST_APP_NETWORK_ALLOW_B];
+    let app_ids = [BUILTIN_NETWORK_ALLOW_A_ID, BUILTIN_NETWORK_ALLOW_B_ID];
 
     stop_test_apps(app, apps_state, &app_ids).await;
 
     start_test_app(
         app,
         apps_state,
-        TEST_APP_NETWORK_ALLOW_A,
+        BUILTIN_NETWORK_ALLOW_A_ID,
         &[("runId", run_id.clone())],
         None,
     )
@@ -859,7 +864,7 @@ async fn run_network_test(app: &AppHandle, apps_state: &State<'_, AppsHostState>
     start_test_app(
         app,
         apps_state,
-        TEST_APP_NETWORK_ALLOW_B,
+        BUILTIN_NETWORK_ALLOW_B_ID,
         &[("runId", run_id.clone())],
         None,
     )
@@ -933,7 +938,7 @@ async fn run_clear_cycle_test(
     apps_state: &State<'_, AppsHostState>,
 ) -> Result<(bool, Option<String>), String> {
     let run_id = unique_run_id("storage-clear-cycle");
-    let app_id = TEST_APP_STORAGE_CLEAR_PERSISTENT;
+    let app_id = BUILTIN_STORAGE_CLEAR_PERSISTENT_ID;
 
     let write = run_clear_cycle_phase(
         app,
@@ -1179,11 +1184,15 @@ pub async fn apps_rerun_sandbox_tests(
         runs.clear();
     }
 
+    let running_state = build_running_sandbox_state();
+    *apps_state.sandbox.state.lock().await = running_state.clone();
+    emit_state(&app, &apps_state).await;
+
     let runner_app = app.clone();
 
     tokio::spawn(async move {
         sandbox_runner(runner_app).await;
     });
 
-    Ok(apps_state.sandbox.state.lock().await.clone())
+    Ok(running_state)
 }
