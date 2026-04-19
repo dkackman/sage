@@ -6502,6 +6502,7 @@ name = "sage-tauri"
 version = "0.12.10"
 dependencies = [
  "anyhow",
+ "async-trait",
  "aws-lc-rs",
  "base64 0.22.1",
  "chia-wallet-sdk",

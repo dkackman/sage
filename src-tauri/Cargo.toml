@@ -50,6 +50,7 @@ sha2 = "0.10.9"
 hex = { workspace = true }
 base64 = { workspace = true }
 sqlx = { workspace = true }
+async-trait = "0.1.89"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-window-state = { workspace = true }

@@ -1,3 +1,4 @@
+pub mod bridge;
 pub mod builtin_apps;
 pub mod csp;
 pub mod install;

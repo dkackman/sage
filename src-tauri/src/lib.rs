@@ -146,6 +146,8 @@ pub fn run() {
             apps::runtime::apps_create_inline_runtime,
             apps::runtime::apps_assert_bridge_origin,
             apps::runtime::apps_clear_runtime_browsing_data,
+            apps::bridge::apps_handle_bridge_request,
+            apps::bridge::apps_resolve_bridge_approval,
             apps::install::list_installed_apps,
             apps::install::preview_app_zip,
             apps::install::preview_app_url,
@@ -218,8 +220,9 @@ pub fn run() {
             let app_state = AppState::new(Mutex::new(Sage::new(&path, false)));
             app.manage(Initialized(Mutex::new(false)));
             app.manage(RpcTask(Mutex::new(None)));
-            app.manage(apps::runtime::AppRuntimeState::default());
             app.manage(app_state);
+            app.manage(apps::runtime::AppRuntimeState::default());
+            app.manage(apps::bridge::BridgeState::default());
             Ok(())
         })
         .run(tauri::generate_context!())

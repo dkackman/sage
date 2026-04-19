@@ -368,6 +368,12 @@ async appsAssertBridgeOrigin(sourceLabel: string) : Promise<string> {
 async appsClearRuntimeBrowsingData(appId: string) : Promise<null> {
     return await TAURI_INVOKE("apps_clear_runtime_browsing_data", { appId });
 },
+async appsHandleBridgeRequest(sourceLabel: string, request: RustBridgeRequest) : Promise<RustBridgeHandleResult> {
+    return await TAURI_INVOKE("apps_handle_bridge_request", { sourceLabel, request });
+},
+async appsResolveBridgeApproval(args: ResolveBridgeApprovalArgs) : Promise<RustBridgeResponse> {
+    return await TAURI_INVOKE("apps_resolve_bridge_approval", { args });
+},
 async listInstalledApps() : Promise<ListedSageApp[]> {
     return await TAURI_INVOKE("list_installed_apps");
 },
@@ -2160,6 +2166,7 @@ name: string }
  * Response for key rename
  */
 export type RenameKeyResponse = Record<string, never>
+export type ResolveBridgeApprovalArgs = { approvalId: string; approved: boolean; reason: string | null }
 /**
  * Resynchronize wallet data with the blockchain
  */
@@ -2208,6 +2215,13 @@ export type ResyncCatResponse = Record<string, never>
  * Response from resynchronizing the wallet
  */
 export type ResyncResponse = Record<string, never>
+export type RustBridgeApprovalRequest = { kind: string; app: InstalledSageApp; sourceLabel: string; requestId: string; paramsJson: string }
+export type RustBridgeErrorPayload = { code: string; message: string }
+export type RustBridgeErrorResponse = { channel: string; bridgeVersion: string; id: string; ok: boolean; error: RustBridgeErrorPayload }
+export type RustBridgeHandleResult = { kind: "immediate"; response: RustBridgeResponse } | { kind: "approvalRequired"; approvalId: string; approval: RustBridgeApprovalRequest }
+export type RustBridgeRequest = { channel: string; bridgeVersion: string | null; id: string; method: string; paramsJson: string | null }
+export type RustBridgeResponse = RustBridgeSuccessResponse | RustBridgeErrorResponse
+export type RustBridgeSuccessResponse = { channel: string; bridgeVersion: string; id: string; ok: boolean; resultJson: string }
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
 export type SageAppPackageManifest = { name: string; version: string; permissions: SageRequestedPermissions; files: SageAppManifestFile[]; entry: string | null; icon: string | null }
 export type SageAppRuntimeRecord = { runtimeId: string; appId: string; appName: string; entrySrc: string; webviewLabel: string; hostWindowLabel: string; mode: string; state: string; startedAt: number; lastActiveAt: number; visible: boolean; internal: boolean; activeBatchCount: number; activeSocketCount: number; inFlightRequestCount: number }

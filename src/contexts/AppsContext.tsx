@@ -15,7 +15,6 @@ export function AppsProvider({ children }: { children: React.ReactNode }) {
 
   useBridgeHost({
     requestApproval,
-    getApp: value.getApp,
   });
 
   useEffect(() => {
