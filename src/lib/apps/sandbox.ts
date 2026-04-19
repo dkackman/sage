@@ -1,4 +1,8 @@
-import type { InstalledSageApp } from '@/bindings';
+import type {
+  InstalledSageApp,
+  SandboxCapabilityResult,
+  SandboxState,
+} from '@/bindings';
 
 export type SandboxCapability =
   | 'storage_isolation_from_sage'
@@ -7,25 +11,6 @@ export type SandboxCapability =
   | 'storage_clear_cycle'
   | 'network_allowlist_enforced';
 
-export type SandboxCapabilityStatus =
-  | 'pending'
-  | 'running'
-  | 'passed'
-  | 'failed';
-
-export interface SandboxCapabilityResult {
-  status: SandboxCapabilityStatus;
-  checkedAt: number | null;
-  details: string | null;
-}
-
-export interface SandboxState {
-  overallCriticalStatus: SandboxCapabilityStatus;
-  capabilities: Record<SandboxCapability, SandboxCapabilityResult>;
-  startedAt: number | null;
-  finishedAt: number | null;
-}
-
 export interface AppLaunchGateResult {
   allowed: boolean;
   kind: 'allowed' | 'running' | 'failed';
@@ -33,141 +18,52 @@ export interface AppLaunchGateResult {
   message: string | null;
 }
 
-export interface SandboxIsolationProbeResult {
-  runId: string;
-  localStorageVisible: boolean;
-  indexedDbVisible: boolean;
-  error: string | null;
+export function formatCapabilityLabel(capability: SandboxCapability): string {
+  switch (capability) {
+    case 'storage_isolation_from_sage':
+      return 'storage isolation from Sage';
+    case 'storage_persistence_normal':
+      return 'persistent storage behavior';
+    case 'storage_non_persistence_incognito':
+      return 'incognito storage behavior';
+    case 'storage_clear_cycle':
+      return 'storage clear cycle behavior';
+    case 'network_allowlist_enforced':
+      return 'network allowlist enforcement';
+  }
 }
 
-export interface SandboxPersistenceWriteProbeResult {
-  runId: string;
-  localStorageWrote: boolean;
-  indexedDbWrote: boolean;
-  error: string | null;
-}
-
-export interface SandboxPersistenceReadProbeResult {
-  runId: string;
-  localStoragePresent: boolean;
-  indexedDbPresent: boolean;
-  error: string | null;
-}
-
-export interface SandboxNetworkProbeResult {
-  runId: string;
-  allowedUrl: string;
-  blockedUrl: string;
-  allowedOk: boolean;
-  blockedOk: boolean;
-  error: string | null;
-}
-
-export type SandboxStorageClearProbePhase =
-  | 'write'
-  | 'check_present'
-  | 'check_absent';
-
-export interface SandboxStorageClearProbeResult {
-  runId: string;
-  phase: SandboxStorageClearProbePhase;
-  localStoragePresent: boolean;
-  indexedDbPresent: boolean;
-  error: string | null;
-}
-
-let storageClearCapabilityPassed = false;
-
-export function setStorageClearCapabilityPassed(value: boolean) {
-  storageClearCapabilityPassed = value;
-}
-
-export function isStorageClearCapabilityPassed() {
-  return storageClearCapabilityPassed;
-}
-
-function makeCapabilityResult(
-  status: SandboxCapabilityStatus,
-  details: string | null = null,
+export function getSandboxCapabilityResult(
+  sandbox: SandboxState,
+  capability: SandboxCapability,
 ): SandboxCapabilityResult {
-  return {
-    status,
-    checkedAt: null,
-    details,
-  };
+  switch (capability) {
+    case 'storage_isolation_from_sage':
+      return sandbox.storageIsolationFromSage;
+    case 'storage_persistence_normal':
+      return sandbox.storagePersistenceNormal;
+    case 'storage_non_persistence_incognito':
+      return sandbox.storageNonPersistenceIncognito;
+    case 'storage_clear_cycle':
+      return sandbox.storageClearCycle;
+    case 'network_allowlist_enforced':
+      return sandbox.networkAllowlistEnforced;
+  }
 }
 
-export function buildInitialSandboxState(): SandboxState {
-  return {
-    overallCriticalStatus: 'pending',
-    startedAt: null,
-    finishedAt: null,
-    capabilities: {
-      storage_isolation_from_sage: makeCapabilityResult('pending'),
-      storage_persistence_normal: makeCapabilityResult('pending'),
-      storage_non_persistence_incognito: makeCapabilityResult('pending'),
-      storage_clear_cycle: makeCapabilityResult('pending'),
-      network_allowlist_enforced: makeCapabilityResult('pending'),
-    },
-  };
-}
-
-export function buildRunningSandboxState(): SandboxState {
-  return {
-    overallCriticalStatus: 'running',
-    startedAt: Date.now(),
-    finishedAt: null,
-    capabilities: {
-      storage_isolation_from_sage: makeCapabilityResult('running'),
-      storage_persistence_normal: makeCapabilityResult('running'),
-      storage_non_persistence_incognito: makeCapabilityResult('running'),
-      storage_clear_cycle: makeCapabilityResult('running'),
-      network_allowlist_enforced: makeCapabilityResult('running'),
-    },
-  };
-}
-
-export function buildCompletedSandboxState(args: {
-  isolation: { passed: boolean; details: string | null };
-  persistenceNormal: { passed: boolean; details: string | null };
-  persistenceIncognito: { passed: boolean; details: string | null };
-  clearCycle: { passed: boolean; details: string | null };
-  network: { passed: boolean; details: string | null };
-}): SandboxState {
-  const checkedAt = Date.now();
-
-  return {
-    overallCriticalStatus: args.isolation.passed ? 'passed' : 'failed',
-    startedAt: checkedAt,
-    finishedAt: checkedAt,
-    capabilities: {
-      storage_isolation_from_sage: {
-        status: args.isolation.passed ? 'passed' : 'failed',
-        checkedAt,
-        details: args.isolation.details,
-      },
-      storage_persistence_normal: {
-        status: args.persistenceNormal.passed ? 'passed' : 'failed',
-        checkedAt,
-        details: args.persistenceNormal.details,
-      },
-      storage_non_persistence_incognito: {
-        status: args.persistenceIncognito.passed ? 'passed' : 'failed',
-        checkedAt,
-        details: args.persistenceIncognito.details,
-      },
-      storage_clear_cycle: {
-        status: args.clearCycle.passed ? 'passed' : 'failed',
-        checkedAt,
-        details: args.clearCycle.details,
-      },
-      network_allowlist_enforced: {
-        status: args.network.passed ? 'passed' : 'failed',
-        checkedAt,
-        details: args.network.details,
-      },
-    },
-  };
+export function listSandboxCapabilities(
+  sandbox: SandboxState,
+): Array<[SandboxCapability, SandboxCapabilityResult]> {
+  return [
+    ['storage_isolation_from_sage', sandbox.storageIsolationFromSage],
+    ['storage_persistence_normal', sandbox.storagePersistenceNormal],
+    [
+      'storage_non_persistence_incognito',
+      sandbox.storageNonPersistenceIncognito,
+    ],
+    ['storage_clear_cycle', sandbox.storageClearCycle],
+    ['network_allowlist_enforced', sandbox.networkAllowlistEnforced],
+  ];
 }
 
 export function getRequiredSandboxCapabilities(
@@ -192,7 +88,7 @@ export function evaluateAppLaunchGate(
   app: InstalledSageApp,
   sandbox: SandboxState,
 ): AppLaunchGateResult {
-  const isolation = sandbox.capabilities.storage_isolation_from_sage;
+  const isolation = sandbox.storageIsolationFromSage;
 
   if (isolation.status === 'pending' || isolation.status === 'running') {
     return {
@@ -221,7 +117,7 @@ export function evaluateAppLaunchGate(
   const required = getRequiredSandboxCapabilities(app);
 
   for (const capability of required) {
-    const result = sandbox.capabilities[capability];
+    const result = getSandboxCapabilityResult(sandbox, capability);
 
     if (result.status === 'pending' || result.status === 'running') {
       return {
@@ -250,19 +146,4 @@ export function evaluateAppLaunchGate(
     capability: null,
     message: null,
   };
-}
-
-export function formatCapabilityLabel(capability: SandboxCapability): string {
-  switch (capability) {
-    case 'storage_isolation_from_sage':
-      return 'storage isolation from Sage';
-    case 'storage_persistence_normal':
-      return 'persistent storage behavior';
-    case 'storage_non_persistence_incognito':
-      return 'incognito storage behavior';
-    case 'storage_clear_cycle':
-      return 'storage clear cycle behavior';
-    case 'network_allowlist_enforced':
-      return 'network allowlist enforcement';
-  }
 }

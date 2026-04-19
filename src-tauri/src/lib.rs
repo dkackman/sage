@@ -148,6 +148,9 @@ pub fn run() {
             apps::runtime::apps_clear_runtime_browsing_data,
             apps::bridge::apps_handle_bridge_request,
             apps::bridge::apps_resolve_bridge_approval,
+            apps::sandbox::apps_get_sandbox_state,
+            apps::sandbox::apps_get_app_launch_gate,
+            apps::sandbox::apps_rerun_sandbox_tests,
             apps::install::list_installed_apps,
             apps::install::preview_app_zip,
             apps::install::preview_app_url,
@@ -221,8 +224,7 @@ pub fn run() {
             app.manage(Initialized(Mutex::new(false)));
             app.manage(RpcTask(Mutex::new(None)));
             app.manage(app_state);
-            app.manage(apps::runtime::AppRuntimeState::default());
-            app.manage(apps::bridge::BridgeState::default());
+            app.manage(apps::state::AppsHostState::default());
             Ok(())
         })
         .run(tauri::generate_context!())

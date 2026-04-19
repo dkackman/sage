@@ -15,12 +15,11 @@ pub struct BridgeContext<'a> {
 pub struct BridgeTools<'a> {
     pub app_handle: &'a tauri::AppHandle,
     pub app_state: &'a tauri::State<'a, AppState>,
+    pub host_state: &'a tauri::State<'a, crate::apps::state::AppsHostState>,
 }
 
 #[async_trait]
 pub trait BridgeMethod: Send + Sync {
-    fn name(&self) -> &'static str;
-
     fn permission(&self) -> Option<&'static str> {
         None
     }

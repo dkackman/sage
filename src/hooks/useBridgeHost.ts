@@ -7,34 +7,12 @@ import {
   type SageBridgeEventPayload,
   type SageBridgeResponse,
 } from '@/lib/apps/bridge';
-import { acceptSandboxBridgeSend } from '@/lib/apps/sandboxRuntimeStore';
-import type {
-  ResolveBridgeApprovalArgs,
-  RustBridgeHandleResult,
-  RustBridgeRequest,
-  RustBridgeResponse,
-} from '@/bindings.ts';
+import { RustBridgeHandleResult, RustBridgeResponse } from '@/bindings.ts';
 
 interface Args {
   requestApproval: (
     request: BridgeApprovalRequest,
   ) => Promise<{ approved: boolean; reason?: string }>;
-}
-
-interface RustSandboxBridgeSendEvent {
-  appId: string;
-  payloadJson: string;
-}
-
-type RustBridgeSuccessLike = Extract<
-  RustBridgeResponse,
-  { resultJson: string }
->;
-
-function isRustBridgeSuccess(
-  response: RustBridgeResponse,
-): response is RustBridgeSuccessLike {
-  return 'resultJson' in response;
 }
 
 function parseJsonOrNull(value: string | null | undefined): unknown {
@@ -51,7 +29,7 @@ function parseJsonOrNull(value: string | null | undefined): unknown {
 }
 
 function toSdkBridgeResponse(response: RustBridgeResponse): SageBridgeResponse {
-  if (isRustBridgeSuccess(response)) {
+  if ('resultJson' in response) {
     return {
       channel: 'sage-bridge',
       bridgeVersion: 'v1',
@@ -61,12 +39,25 @@ function toSdkBridgeResponse(response: RustBridgeResponse): SageBridgeResponse {
     };
   }
 
+  if ('error' in response) {
+    return {
+      channel: 'sage-bridge',
+      bridgeVersion: 'v1',
+      id: response.id,
+      ok: false,
+      error: response.error,
+    };
+  }
+
   return {
     channel: 'sage-bridge',
     bridgeVersion: 'v1',
-    id: response.id,
+    id: 'unknown',
     ok: false,
-    error: response.error,
+    error: {
+      code: 'internal_error',
+      message: 'Unknown Rust bridge response shape',
+    },
   };
 }
 
@@ -75,7 +66,6 @@ export function useBridgeHost({ requestApproval }: Args) {
 
   useEffect(() => {
     let unlistenRequest: (() => void) | null = null;
-    let unlistenSandbox: (() => void) | null = null;
 
     const mount = async () => {
       unlistenRequest = await hostWebview.listen<SageBridgeEventPayload>(
@@ -88,22 +78,20 @@ export function useBridgeHost({ requestApproval }: Args) {
           const sourceLabel = payload.sourceLabel;
 
           const run = async () => {
-            const rustRequest: RustBridgeRequest = {
-              channel: payload.request.channel,
-              bridgeVersion: payload.request.bridgeVersion ?? null,
-              id: payload.request.id,
-              method: payload.request.method,
-              paramsJson:
-                payload.request.params === undefined
-                  ? null
-                  : JSON.stringify(payload.request.params),
-            };
-
             const result = await invoke<RustBridgeHandleResult>(
               'apps_handle_bridge_request',
               {
                 sourceLabel,
-                request: rustRequest,
+                request: {
+                  channel: payload.request.channel,
+                  bridgeVersion: payload.request.bridgeVersion ?? null,
+                  id: payload.request.id,
+                  method: payload.request.method,
+                  paramsJson:
+                    payload.request.params === undefined
+                      ? null
+                      : JSON.stringify(payload.request.params),
+                },
               },
             );
 
@@ -126,16 +114,14 @@ export function useBridgeHost({ requestApproval }: Args) {
               ) as BridgeApprovalRequest['params'],
             });
 
-            const approvalArgs: ResolveBridgeApprovalArgs = {
-              approvalId: result.approvalId,
-              approved: approvalResult.approved,
-              reason: approvalResult.reason ?? null,
-            };
-
             const rawResponse = await invoke<RustBridgeResponse>(
               'apps_resolve_bridge_approval',
               {
-                args: approvalArgs,
+                args: {
+                  approvalId: result.approvalId,
+                  approved: approvalResult.approved,
+                  reason: approvalResult.reason ?? null,
+                },
               },
             );
 
@@ -151,20 +137,6 @@ export function useBridgeHost({ requestApproval }: Args) {
           });
         },
       );
-
-      unlistenSandbox = await hostWebview.listen<RustSandboxBridgeSendEvent>(
-        'sage-sandbox:report',
-        ({ payload }) => {
-          if (!payload) {
-            return;
-          }
-
-          acceptSandboxBridgeSend({
-            appId: payload.appId,
-            payload: parseJsonOrNull(payload.payloadJson) as never,
-          });
-        },
-      );
     };
 
     void mount().catch((err) => {
@@ -173,7 +145,7 @@ export function useBridgeHost({ requestApproval }: Args) {
 
     return () => {
       unlistenRequest?.();
-      unlistenSandbox?.();
     };
   }, [hostWebview, requestApproval]);
 }
+

@@ -11,10 +11,6 @@ pub struct WalletSendXch;
 
 #[async_trait]
 impl BridgeMethod for WalletSendXch {
-    fn name(&self) -> &'static str {
-        "wallet.sendXch"
-    }
-
     fn permission(&self) -> Option<&'static str> {
         Some("wallet.send_xch")
     }

@@ -374,6 +374,15 @@ async appsHandleBridgeRequest(sourceLabel: string, request: RustBridgeRequest) :
 async appsResolveBridgeApproval(args: ResolveBridgeApprovalArgs) : Promise<RustBridgeResponse> {
     return await TAURI_INVOKE("apps_resolve_bridge_approval", { args });
 },
+async appsGetSandboxState() : Promise<SandboxState> {
+    return await TAURI_INVOKE("apps_get_sandbox_state");
+},
+async appsGetAppLaunchGate(appId: string) : Promise<AppLaunchGateResult> {
+    return await TAURI_INVOKE("apps_get_app_launch_gate", { appId });
+},
+async appsRerunSandboxTests() : Promise<SandboxState> {
+    return await TAURI_INVOKE("apps_rerun_sandbox_tests");
+},
 async listInstalledApps() : Promise<ListedSageApp[]> {
     return await TAURI_INVOKE("list_installed_apps");
 },
@@ -462,6 +471,7 @@ export type AddPeer = {
 ip: string }
 export type AddressKind = "own" | "burn" | "launcher" | "offer" | "external" | "unknown"
 export type Amount = string | number
+export type AppLaunchGateResult = { allowed: boolean; kind: string; capability: SandboxCapability | null; message: string | null }
 export type Asset = { asset_id: string | null; name: string | null; ticker: string | null; precision: number; icon_url: string | null; description: string | null; is_sensitive_content: boolean; is_visible: boolean; revocation_address: string | null; kind: AssetKind }
 /**
  * Type of asset coin
@@ -2233,6 +2243,10 @@ export type SageRequestedCapabilities = { required: string[]; optional: string[]
 export type SageRequestedNetworkPermissions = { whitelist: SageRequestedNetworkWhitelist }
 export type SageRequestedNetworkWhitelist = { required: SageNetworkPermissionTarget[]; optional: SageNetworkPermissionTarget[] }
 export type SageRequestedPermissions = { network: SageRequestedNetworkPermissions; capabilities: SageRequestedCapabilities }
+export type SandboxCapability = "storage_isolation_from_sage" | "storage_persistence_normal" | "storage_non_persistence_incognito" | "storage_clear_cycle" | "network_allowlist_enforced"
+export type SandboxCapabilityResult = { status: SandboxCapabilityStatus; checkedAt: number | null; details: string | null }
+export type SandboxCapabilityStatus = "pending" | "running" | "passed" | "failed"
+export type SandboxState = { overallCriticalStatus: SandboxCapabilityStatus; storageIsolationFromSage: SandboxCapabilityResult; storagePersistenceNormal: SandboxCapabilityResult; storageNonPersistenceIncognito: SandboxCapabilityResult; storageClearCycle: SandboxCapabilityResult; networkAllowlistEnforced: SandboxCapabilityResult; startedAt: number | null; finishedAt: number | null }
 /**
  * Save a theme NFT to the wallet
  */

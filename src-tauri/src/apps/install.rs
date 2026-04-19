@@ -32,7 +32,7 @@ use crate::{
     error::Result,
 };
 use crate::apps::permissions::normalize_network_key;
-use crate::apps::types::{SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedNetworkPermissions};
+use crate::apps::types::{SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedNetworkPermissions, SageRequestedPermissions};
 
 pub fn current_millis() -> u128 {
     SystemTime::now()
@@ -62,6 +62,8 @@ fn slugify_name(name: &str) -> String {
         out
     }
 }
+
+
 
 fn generate_app_id(name: &str) -> String {
     format!("{}-{}", slugify_name(name), current_millis())
@@ -100,6 +102,75 @@ pub fn normalize_app_url(url: &str) -> AnyResult<String> {
     Ok(parsed.to_string())
 }
 
+fn find_existing_app_id_by_name(
+    root: &Path,
+    app_name: &str,
+) -> AnyResult<Option<String>> {
+    Ok(list_installed_apps_internal(root)?
+        .into_iter()
+        .find_map(|app| match app {
+            ListedSageApp::Installed(installed) if installed.name == app_name => {
+                Some(installed.id)
+            }
+            _ => None,
+        }))
+}
+
+fn build_installed_app(
+    app_id: String,
+    install_dir: &Path,
+    manifest: &SageAppPackageManifest,
+    granted_permissions: SageGrantedPermissions,
+    permission_flags: crate::apps::types::InstalledSageAppPermissionFlags,
+    source: InstalledSageAppSource,
+    snapshot: crate::apps::types::InstalledSageAppSnapshot,
+) -> InstalledSageApp {
+    InstalledSageApp {
+        id: app_id,
+        name: manifest.name.clone(),
+        version: manifest.version.clone(),
+        install_dir: install_dir.to_string_lossy().to_string(),
+        entry_file: manifest_entry_file(manifest).to_string(),
+        icon_file: manifest_icon_file(manifest).to_string(),
+        requested_permissions: manifest.permissions.clone(),
+        granted_permissions,
+        permission_flags,
+        source,
+        active_snapshot: snapshot,
+        pending_update: None,
+    }
+}
+
+fn recreate_install_dir(install_dir: &Path) -> AnyResult<()> {
+    if install_dir.exists() {
+        fs::remove_dir_all(install_dir).with_context(|| {
+            format!(
+                "failed to remove existing install dir {}",
+                install_dir.display()
+            )
+        })?;
+    }
+
+    fs::create_dir_all(install_dir).with_context(|| {
+        format!(
+            "failed to create install dir {}",
+            install_dir.display()
+        )
+    })?;
+
+    Ok(())
+}
+
+fn resolve_install_dir(
+    root: &Path,
+    app_name: &str,
+) -> AnyResult<(String, std::path::PathBuf)> {
+    let app_id = find_existing_app_id_by_name(root, app_name)?
+        .unwrap_or_else(|| generate_app_id(app_name));
+
+    Ok((app_id.clone(), root.join(app_id)))
+}
+
 pub fn hash_string(input: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
@@ -120,6 +191,25 @@ pub fn manifest_entry_file(manifest: &SageAppPackageManifest) -> &str {
 
 pub fn manifest_icon_file(manifest: &SageAppPackageManifest) -> &str {
     manifest.icon.as_deref().unwrap_or("icon.png")
+}
+
+fn normalize_and_validate_granted_permissions(
+    requested: &SageRequestedPermissions,
+    granted: SageGrantedPermissions,
+) -> AnyResult<SageGrantedPermissions> {
+    validate_granted_permissions(&requested, &granted.capabilities)?;
+
+    let whitelist = normalize_and_validate_granted_network_whitelist(
+        &requested.network,
+        &granted.network.whitelist,
+    )?;
+
+    Ok(SageGrantedPermissions {
+        capabilities: granted.capabilities,
+        network: crate::apps::types::SageGrantedNetworkPermissions {
+            whitelist,
+        },
+    })
 }
 
 pub fn normalize_and_validate_granted_network_whitelist(
@@ -285,57 +375,28 @@ pub async fn install_app_zip(
 
         let manifest = normalize_manifest_permissions(read_manifest(&package_root)?)?;
 
-        validate_granted_permissions(&manifest.permissions, &granted_permissions.capabilities)?;
-        let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
-            &manifest.permissions.network,
-            &granted_permissions.network.whitelist,
+        let granted_permissions = normalize_and_validate_granted_permissions(
+            &manifest.permissions,
+            granted_permissions,
         )?;
+
         let permission_flags =
             resolve_granted_permission_flags(&granted_permissions.capabilities, None)?;
 
-        let existing = list_installed_apps_internal(&root)?
-            .into_iter()
-            .find_map(|app| match app {
-                ListedSageApp::Installed(installed)
-                if installed.name == manifest.name =>
-                    {
-                        Some(installed)
-                    }
-                _ => None,
-            });
-
-        let app_id = existing
-            .map(|app| app.id)
-            .unwrap_or_else(|| generate_app_id(&manifest.name));
-
-        let install_dir = root.join(&app_id);
-        if install_dir.exists() {
-            fs::remove_dir_all(&install_dir).with_context(|| {
-                format!(
-                    "failed to remove existing install dir {}",
-                    install_dir.display()
-                )
-            })?;
-        }
-
-        fs::create_dir_all(&install_dir)?;
+        let (app_id, install_dir) = resolve_install_dir(&root, &manifest.name)?;
+        recreate_install_dir(&install_dir)?;
         let snapshot =
             prepare_zip_snapshot(&package_root, &install_dir, &manifest)?;
 
-        let installed = InstalledSageApp {
-            id: app_id,
-            name: manifest.name.clone(),
-            version: manifest.version.clone(),
-            install_dir: install_dir.to_string_lossy().to_string(),
-            entry_file: manifest_entry_file(&manifest).to_string(),
-            icon_file: manifest_icon_file(&manifest).to_string(),
-            requested_permissions: manifest.permissions.clone(),
+        let installed = build_installed_app(
+            app_id,
+            &install_dir,
+            &manifest,
             granted_permissions,
             permission_flags,
-            source: InstalledSageAppSource::Zip,
-            active_snapshot: snapshot,
-            pending_update: None,
-        };
+            InstalledSageAppSource::Zip,
+            snapshot,
+        );
 
         write_installed_app_metadata(&installed, &install_dir)?;
         Ok(installed)
@@ -384,24 +445,13 @@ pub async fn install_app_url(
             ))
         })?;
 
-    validate_granted_permissions(
+    let granted_permissions = normalize_and_validate_granted_permissions(
         &preview.manifest.permissions,
-        &granted_permissions.capabilities,
+        granted_permissions,
     )
         .map_err(|err| {
             io::Error::other(format!(
                 "invalid granted permissions for URL app {}: {err}",
-                app_url
-            ))
-        })?;
-
-    let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
-        &preview.manifest.permissions.network,
-        &granted_permissions.network.whitelist,
-    )
-        .map_err(|err| {
-            io::Error::other(format!(
-                "invalid granted network whitelist for URL app {}: {err}",
                 app_url
             ))
         })?;
@@ -415,31 +465,10 @@ pub async fn install_app_url(
                 ))
             })?;
 
-    let existing = list_installed_apps_internal(&root)
-        .map_err(|err| {
-            io::Error::other(format!("failed to list installed apps: {err}"))
-        })?
-        .into_iter()
-        .find_map(|app| match app {
-            ListedSageApp::Installed(installed)
-            if installed.name == preview.manifest.name =>
-                {
-                    Some(installed)
-                }
-            _ => None,
-        });
-
-    let app_id = existing
-        .map(|app| app.id)
-        .unwrap_or_else(|| generate_app_id(&preview.manifest.name));
-
-    let install_dir = root.join(&app_id);
-    fs::create_dir_all(&install_dir).map_err(|err| {
-        io::Error::other(format!(
-            "failed to create install dir {}: {err}",
-            install_dir.display()
-        ))
-    })?;
+    let (app_id, install_dir) = resolve_install_dir(&root, &preview.manifest.name)
+        .map_err(|err| io::Error::other(format!("failed to resolve install dir: {err}")))?;
+    recreate_install_dir(&install_dir)
+        .map_err(|err| io::Error::other(format!("failed to recreate install dir: {err}")))?;
 
     let snapshot = download_url_snapshot(
         &install_dir,
@@ -454,23 +483,18 @@ pub async fn install_app_url(
             ))
         })?;
 
-    let installed = InstalledSageApp {
-        id: app_id.clone(),
-        name: preview.manifest.name.clone(),
-        version: preview.manifest.version.clone(),
-        install_dir: install_dir.to_string_lossy().to_string(),
-        entry_file: manifest_entry_file(&preview.manifest).to_string(),
-        icon_file: manifest_icon_file(&preview.manifest).to_string(),
-        requested_permissions: preview.manifest.permissions.clone(),
+    let installed = build_installed_app(
+        app_id.clone(),
+        &install_dir,
+        &preview.manifest,
         granted_permissions,
         permission_flags,
-        source: InstalledSageAppSource::Url {
+        InstalledSageAppSource::Url {
             app_url: preview.app_url.clone(),
             manifest_url: preview.manifest_url.clone(),
         },
-        active_snapshot: snapshot,
-        pending_update: None,
-    };
+        snapshot,
+    );
 
     write_installed_app_metadata(&installed, &install_dir).map_err(|err| {
         io::Error::other(format!(

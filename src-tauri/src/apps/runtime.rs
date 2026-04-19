@@ -1,16 +1,18 @@
 use std::collections::BTreeMap;
+#[cfg(target_os = "windows")]
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::webview::NewWindowResponse;
-use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewUrl};
+use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, State, WebviewUrl};
 use tokio::sync::Mutex;
 use url::Url;
 
 use crate::apps::builtin_apps::build_builtin_test_app;
 use crate::apps::registry::read_installed_app_by_id;
+use crate::apps::state::AppsHostState;
 use crate::apps::types::InstalledSageApp;
 
 #[derive(Debug, Clone, Serialize, Type)]
@@ -35,8 +37,8 @@ pub struct SageAppRuntimeRecord {
 
 #[derive(Default)]
 pub struct AppRuntimeState {
-    by_runtime_id: Mutex<BTreeMap<String, SageAppRuntimeRecord>>,
-    runtime_by_app_id: Mutex<BTreeMap<String, String>>,
+    pub by_runtime_id: Mutex<BTreeMap<String, SageAppRuntimeRecord>>,
+    pub runtime_by_app_id: Mutex<BTreeMap<String, String>>,
 }
 
 fn runtime_id_for(app_id: &str) -> String {
@@ -88,7 +90,7 @@ fn build_entry_src(
     url.to_string()
 }
 
-fn resolve_app(base_path: &std::path::Path, app_id: &str) -> Result<InstalledSageApp, String> {
+pub fn resolve_app(base_path: &std::path::Path, app_id: &str) -> Result<InstalledSageApp, String> {
     match read_installed_app_by_id(base_path, app_id) {
         Ok(app) => Ok(app),
         Err(installed_err) => build_builtin_test_app(app_id)
@@ -134,7 +136,7 @@ pub struct CreateInlineRuntimeArgs {
 #[specta::specta]
 pub async fn apps_create_inline_runtime(
     app: AppHandle,
-    state: tauri::State<'_, AppRuntimeState>,
+    apps_state: State<'_, AppsHostState>,
     args: CreateInlineRuntimeArgs,
 ) -> Result<SageAppRuntimeRecord, String> {
     let base_path = app
@@ -143,6 +145,20 @@ pub async fn apps_create_inline_runtime(
         .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
 
     let installed = resolve_app(&base_path, &args.app_id)?;
+    let is_builtin_test_app = installed.id.starts_with("__sage_test_");
+
+    if !args.internal && !is_builtin_test_app {
+        let sandbox = apps_state.sandbox.state.lock().await.clone();
+        let gate = crate::apps::sandbox::evaluate_app_launch_gate(&installed, &sandbox);
+
+        if !gate.allowed {
+            return Err(
+                gate.message
+                    .unwrap_or_else(|| "App launch blocked by sandbox policy".into()),
+            );
+        }
+    }
+
     let is_incognito = should_use_incognito(&installed);
 
     let host_window = app
@@ -226,12 +242,12 @@ pub async fn apps_create_inline_runtime(
     };
 
     {
-        let mut by_runtime_id = state.by_runtime_id.lock().await;
+        let mut by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
         by_runtime_id.insert(runtime_id.clone(), record.clone());
     }
 
     {
-        let mut runtime_by_app_id = state.runtime_by_app_id.lock().await;
+        let mut runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
         runtime_by_app_id.insert(installed.id.clone(), runtime_id);
     }
 
@@ -327,4 +343,79 @@ pub async fn apps_clear_runtime_browsing_data(
     }
 
     Ok(())
+}
+
+pub(crate) async fn close_runtime_internal(
+    app: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+    app_id: &str,
+) -> Result<(), String> {
+    let runtime_id = {
+        let runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
+        runtime_by_app_id.get(app_id).cloned()
+    };
+
+    let Some(runtime_id) = runtime_id else {
+        return Ok(());
+    };
+
+    let record = {
+        let by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
+        by_runtime_id.get(&runtime_id).cloned()
+    };
+
+    let Some(record) = record else {
+        let mut runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
+        runtime_by_app_id.remove(app_id);
+        return Ok(());
+    };
+
+    if let Some(host_window) = app.get_window("main") {
+        if let Some(webview) = host_window.get_webview(&record.webview_label) {
+            let _ = webview.close();
+        }
+    }
+
+    {
+        let mut by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
+        by_runtime_id.remove(&runtime_id);
+    }
+
+    {
+        let mut runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
+        runtime_by_app_id.remove(app_id);
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn clear_runtime_browsing_data_internal(
+    app: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+    app_id: &str,
+) -> Result<(), String> {
+    let _ = close_runtime_internal(app, apps_state, app_id).await;
+    apps_clear_runtime_browsing_data(app.clone(), app_id.to_string()).await
+}
+
+pub(crate) async fn start_internal_runtime_for_sandbox(
+    app: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+    app_id: &str,
+    visible: bool,
+    path: Option<String>,
+    query: BTreeMap<String, String>,
+) -> Result<(), String> {
+    let args = CreateInlineRuntimeArgs {
+        app_id: app_id.to_string(),
+        visible,
+        internal: true,
+        debug_layout: false,
+        path,
+        query,
+    };
+
+    apps_create_inline_runtime(app.clone(), apps_state.clone(), args)
+        .await
+        .map(|_| ())
 }

@@ -19,7 +19,7 @@ export function AppsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const clearCycleStatus =
-      value.sandboxState.capabilities.storage_clear_cycle?.status;
+      value.sandboxState?.storageClearCycle?.status ?? null;
 
     setForceIncognitoForSecretApps(clearCycleStatus === 'failed');
   }, [value.sandboxState]);

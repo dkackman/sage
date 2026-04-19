@@ -18,8 +18,10 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { useApps } from '@/contexts/AppsContext.tsx';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes.ts';
-import { clearAppDataStore } from '@/lib/apps/storageClearCycle';
-import { formatCapabilityLabel } from '@/lib/apps/sandbox';
+import {
+  formatCapabilityLabel,
+  listSandboxCapabilities,
+} from '@/lib/apps/sandbox';
 import { Plus } from 'lucide-react';
 import { AppsPageActionsMenu } from '@/components/apps/AppsPageActionsMenu';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -139,6 +141,7 @@ export function Apps() {
     uninstallApp,
     checkForUpdate,
     performAppUpdate,
+    clearAppStorage,
     updateAvailability,
     busyAppIds,
     sandboxState,
@@ -320,13 +323,7 @@ export function Apps() {
       }));
 
       try {
-        const result = await clearAppDataStore(app);
-
-        if (!result.passed) {
-          throw new Error(
-            result.details ?? 'Storage clear verification failed for this app.',
-          );
-        }
+        await clearAppStorage(app.id);
 
         if (reopen) {
           closeContextMenu();
@@ -357,7 +354,7 @@ export function Apps() {
         );
       }
     },
-    [navigate, refresh, closeContextMenu],
+    [clearAppStorage, navigate, refresh, closeContextMenu],
   );
 
   const handleApplyPermissions = useCallback(
@@ -423,15 +420,7 @@ export function Apps() {
     setPermissionsDialogError(null);
 
     try {
-      const clearResult = await clearAppDataStore(permissionsDialogApp);
-
-      if (!clearResult.passed) {
-        setPermissionsDialogError(
-          clearResult.details ??
-            'Storage clear verification failed. The app remains tainted and isolated.',
-        );
-        return;
-      }
+      await clearAppStorage(permissionsDialogApp.id);
 
       await invoke('apps_update_permissions', {
         appId: permissionsDialogApp.id,
@@ -566,7 +555,7 @@ export function Apps() {
             <AppsPageActionsMenu
               showSandboxDebugUi
               sandboxTestsRunning={
-                sandboxState.overallCriticalStatus === 'running'
+                sandboxState?.overallCriticalStatus === 'running'
               }
               onTaskManager={() => {
                 navigate('/apps/task-manager');
@@ -585,13 +574,15 @@ export function Apps() {
           {showSandboxDebugResults ? (
             <Alert className='mb-6'>
               <AlertTitle>
-                {sandboxState.overallCriticalStatus === 'running'
-                  ? 'Sandbox tests are running'
-                  : sandboxState.overallCriticalStatus === 'passed'
-                    ? 'Sandbox tests passed'
-                    : sandboxState.overallCriticalStatus === 'failed'
-                      ? 'Sandbox tests failed'
-                      : 'Sandbox tests are pending'}
+                {!sandboxState
+                  ? 'Sandbox tests are pending'
+                  : sandboxState.overallCriticalStatus === 'running'
+                    ? 'Sandbox tests are running'
+                    : sandboxState.overallCriticalStatus === 'passed'
+                      ? 'Sandbox tests passed'
+                      : sandboxState.overallCriticalStatus === 'failed'
+                        ? 'Sandbox tests failed'
+                        : 'Sandbox tests are pending'}
               </AlertTitle>
 
               <AlertDescription className='space-y-3'>
@@ -600,17 +591,18 @@ export function Apps() {
                   capabilities have passed.
                 </div>
 
-                <div className='space-y-1 text-xs text-muted-foreground'>
-                  {Object.entries(sandboxState.capabilities).map(
-                    ([capability, result]) => (
-                      <div key={capability}>
-                        {formatCapabilityLabel(capability as never)} —{' '}
-                        {result.status}
-                        {result.details ? ` — ${result.details}` : ''}
-                      </div>
-                    ),
-                  )}
-                </div>
+                {sandboxState ? (
+                  <div className='space-y-1 text-xs text-muted-foreground'>
+                    {listSandboxCapabilities(sandboxState).map(
+                      ([capability, result]) => (
+                        <div key={capability}>
+                          {formatCapabilityLabel(capability)} — {result.status}
+                          {result.details ? ` — ${result.details}` : ''}
+                        </div>
+                      ),
+                    )}
+                  </div>
+                ) : null}
 
                 <div>
                   <Button

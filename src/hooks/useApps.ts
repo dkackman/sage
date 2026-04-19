@@ -1,20 +1,13 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import  {
+import {
   InstalledSageApp,
   ListedSageApp,
-  SageAppUrlPreview, SageGrantedPermissions,
+  SageAppUrlPreview,
+  SageGrantedPermissions,
   SageNetworkPermissionTarget,
+  SandboxState,
 } from '@/bindings.ts';
-import {
-  buildInitialSandboxState,
-  buildRunningSandboxState,
-  evaluateAppLaunchGate,
-  setStorageClearCapabilityPassed,
-  type SandboxState,
-} from '@/lib/apps/sandbox';
-import { clearAppDataStore } from '@/lib/apps/storageClearCycle';
-import { runSandboxTestsIncremental } from '@/lib/apps/sandbox-tests';
 import { formatAppError } from '@/lib/apps/formatAppError.ts';
 
 type UpdateAvailabilityMap = Record<string, SageAppUrlPreview | null>;
@@ -26,9 +19,7 @@ export function useAppsInternal() {
   const [updateAvailability, setUpdateAvailability] =
     useState<UpdateAvailabilityMap>({});
   const [busyAppIds, setBusyAppIds] = useState<Record<string, boolean>>({});
-  const [sandboxState, setSandboxState] = useState<SandboxState>(
-    buildInitialSandboxState(),
-  );
+  const [sandboxState, setSandboxState] = useState<SandboxState | null>(null);
 
   const setBusy = useCallback((appId: string, busy: boolean) => {
     setBusyAppIds((prev) => {
@@ -55,42 +46,44 @@ export function useAppsInternal() {
     }
   }, []);
 
+  const refreshSandboxState = useCallback(async () => {
+    const next = await invoke<SandboxState>('apps_get_sandbox_state');
+    setSandboxState(next);
+  }, []);
+
   const rerunSandboxTests = useCallback(async () => {
-    setSandboxState(buildRunningSandboxState());
-    setStorageClearCapabilityPassed(false);
-
-    try {
-      const finalState = await runSandboxTestsIncremental((next) => {
-        setSandboxState({ ...next });
-      });
-
-      setStorageClearCapabilityPassed(
-        finalState.capabilities.storage_clear_cycle.status === 'passed',
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-
-      setSandboxState((prev) => ({
-        ...prev,
-        overallCriticalStatus: 'failed',
-        finishedAt: Date.now(),
-        capabilities: {
-          ...prev.capabilities,
-          storage_isolation_from_sage: {
-            status: 'failed',
-            checkedAt: Date.now(),
-            details: message,
-          },
-        },
-      }));
-
-      setStorageClearCapabilityPassed(false);
-    }
+    const next = await invoke<SandboxState>('apps_rerun_sandbox_tests');
+    setSandboxState(next);
   }, []);
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    void refreshSandboxState();
+  }, [refresh, refreshSandboxState]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+
+    const mount = async () => {
+      const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+      const webview = getCurrentWebview();
+
+      unlisten = await webview.listen<SandboxState>(
+        'apps:sandbox-state-updated',
+        ({ payload }) => {
+          if (payload) {
+            setSandboxState(payload);
+          }
+        },
+      );
+    };
+
+    void mount();
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   const installApp = useCallback(
     async (
@@ -154,9 +147,7 @@ export function useAppsInternal() {
   );
 
   const isInstalled = useCallback(
-    (appId: string): boolean => {
-      return apps.some((app) => app.id === appId);
-    },
+    (appId: string): boolean => apps.some((app) => app.id === appId),
     [apps],
   );
 
@@ -164,10 +155,8 @@ export function useAppsInternal() {
     return [...apps].sort((a, b) => {
       const aKey =
         a.kind === 'installed' ? a.name.toLowerCase() : a.id.toLowerCase();
-
       const bKey =
         b.kind === 'installed' ? b.name.toLowerCase() : b.id.toLowerCase();
-
       return aKey.localeCompare(bKey);
     });
   }, [apps]);
@@ -218,10 +207,8 @@ export function useAppsInternal() {
         await refresh();
         return installed;
       } catch (err) {
-        const message = formatAppError(err);
-
         throw new Error(
-          `Failed to download app update for ${appId}: ${message}`,
+          `Failed to download app update for ${appId}: ${formatAppError(err)}`,
         );
       } finally {
         setBusy(appId, false);
@@ -298,38 +285,20 @@ export function useAppsInternal() {
 
   const clearAppStorage = useCallback(
     async (appId: string) => {
-      const app = getApp(appId);
-      if (!app) {
-        throw new Error(`Missing app ${appId}`);
-      }
-
       try {
         setBusy(appId, true);
-        const result = await clearAppDataStore(app);
-
-        if (!result.passed) {
-          throw new Error(result.details ?? 'Storage clear cycle failed.');
-        }
-
+        await invoke('apps_clear_runtime_browsing_data', { appId });
         await refresh();
       } finally {
         setBusy(appId, false);
       }
     },
-    [getApp, refresh, setBusy],
+    [refresh, setBusy],
   );
 
-  const getAppLaunchGate = useCallback(
-    (appId: string) => {
-      const app = getApp(appId);
-      if (!app) {
-        return null;
-      }
-
-      return evaluateAppLaunchGate(app, sandboxState);
-    },
-    [getApp, sandboxState],
-  );
+  const getAppLaunchGate = useCallback(async (appId: string) => {
+    return await invoke('apps_get_app_launch_gate', { appId });
+  }, []);
 
   useEffect(() => {
     const urlApps = apps.filter(

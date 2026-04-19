@@ -1,5 +1,5 @@
-import type { InstalledSageApp } from '@/bindings';
-import { evaluateAppLaunchGate, type SandboxState } from '@/lib/apps/sandbox';
+import type { InstalledSageApp, SandboxState } from '@/bindings';
+import { evaluateAppLaunchGate } from '@/lib/apps/sandbox';
 
 export interface SandboxLaunchDecision {
   allowed: boolean;

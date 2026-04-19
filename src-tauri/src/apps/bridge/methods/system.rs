@@ -1,10 +1,9 @@
 use async_trait::async_trait;
 use serde_json::{json};
-use tauri::Emitter;
 
 use super::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::apps::bridge::{
-    success, RustBridgeRequest, RustBridgeResponse, RustSandboxBridgeSendEvent,
+    success, RustBridgeRequest, RustBridgeResponse,
 };
 
 pub struct BridgePing;
@@ -14,10 +13,6 @@ pub struct SageGetPermissions;
 
 #[async_trait]
 impl BridgeMethod for BridgePing {
-    fn name(&self) -> &'static str {
-        "bridge.ping"
-    }
-
     async fn handle(
         &self,
         ctx: BridgeContext<'_>,
@@ -37,10 +32,6 @@ impl BridgeMethod for BridgePing {
 
 #[async_trait]
 impl BridgeMethod for BridgeSend {
-    fn name(&self) -> &'static str {
-        "bridge.send"
-    }
-
     async fn handle(
         &self,
         ctx: BridgeContext<'_>,
@@ -52,13 +43,15 @@ impl BridgeMethod for BridgeSend {
             .clone()
             .unwrap_or_else(|| "null".to_string());
 
-        let _ = tools.app_handle.emit(
-            "sage-sandbox:report",
-            RustSandboxBridgeSendEvent {
-                app_id: ctx.app.id.clone(),
-                payload_json,
-            },
-        );
+        let payload = serde_json::from_str::<serde_json::Value>(&payload_json)
+            .unwrap_or(serde_json::Value::Null);
+
+        crate::apps::sandbox::ingest_bridge_send_payload(
+            &ctx.app.id,
+            &payload,
+            tools.host_state,
+        )
+            .await;
 
         success(&request.id, json!({ "ok": true }))
     }
@@ -66,10 +59,6 @@ impl BridgeMethod for BridgeSend {
 
 #[async_trait]
 impl BridgeMethod for AppGetInfo {
-    fn name(&self) -> &'static str {
-        "app.getInfo"
-    }
-
     async fn handle(
         &self,
         ctx: BridgeContext<'_>,
@@ -92,10 +81,6 @@ impl BridgeMethod for AppGetInfo {
 
 #[async_trait]
 impl BridgeMethod for SageGetPermissions {
-    fn name(&self) -> &'static str {
-        "sage.getPermissions"
-    }
-
     async fn handle(
         &self,
         ctx: BridgeContext<'_>,

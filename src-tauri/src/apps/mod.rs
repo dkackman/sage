@@ -13,5 +13,7 @@ pub mod snapshot;
 pub mod types;
 pub mod update;
 pub mod runtime;
+pub mod sandbox;
+pub mod state;
 
 pub use protocol::handle_app_protocol_request;

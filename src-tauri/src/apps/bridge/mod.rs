@@ -8,10 +8,10 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
-use crate::apps::builtin_apps::build_builtin_test_app;
-use crate::apps::registry::read_installed_app_by_id;
-use crate::apps::runtime::apps_assert_bridge_origin;
+use crate::apps::runtime::{apps_assert_bridge_origin, resolve_app};
+use crate::apps::state::AppsHostState;
 use crate::apps::types::InstalledSageApp;
+use crate::apps::permission_registry::require_permission_definition;
 
 pub mod methods;
 pub mod registry;
@@ -107,26 +107,6 @@ pub struct BridgeState {
     pending_approvals: Mutex<BTreeMap<String, PendingBridgeApproval>>,
 }
 
-#[derive(Debug, Clone, Serialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct RustSandboxBridgeSendEvent {
-    pub app_id: String,
-    pub payload_json: String,
-}
-
-fn resolve_app(base_path: &std::path::Path, app_id: &str) -> Result<InstalledSageApp, String> {
-    match read_installed_app_by_id(base_path, app_id) {
-        Ok(app) => Ok(app),
-        Err(installed_err) => build_builtin_test_app(app_id)
-            .map_err(|builtin_err| {
-                format!(
-                    "failed to resolve app {app_id}: installed lookup error: {installed_err}; builtin lookup error: {builtin_err}"
-                )
-            })?
-            .ok_or_else(|| format!("failed to read app {app_id}: {installed_err}")),
-    }
-}
-
 pub(crate) fn success(id: &str, result: Value) -> RustBridgeResponse {
     RustBridgeResponse::Success(RustBridgeSuccessResponse {
         channel: "sage-bridge".into(),
@@ -196,6 +176,7 @@ async fn execute_bridge_request(
             BridgeTools {
                 app_handle,
                 app_state,
+                host_state: &app_handle.state::<crate::apps::state::AppsHostState>(),
             },
             request,
         )
@@ -207,7 +188,7 @@ async fn execute_bridge_request(
 pub async fn apps_handle_bridge_request(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    bridge_state: State<'_, BridgeState>,
+    apps_state: State<'_, AppsHostState>,
     source_label: String,
     request: RustBridgeRequest,
 ) -> Result<RustBridgeHandleResult, String> {
@@ -248,17 +229,20 @@ pub async fn apps_handle_bridge_request(
     };
 
     if let Some(permission) = method.permission() {
+        let permission_definition = require_permission_definition(permission)
+            .map_err(|err| format!("bridge method declared unknown permission {permission}: {err}"))?;
+
         if !resolved_app
             .granted_permissions
             .capabilities
             .iter()
-            .any(|cap| cap == permission)
+            .any(|cap| cap == permission_definition.key)
         {
             return Ok(RustBridgeHandleResult::Immediate {
                 response: failure(
                     &request.id,
                     "permission_denied",
-                    format!("Permission denied for {permission}"),
+                    format!("Permission denied for {}", permission_definition.key),
                 ),
             });
         }
@@ -268,7 +252,7 @@ pub async fn apps_handle_bridge_request(
         let approval_id = Uuid::new_v4().to_string();
 
         {
-            let mut pending = bridge_state.pending_approvals.lock().await;
+            let mut pending = apps_state.bridge.pending_approvals.lock().await;
             pending.insert(
                 approval_id.clone(),
                 PendingBridgeApproval {
@@ -302,11 +286,11 @@ pub async fn apps_handle_bridge_request(
 pub async fn apps_resolve_bridge_approval(
     app: AppHandle,
     app_state: State<'_, AppState>,
-    bridge_state: State<'_, BridgeState>,
+    apps_state: State<'_, AppsHostState>,
     args: ResolveBridgeApprovalArgs,
 ) -> Result<RustBridgeResponse, String> {
     let pending = {
-        let mut pending = bridge_state.pending_approvals.lock().await;
+        let mut pending = apps_state.bridge.pending_approvals.lock().await;
         pending.remove(&args.approval_id)
     }
         .ok_or_else(|| format!("unknown approval id: {}", args.approval_id))?;

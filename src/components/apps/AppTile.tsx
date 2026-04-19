@@ -1,10 +1,10 @@
 import type { InstalledSageApp } from '@/bindings';
-import type { SandboxState } from '@/lib/apps/sandbox';
+import type { SandboxState } from '@/bindings';
 import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
 
 interface Props {
   app: InstalledSageApp;
-  sandboxState: SandboxState;
+  sandboxState: SandboxState | null;
   onOpen: () => void;
   onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }
