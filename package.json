@@ -7,10 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build:sdk": "pnpm --filter @sage-app/sdk build",
-    "build:test-apps": "pnpm build:sdk && node ./scripts/build-test-apps.mjs",
-    "build": "pnpm build:test-apps && tsc -b && vite build",
-    "tauri:dev": "pnpm build:test-apps && tauri dev",
-    "tauri:build": "pnpm build:test-apps && tauri build",
+    "build": "pnpm build:sdk && tsc -b && vite build",
+    "tauri:dev": "pnpm build:sdk && tauri dev",
+    "tauri:build": "pnpm build:sdk && tauri build",
     "lint": "eslint .",
     "preview": "vite preview",
     "prettier": "prettier --write .",
