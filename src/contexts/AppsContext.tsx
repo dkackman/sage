@@ -36,7 +36,7 @@ export function AppsProvider({ children }: { children: React.ReactNode }) {
     startedInitialSandboxRunRef.current = true;
 
     void value.rerunSandboxTests();
-  }, [bridgeHostReady, value.rerunSandboxTests]);
+  }, [bridgeHostReady, value, value.rerunSandboxTests]);
 
   return <AppsContext.Provider value={value}>{children}</AppsContext.Provider>;
 }

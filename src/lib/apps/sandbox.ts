@@ -53,7 +53,7 @@ export function getSandboxCapabilityResult(
 
 export function listSandboxCapabilities(
   sandbox: SandboxState,
-): Array<[SandboxCapability, SandboxCapabilityResult]> {
+): [SandboxCapability, SandboxCapabilityResult][] {
   return [
     ['storage_isolation_from_sage', sandbox.storageIsolationFromSage],
     ['storage_persistence_normal', sandbox.storagePersistenceNormal],
