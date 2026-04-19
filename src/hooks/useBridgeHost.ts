@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import {
@@ -62,15 +62,22 @@ function toSdkBridgeResponse(response: RustBridgeResponse): SageBridgeResponse {
 }
 
 export function useBridgeHost({ requestApproval }: Args) {
-  const hostWebview = getCurrentWebview();
   const [isReady, setIsReady] = useState(false);
+  const requestApprovalRef = useRef(requestApproval);
 
   useEffect(() => {
-    let unlistenRequest: (() => void) | null = null;
+    requestApprovalRef.current = requestApproval;
+  }, [requestApproval]);
+
+  useEffect(() => {
     let disposed = false;
+    let shouldUnlistenWhenReady = false;
+    let unlistenRequest: (() => void) | null = null;
+
+    const hostWebview = getCurrentWebview();
 
     const mount = async () => {
-      unlistenRequest = await hostWebview.listen<SageBridgeEventPayload>(
+      const unlisten = await hostWebview.listen<SageBridgeEventPayload>(
         'sage-bridge:request',
         ({ payload }) => {
           if (!payload || !isBridgeRequest(payload.request)) {
@@ -106,7 +113,7 @@ export function useBridgeHost({ requestApproval }: Args) {
               return;
             }
 
-            const approvalResult = await requestApproval({
+            const approvalResult = await requestApprovalRef.current({
               kind: 'send_xch',
               app: result.approval.app,
               sourceLabel: result.approval.sourceLabel,
@@ -140,9 +147,20 @@ export function useBridgeHost({ requestApproval }: Args) {
         },
       );
 
-      if (!disposed) {
-        setIsReady(true);
+      if (disposed) {
+        shouldUnlistenWhenReady = false;
+        unlisten();
+        return;
       }
+
+      if (shouldUnlistenWhenReady) {
+        shouldUnlistenWhenReady = false;
+        unlisten();
+        return;
+      }
+
+      unlistenRequest = unlisten;
+      setIsReady(true);
     };
 
     void mount().catch((err) => {
@@ -152,9 +170,15 @@ export function useBridgeHost({ requestApproval }: Args) {
     return () => {
       disposed = true;
       setIsReady(false);
-      unlistenRequest?.();
+
+      if (unlistenRequest) {
+        unlistenRequest();
+        unlistenRequest = null;
+      } else {
+        shouldUnlistenWhenReady = true;
+      }
     };
-  }, [hostWebview, requestApproval]);
+  }, []);
 
   return { isReady };
 }

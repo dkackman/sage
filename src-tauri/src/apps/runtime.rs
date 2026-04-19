@@ -90,7 +90,10 @@ fn build_entry_src(
     url.to_string()
 }
 
-pub fn resolve_app(base_path: &std::path::Path, app_id: &str) -> Result<InstalledSageApp, String> {
+pub fn resolve_app(
+    base_path: &std::path::Path,
+    app_id: &str,
+) -> Result<InstalledSageApp, String> {
     match read_installed_app_by_id(base_path, app_id) {
         Ok(app) => Ok(app),
         Err(installed_err) => build_builtin_test_app(app_id)

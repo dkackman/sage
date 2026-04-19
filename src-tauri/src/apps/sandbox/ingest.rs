@@ -3,7 +3,7 @@ use tauri::State;
 
 use crate::apps::state::AppsHostState;
 
-use super::store::{SandboxAppResult, replace_by_app_id};
+use super::store::{replace_by_app_id, SandboxAppResult};
 use super::types::{
     SandboxIsolationProbeResult, SandboxNetworkProbeResult,
     SandboxPersistenceReadProbeResult, SandboxPersistenceWriteProbeResult,
@@ -51,7 +51,7 @@ pub async fn ingest_bridge_send_payload(
     match report_type {
         "isolation" => {
             if let Ok(parsed) = serde_json::from_value::<SandboxIsolationProbeResult>(data) {
-                replace_by_app_id(
+                let _changed = replace_by_app_id(
                     &mut run.isolation,
                     SandboxAppResult {
                         app_id: app_id.to_string(),
@@ -64,7 +64,7 @@ pub async fn ingest_bridge_send_payload(
             if let Ok(parsed) =
                 serde_json::from_value::<SandboxPersistenceWriteProbeResult>(data)
             {
-                replace_by_app_id(
+                let _changed = replace_by_app_id(
                     &mut run.persistence_write,
                     SandboxAppResult {
                         app_id: app_id.to_string(),
@@ -77,7 +77,7 @@ pub async fn ingest_bridge_send_payload(
             if let Ok(parsed) =
                 serde_json::from_value::<SandboxPersistenceReadProbeResult>(data)
             {
-                replace_by_app_id(
+                let _changed = replace_by_app_id(
                     &mut run.persistence_read,
                     SandboxAppResult {
                         app_id: app_id.to_string(),
@@ -88,7 +88,7 @@ pub async fn ingest_bridge_send_payload(
         }
         "network" => {
             if let Ok(parsed) = serde_json::from_value::<SandboxNetworkProbeResult>(data) {
-                replace_by_app_id(
+                let _changed = replace_by_app_id(
                     &mut run.network,
                     SandboxAppResult {
                         app_id: app_id.to_string(),
@@ -101,7 +101,7 @@ pub async fn ingest_bridge_send_payload(
             if let Ok(parsed) =
                 serde_json::from_value::<SandboxStorageClearProbeResult>(data)
             {
-                replace_by_app_id(
+                let _changed = replace_by_app_id(
                     &mut run.clear_cycle,
                     SandboxAppResult {
                         app_id: app_id.to_string(),

@@ -1,5 +1,5 @@
 use tauri::{AppHandle, State};
-use tokio::time::{Duration, sleep};
+use tokio::time::{sleep, Duration};
 
 use crate::apps::builtin_apps::{
     BUILTIN_NETWORK_ALLOW_A_ID, BUILTIN_NETWORK_ALLOW_B_ID,
@@ -69,9 +69,7 @@ async fn poll_persistence_write(
         }
 
         if now_ms() - started >= timeout_ms {
-            return Err(
-                "Timed out waiting for sandbox persistence write results.".into(),
-            );
+            return Err("Timed out waiting for sandbox persistence write results.".into());
         }
 
         sleep(Duration::from_millis(100)).await;
@@ -99,9 +97,7 @@ async fn poll_persistence_read(
         }
 
         if now_ms() - started >= timeout_ms {
-            return Err(
-                "Timed out waiting for sandbox persistence read results.".into(),
-            );
+            return Err("Timed out waiting for sandbox persistence read results.".into());
         }
 
         sleep(Duration::from_millis(100)).await;
@@ -214,9 +210,7 @@ pub async fn run_isolation_test(
         return Ok((false, Some("Missing incognito isolation result.".into())));
     };
 
-    for (label, result) in
-        [("persistent", &persistent.data), ("incognito", &incognito.data)]
-    {
+    for (label, result) in [("persistent", &persistent.data), ("incognito", &incognito.data)] {
         if result.error.is_some() {
             return Ok((
                 false,

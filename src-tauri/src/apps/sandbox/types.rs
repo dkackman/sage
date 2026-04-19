@@ -65,7 +65,7 @@ pub struct AppLaunchGateResult {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SandboxIsolationProbeResult {
     pub run_id: String,
@@ -74,7 +74,7 @@ pub struct SandboxIsolationProbeResult {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SandboxPersistenceWriteProbeResult {
     pub run_id: String,
@@ -83,7 +83,7 @@ pub struct SandboxPersistenceWriteProbeResult {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SandboxPersistenceReadProbeResult {
     pub run_id: String,
@@ -92,7 +92,7 @@ pub struct SandboxPersistenceReadProbeResult {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SandboxNetworkProbeResult {
     pub run_id: String,
@@ -104,14 +104,6 @@ pub struct SandboxNetworkProbeResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum SandboxStorageClearProbePhase {
-    Write,
-    CheckPresent,
-    CheckAbsent,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SandboxStorageClearProbeResult {
     pub run_id: String,
@@ -119,6 +111,14 @@ pub struct SandboxStorageClearProbeResult {
     pub local_storage_present: bool,
     pub indexed_db_present: bool,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SandboxStorageClearProbePhase {
+    Write,
+    CheckPresent,
+    CheckAbsent,
 }
 
 pub fn make_cap(
