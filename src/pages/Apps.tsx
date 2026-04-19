@@ -28,6 +28,7 @@ import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEdit
 import { AppTile } from '@/components/apps/AppTile';
 import { formatAppError } from '@/lib/apps/formatAppError.ts';
 import { AppUpdateDialog } from '@/components/apps/AppUpdateDialog.tsx';
+import { getAppUpdatePermissionsDelta } from '@/lib/apps/updatePermissionsDelta.ts';
 
 type InstalledEntry = ReturnType<typeof useApps>['apps'][number] & {
   kind: 'installed';
@@ -216,6 +217,21 @@ export function Apps() {
       }
     },
     [performAppUpdate, runningAppIds],
+  );
+
+  const handleReviewOrApplyUpdate = useCallback(
+    async (app: InstalledEntry, preview: SageAppUrlPreview) => {
+      const delta = getAppUpdatePermissionsDelta(app, preview);
+
+      if (!delta.requiresUserReview) {
+        closeUpdateDialog();
+        await handleConfirmUpdate(app, delta.nextGrantedPermissions);
+        return;
+      }
+
+      openUpdateDialog(app, preview);
+    },
+    [handleConfirmUpdate],
   );
 
   const closeContextMenu = useCallback(() => {
@@ -731,8 +747,11 @@ export function Apps() {
               return;
             }
 
+            const app = contextMenu.app;
+            const preview = contextMenuPreview;
+
             closeContextMenu();
-            openUpdateDialog(contextMenu.app, contextMenuPreview);
+            void handleReviewOrApplyUpdate(app, preview);
           }}
           onChangePermissions={() => {
             if (!contextMenu) {

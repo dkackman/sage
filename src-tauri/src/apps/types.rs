@@ -11,16 +11,12 @@ pub struct SageNetworkPermissionTarget {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq)]
 pub struct SageRequestedNetworkWhitelist {
-    #[serde(default)]
     pub required: Vec<SageNetworkPermissionTarget>,
-
-    #[serde(default)]
     pub optional: Vec<SageNetworkPermissionTarget>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq)]
 pub struct SageRequestedNetworkPermissions {
-    #[serde(default)]
     pub whitelist: SageRequestedNetworkWhitelist,
 }
 
@@ -28,19 +24,13 @@ pub struct SageRequestedNetworkPermissions {
     Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq,
 )]
 pub struct SageRequestedCapabilities {
-    #[serde(default)]
     pub required: Vec<String>,
-
-    #[serde(default)]
     pub optional: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Type, Default, PartialEq, Eq)]
 pub struct SageRequestedPermissions {
-    #[serde(default)]
     pub network: SageRequestedNetworkPermissions,
-
-    #[serde(default)]
     pub capabilities: SageRequestedCapabilities,
 }
 
@@ -59,21 +49,13 @@ pub struct SageGrantedPermissions {
     pub network: SageGrantedNetworkPermissions,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
 pub struct SageAppPackageManifest {
     pub name: String,
     pub version: String,
-
-    #[serde(default)]
     pub permissions: SageRequestedPermissions,
-
-    #[serde(default)]
     pub files: Vec<SageAppManifestFile>,
-
-    #[serde(default)]
     pub entry: Option<String>,
-
-    #[serde(default)]
     pub icon: Option<String>,
 }
 
@@ -228,6 +210,24 @@ struct RawRequestedPermissions {
     capabilities: Option<SageRequestedCapabilities>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+struct RawSageAppPackageManifest {
+    name: String,
+    version: String,
+
+    #[serde(default)]
+    permissions: Option<SageRequestedPermissions>,
+
+    #[serde(default)]
+    files: Vec<SageAppManifestFile>,
+
+    #[serde(default)]
+    entry: Option<String>,
+
+    #[serde(default)]
+    icon: Option<String>,
+}
+
 impl<'de> Deserialize<'de> for SageRequestedPermissions {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -265,6 +265,24 @@ impl<'de> Deserialize<'de> for SageRequestedPermissions {
                 },
             },
             capabilities: raw.capabilities.unwrap_or_default(),
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for SageAppPackageManifest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = <RawSageAppPackageManifest as Deserialize>::deserialize(deserializer)?;
+
+        Ok(SageAppPackageManifest {
+            name: raw.name,
+            version: raw.version,
+            permissions: raw.permissions.unwrap_or_default(),
+            files: raw.files,
+            entry: raw.entry,
+            icon: raw.icon,
         })
     }
 }

@@ -2199,15 +2199,15 @@ export type ResyncCatResponse = Record<string, never>
  */
 export type ResyncResponse = Record<string, never>
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
-export type SageAppPackageManifest = { name: string; version: string; permissions?: SageRequestedPermissions; files?: SageAppManifestFile[]; entry?: string | null; icon?: string | null }
+export type SageAppPackageManifest = { name: string; version: string; permissions: SageRequestedPermissions; files: SageAppManifestFile[]; entry: string | null; icon: string | null }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageGrantedNetworkPermissions = { whitelist: SageNetworkPermissionTarget[] }
 export type SageGrantedPermissions = { capabilities: string[]; network: SageGrantedNetworkPermissions }
 export type SageNetworkPermissionTarget = { scheme: string; host: string }
-export type SageRequestedCapabilities = { required?: string[]; optional?: string[] }
-export type SageRequestedNetworkPermissions = { whitelist?: SageRequestedNetworkWhitelist }
-export type SageRequestedNetworkWhitelist = { required?: SageNetworkPermissionTarget[]; optional?: SageNetworkPermissionTarget[] }
-export type SageRequestedPermissions = { network?: SageRequestedNetworkPermissions; capabilities?: SageRequestedCapabilities }
+export type SageRequestedCapabilities = { required: string[]; optional: string[] }
+export type SageRequestedNetworkPermissions = { whitelist: SageRequestedNetworkWhitelist }
+export type SageRequestedNetworkWhitelist = { required: SageNetworkPermissionTarget[]; optional: SageNetworkPermissionTarget[] }
+export type SageRequestedPermissions = { network: SageRequestedNetworkPermissions; capabilities: SageRequestedCapabilities }
 /**
  * Save a theme NFT to the wallet
  */

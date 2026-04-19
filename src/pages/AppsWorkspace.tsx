@@ -21,6 +21,7 @@ import type {
   SageGrantedPermissions,
 } from '@/bindings';
 import { AppUpdateDialog } from '@/components/apps/AppUpdateDialog.tsx';
+import { getAppUpdatePermissionsDelta } from '@/lib/apps/updatePermissionsDelta.ts';
 
 export function AppsWorkspace() {
   const { appId } = useParams();
@@ -143,6 +144,25 @@ export function AppsWorkspace() {
     [activeApp, performAppUpdate],
   );
 
+  const handleReviewOrApplyUpdate = useCallback(async () => {
+    if (!activeApp || !activeUpdatePreview) {
+      return;
+    }
+
+    const delta = getAppUpdatePermissionsDelta(activeApp, activeUpdatePreview);
+    console.log('update delta', delta);
+
+    if (!delta.requiresUserReview) {
+      setUpdateDialogOpen(false);
+      setUpdateDialogError(null);
+      await handleConfirmUpdate(delta.nextGrantedPermissions);
+      return;
+    }
+
+    setUpdateDialogError(null);
+    setUpdateDialogOpen(true);
+  }, [activeApp, activeUpdatePreview, handleConfirmUpdate]);
+
   return (
     <div className='flex h-full min-h-0 w-full flex-col overflow-hidden'>
       <AppTaskBar
@@ -192,8 +212,7 @@ export function AppsWorkspace() {
               variant='outline'
               disabled={activeBusy || applyingUpdate}
               onClick={() => {
-                setUpdateDialogError(null);
-                setUpdateDialogOpen(true);
+                void handleReviewOrApplyUpdate();
               }}
             >
               {applyingUpdate ? 'Updating...' : 'Review update'}
