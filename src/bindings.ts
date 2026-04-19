@@ -359,6 +359,15 @@ async getLogs() : Promise<LogFile[]> {
 async isAssetOwned(req: IsAssetOwned) : Promise<IsAssetOwnedResponse> {
     return await TAURI_INVOKE("is_asset_owned", { req });
 },
+async appsCreateInlineRuntime(args: CreateInlineRuntimeArgs) : Promise<SageAppRuntimeRecord> {
+    return await TAURI_INVOKE("apps_create_inline_runtime", { args });
+},
+async appsAssertBridgeOrigin(sourceLabel: string) : Promise<string> {
+    return await TAURI_INVOKE("apps_assert_bridge_origin", { sourceLabel });
+},
+async appsClearRuntimeBrowsingData(appId: string) : Promise<null> {
+    return await TAURI_INVOKE("apps_clear_runtime_browsing_data", { appId });
+},
 async listInstalledApps() : Promise<ListedSageApp[]> {
     return await TAURI_INVOKE("list_installed_apps");
 },
@@ -775,6 +784,7 @@ fee: Amount;
  * Whether to automatically submit the transaction
  */
 auto_submit?: boolean }
+export type CreateInlineRuntimeArgs = { appId: string; visible: boolean; internal: boolean; debugLayout: boolean; path: string | null; query: Partial<{ [key in string]: string }> }
 export type CreateTransaction = { 
 /**
  * Pre-selected coins to use in the transaction prior to coin selection
@@ -2200,6 +2210,7 @@ export type ResyncCatResponse = Record<string, never>
 export type ResyncResponse = Record<string, never>
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
 export type SageAppPackageManifest = { name: string; version: string; permissions: SageRequestedPermissions; files: SageAppManifestFile[]; entry: string | null; icon: string | null }
+export type SageAppRuntimeRecord = { runtimeId: string; appId: string; appName: string; entrySrc: string; webviewLabel: string; hostWindowLabel: string; mode: string; state: string; startedAt: number; lastActiveAt: number; visible: boolean; internal: boolean; activeBatchCount: number; activeSocketCount: number; inFlightRequestCount: number }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageGrantedNetworkPermissions = { whitelist: SageNetworkPermissionTarget[] }
 export type SageGrantedPermissions = { capabilities: string[]; network: SageGrantedNetworkPermissions }

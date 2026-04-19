@@ -6539,6 +6539,7 @@ dependencies = [
  "tauri-specta",
  "tokio",
  "tracing",
+ "url",
  "uuid",
  "zip",
 ]

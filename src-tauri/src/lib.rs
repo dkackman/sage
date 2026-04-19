@@ -143,6 +143,9 @@ pub fn run() {
             commands::download_cni_offercode,
             commands::get_logs,
             commands::is_asset_owned,
+            apps::runtime::apps_create_inline_runtime,
+            apps::runtime::apps_assert_bridge_origin,
+            apps::runtime::apps_clear_runtime_browsing_data,
             apps::install::list_installed_apps,
             apps::install::preview_app_zip,
             apps::install::preview_app_url,
@@ -215,6 +218,7 @@ pub fn run() {
             let app_state = AppState::new(Mutex::new(Sage::new(&path, false)));
             app.manage(Initialized(Mutex::new(false)));
             app.manage(RpcTask(Mutex::new(None)));
+            app.manage(apps::runtime::AppRuntimeState::default());
             app.manage(app_state);
             Ok(())
         })

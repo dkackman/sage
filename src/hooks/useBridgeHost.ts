@@ -7,6 +7,7 @@ import {
 } from '@/lib/apps/bridge';
 import { getBuiltinApp } from '@/lib/apps/registry';
 import type { InstalledSageApp } from '@/bindings';
+import { invoke } from '@tauri-apps/api/core';
 
 interface Args {
   requestApproval: Parameters<typeof handleBridgeRequest>[2]['requestApproval'];
@@ -34,10 +35,24 @@ export function useBridgeHost({ requestApproval, getApp }: Args) {
             return;
           }
 
-          const appId = sourceLabel.slice(prefix.length);
+          const claimedAppId = sourceLabel.slice(prefix.length);
 
           const run = async () => {
-            const app = getApp(appId) ?? (await getBuiltinApp(appId));
+            const confirmedAppId = await invoke<string>(
+              'apps_assert_bridge_origin',
+              {
+                sourceLabel,
+              },
+            );
+
+            if (confirmedAppId !== claimedAppId) {
+              throw new Error(
+                `Bridge origin mismatch for ${sourceLabel}: claimed ${claimedAppId}, confirmed ${confirmedAppId}`,
+              );
+            }
+
+            const app =
+              getApp(confirmedAppId) ?? (await getBuiltinApp(confirmedAppId));
 
             if (!app) {
               return;
@@ -65,7 +80,7 @@ export function useBridgeHost({ requestApproval, getApp }: Args) {
             console.error('Failed to handle bridge request:', err);
           });
         },
-      );
+      )
     };
 
     void mount().catch((err) => {

@@ -38,6 +38,7 @@ rustls = { workspace = true }
 reqwest = { workspace = true }
 zip = "8.5.1"
 mime_guess = "2"
+url = "2"
 
 # This is to ensure that the bindgen feature is enabled for the aws-lc-rs crate.
 # https://aws.github.io/aws-lc-rs/platform_support.html#tested-platforms

@@ -1,10 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview, Webview } from '@tauri-apps/api/webview';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { InstalledSageApp } from '@/bindings.ts';
-import { platform } from '@tauri-apps/plugin-os';
-import { removeDataStore } from '@tauri-apps/api/app';
-import { BaseDirectory, remove } from '@tauri-apps/plugin-fs';
 
 export type SageAppRuntimeState =
   | 'starting'
@@ -107,31 +103,8 @@ function stripInternal(record: RuntimeInternalRecord): SageAppRuntimeRecord {
   };
 }
 
-export function runtimeIdFor(appId: string) {
-  return `runtime-${appId}`;
-}
-
 export function inlineLabelFor(appId: string) {
   return `app-inline-${appId}`;
-}
-
-/**
- * Windows-only custom data directory for the webview profile.
- * Tauri resolves this relative to appDataDir()/${webviewLabel}.
- */
-export function dataDirectoryFor(appId: string) {
-  return `profiles/${appId}`;
-}
-
-export function dataStoreIdFor(appId: string): number[] {
-  const bytes = new TextEncoder().encode(appId);
-  const out = new Uint8Array(16);
-
-  for (let i = 0; i < bytes.length; i += 1) {
-    out[i % 16] = (out[i % 16] + bytes[i] + i) & 0xff;
-  }
-
-  return Array.from(out);
 }
 
 export function shouldUseIncognito(app: InstalledSageApp): boolean {
@@ -147,94 +120,7 @@ export function shouldUseIncognito(app: InstalledSageApp): boolean {
     return true;
   }
 
-  if (forceIncognitoForSecretApps && app.permissionFlags.hasSecretAccess) {
-    return true;
-  }
-
-  return false;
-}
-
-async function supportsDataDirectory(): Promise<boolean> {
-  return (await platform()) === 'windows';
-}
-
-async function supportsDataStoreIdentifier(): Promise<boolean> {
-  const os = await platform();
-  return os === 'macos' || os === 'ios';
-}
-
-async function buildWebviewOptions(
-  app: InstalledSageApp,
-  entrySrc: string,
-  options?: {
-    visible?: boolean;
-  },
-) {
-  const isIncognito = shouldUseIncognito(app);
-  const debug = shouldDebugTestAppWindows(app);
-
-  const webviewOptions: ConstructorParameters<typeof Webview>[2] = {
-    url: entrySrc,
-    x: debug ? 80 : 0,
-    y: debug ? 80 : 0,
-    width: debug ? 200 : 1,
-    height: debug ? 200 : 1,
-    focus: debug || !!options?.visible,
-    incognito: isIncognito,
-  };
-
-  if (!isIncognito && (await supportsDataStoreIdentifier())) {
-    webviewOptions.dataStoreIdentifier = dataStoreIdFor(app.id);
-  }
-
-  if (!isIncognito && (await supportsDataDirectory())) {
-    webviewOptions.dataDirectory = dataDirectoryFor(app.id);
-  }
-
-  return webviewOptions;
-}
-
-export async function waitForWebviewCreated(webview: Webview): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    let unlistenCreated: (() => void) | null = null;
-    let unlistenError: (() => void) | null = null;
-
-    const cleanupListeners = () => {
-      try {
-        unlistenCreated?.();
-      } catch (err) {
-        console.warn('Failed to unlisten created:', err);
-      }
-
-      try {
-        unlistenError?.();
-      } catch (err) {
-        console.warn('Failed to unlisten error:', err);
-      }
-    };
-
-    void (async () => {
-      try {
-        unlistenCreated = await webview.once('tauri://created', () => {
-          cleanupListeners();
-          resolve();
-        });
-
-        unlistenError = await webview.once('tauri://error', (event) => {
-          cleanupListeners();
-
-          const payload =
-            typeof event.payload === 'string'
-              ? event.payload
-              : JSON.stringify(event.payload);
-          reject(new Error(payload));
-        });
-      } catch (err) {
-        cleanupListeners();
-        reject(err instanceof Error ? err : new Error(String(err)));
-      }
-    })();
-  });
+  return forceIncognitoForSecretApps && app.permissionFlags.hasSecretAccess;
 }
 
 export async function waitForWebviewClosed(
@@ -266,17 +152,8 @@ async function createInlineRuntime(
     path?: string;
   },
 ): Promise<SageAppRuntimeRecord> {
-  const hostWindow = getCurrentWindow();
   const hostWebview = getCurrentWebview();
-
   const webviewLabel = inlineLabelFor(app.id);
-
-  const entryPath = options?.path ?? `/${app.entryFile}`;
-  const url = new URL(`sage-app://${app.id}${entryPath}`);
-  for (const [key, value] of Object.entries(options?.query ?? {})) {
-    url.searchParams.set(key, value);
-  }
-  const entrySrc = url.toString();
 
   const staleWebview = await Webview.getByLabel(webviewLabel).catch(() => null);
   if (staleWebview) {
@@ -288,7 +165,6 @@ async function createInlineRuntime(
     await waitForWebviewClosed(webviewLabel, 8000);
   }
 
-  const debug = shouldDebugTestAppWindows(app);
   const isIncognito = shouldUseIncognito(app);
 
   if (!isIncognito && app.permissionFlags.hasSecretAccess) {
@@ -297,43 +173,38 @@ async function createInlineRuntime(
     });
   }
 
-  const webviewOptions = await buildWebviewOptions(app, entrySrc, {
-    visible: options?.visible,
-  });
+  const record = await invoke<SageAppRuntimeRecord>(
+    'apps_create_inline_runtime',
+    {
+      args: {
+        appId: app.id,
+        visible: options?.visible ?? true,
+        internal: options?.internal ?? false,
+        debugLayout: shouldDebugTestAppWindows(app),
+        query: options?.query ?? {},
+        path: options?.path ?? null,
+      },
+    },
+  );
 
-  const webview = new Webview(hostWindow, webviewLabel, webviewOptions);
-
-  await waitForWebviewCreated(webview);
-
-  if (!options?.visible && !debug) {
-    await webview.hide();
+  const webview = await Webview.getByLabel(webviewLabel).catch(() => null);
+  if (!webview) {
+    throw new Error(
+      `Host created runtime ${webviewLabel}, but no webview handle was found`,
+    );
   }
 
-  const runtimeId = runtimeIdFor(app.id);
-  const record: RuntimeInternalRecord = {
-    runtimeId,
-    appId: app.id,
-    appName: app.name,
-    entrySrc,
-    webviewLabel,
+  const internalRecord: RuntimeInternalRecord = {
+    ...record,
     hostWindowLabel: hostWebview.label,
-    mode: 'inline',
-    state: options?.visible === false ? 'hidden' : 'running',
-    startedAt: Date.now(),
-    lastActiveAt: Date.now(),
-    visible: options?.visible ?? true,
-    internal: options?.internal ?? false,
-    activeBatchCount: 0,
-    activeSocketCount: 0,
-    inFlightRequestCount: 0,
     webview,
   };
 
-  runtimes.set(runtimeId, record);
-  runtimeByAppId.set(app.id, runtimeId);
+  runtimes.set(record.runtimeId, internalRecord);
+  runtimeByAppId.set(app.id, record.runtimeId);
   emitChange();
 
-  return stripInternal(record);
+  return stripInternal(internalRecord);
 }
 
 export function subscribeAppRuntimes(listener: RuntimeListener): () => void {
@@ -437,87 +308,23 @@ export async function startInternalInlineRuntime(
   });
 }
 
-async function removeAppDataStore(app: InstalledSageApp): Promise<void> {
-  if (await supportsDataStoreIdentifier()) {
-    try {
-      await removeDataStore(
-        dataStoreIdFor(app.id) as [
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-        ],
-      );
-    } catch (err) {
-      console.warn(
-        `removeDataStore failed for ${app.id}:`,
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-  }
-}
-
-async function removeAppDataDirectory(app: InstalledSageApp): Promise<void> {
-  if (await supportsDataDirectory()) {
-    try {
-      await remove(dataDirectoryFor(app.id), {
-        baseDir: BaseDirectory.AppData,
-        recursive: true,
-      });
-    } catch (err) {
-      console.warn(
-        `remove data directory failed for ${app.id}:`,
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-  }
-}
-
 /**
  * Best-effort host-side clear.
  *
- * This does NOT prove the app origin is clean; your verification cycle should
+ * This does NOT prove the app origin is clean; the verification cycle should
  * still decide whether the capability passed for this environment.
  */
 export async function clearAppRuntimeBrowsingData(
   app: InstalledSageApp,
 ): Promise<void> {
-  const webviewLabel = inlineLabelFor(app.id);
-
   const existingRuntimeId = runtimeByAppId.get(app.id);
   if (existingRuntimeId) {
     await closeAppRuntime(app.id, { timeoutMs: 8000 });
-  } else {
-    const staleWebview = await Webview.getByLabel(webviewLabel).catch(
-      (err: unknown) => {
-        throw new Error(
-          `Failed to query existing webview ${webviewLabel}: ${String(err)}`,
-        );
-      },
-    );
-
-    if (staleWebview) {
-      await staleWebview.close();
-      await waitForWebviewClosed(webviewLabel, 8000);
-    }
   }
 
-  await Promise.allSettled([
-    removeAppDataStore(app),
-    removeAppDataDirectory(app),
-  ]);
+  await invoke('apps_clear_runtime_browsing_data', {
+    appId: app.id,
+  });
 }
 
 export async function getRuntimeWebview(
