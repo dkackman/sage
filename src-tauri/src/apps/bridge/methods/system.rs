@@ -1,10 +1,8 @@
 use async_trait::async_trait;
-use serde_json::{json};
+use serde_json::json;
 
 use super::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::apps::bridge::{
-    success, RustBridgeRequest, RustBridgeResponse,
-};
+use crate::apps::bridge::{success, RustBridgeRequest, RustBridgeResponse};
 
 pub struct BridgePing;
 pub struct BridgeSend;
@@ -72,7 +70,7 @@ impl BridgeMethod for AppGetInfo {
                 "name": ctx.app.name,
                 "version": ctx.app.version,
                 "requestedPermissions": ctx.app.requested_permissions,
-                "grantedPermissions": ctx.app.granted_permissions.capabilities,
+                "sharedCapabilities": ctx.app.shared_capabilities,
                 "network": ctx.app.active_snapshot.manifest.permissions.network.whitelist.required,
             }),
         )
@@ -89,7 +87,7 @@ impl BridgeMethod for SageGetPermissions {
     ) -> RustBridgeResponse {
         success(
             &request.id,
-            serde_json::to_value(&ctx.app.granted_permissions.capabilities)
+            serde_json::to_value(&ctx.app.shared_capabilities)
                 .unwrap_or_else(|_| json!([])),
         )
     }

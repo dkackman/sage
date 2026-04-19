@@ -17,9 +17,9 @@ interface Props {
   description?: string | null;
   error: string | null;
   submitting: boolean;
-  grantedPermissions: string[];
+  grantedCapabilities: string[];
   grantedNetworkWhitelist: SageNetworkPermissionTarget[];
-  onGrantedPermissionsChange: (next: string[]) => void;
+  onGrantedCapabilitiesChange: (next: string[]) => void;
   onGrantedNetworkWhitelistChange: (
     next: SageNetworkPermissionTarget[],
   ) => void;
@@ -34,9 +34,9 @@ export function PermissionsDialog({
   description,
   error,
   submitting,
-  grantedPermissions,
+  grantedCapabilities,
   grantedNetworkWhitelist,
-  onGrantedPermissionsChange,
+  onGrantedCapabilitiesChange,
   onGrantedNetworkWhitelistChange,
   onCancel,
   onConfirm,
@@ -61,9 +61,9 @@ export function PermissionsDialog({
 
             <PermissionsEditor
               app={app}
-              grantedPermissions={grantedPermissions}
+              grantedCapabilities={grantedCapabilities}
               grantedNetworkWhitelist={grantedNetworkWhitelist}
-              onGrantedPermissionsChange={onGrantedPermissionsChange}
+              onGrantedCapabilitiesChange={onGrantedCapabilitiesChange}
               onGrantedNetworkWhitelistChange={onGrantedNetworkWhitelistChange}
             />
 

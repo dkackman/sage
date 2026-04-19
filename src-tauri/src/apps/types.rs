@@ -158,6 +158,9 @@ pub struct InstalledSageApp {
     #[serde(rename = "grantedPermissions", alias = "granted_permissions")]
     pub granted_permissions: SageGrantedPermissions,
 
+    #[serde(rename = "sharedCapabilities", alias = "shared_capabilities", default)]
+    pub shared_capabilities: Vec<String>,
+
     #[serde(rename = "permissionFlags", alias = "permission_flags")]
     pub permission_flags: InstalledSageAppPermissionFlags,
 

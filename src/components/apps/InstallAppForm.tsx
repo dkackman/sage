@@ -155,9 +155,9 @@ export function InstallAppForm({
         source={source}
         error={error}
         installing={installing}
-        grantedPermissions={grantedPermissions}
+        grantedCapabilities={grantedPermissions}
         grantedNetworkWhitelist={grantedNetworkWhitelist}
-        onGrantedPermissionsChange={setGrantedPermissions}
+        onGrantedCapabilitiesChange={setGrantedPermissions}
         onGrantedNetworkWhitelistChange={setGrantedNetworkWhitelist}
         onCancel={resetDialog}
         onConfirm={confirmInstall}

@@ -30,9 +30,9 @@ interface Props {
   source: InstallSource | null;
   error: string | null;
   installing: boolean;
-  grantedPermissions: string[];
+  grantedCapabilities: string[];
   grantedNetworkWhitelist: SageNetworkPermissionTarget[];
-  onGrantedPermissionsChange: (next: string[]) => void;
+  onGrantedCapabilitiesChange: (next: string[]) => void;
   onGrantedNetworkWhitelistChange: (
     next: SageNetworkPermissionTarget[],
   ) => void;
@@ -42,7 +42,7 @@ interface Props {
 
 function buildPreviewApp(
   manifest: SageAppPackageManifest,
-  grantedPermissions: string[],
+  grantedCapabilities: string[],
   grantedNetworkWhitelist: SageNetworkPermissionTarget[],
 ): InstalledSageApp {
   return {
@@ -65,11 +65,12 @@ function buildPreviewApp(
       },
     },
     grantedPermissions: {
-      capabilities: grantedPermissions,
+      capabilities: grantedCapabilities,
       network: {
         whitelist: grantedNetworkWhitelist,
       },
     },
+    sharedCapabilities: grantedCapabilities,
     permissionFlags: {
       hasSecretAccess: false,
       hasExternalAccess: false,
@@ -91,9 +92,9 @@ export function InstallPermissionsDialog({
   source,
   error,
   installing,
-  grantedPermissions,
+  grantedCapabilities,
   grantedNetworkWhitelist,
-  onGrantedPermissionsChange,
+  onGrantedCapabilitiesChange,
   onGrantedNetworkWhitelistChange,
   onCancel,
   onConfirm,
@@ -113,7 +114,7 @@ export function InstallPermissionsDialog({
 
   const previewApp = buildPreviewApp(
     manifest,
-    grantedPermissions,
+    grantedCapabilities,
     grantedNetworkWhitelist,
   );
 
@@ -132,9 +133,9 @@ export function InstallPermissionsDialog({
 
           <PermissionsEditor
             app={previewApp}
-            grantedPermissions={grantedPermissions}
+            grantedCapabilities={grantedCapabilities}
             grantedNetworkWhitelist={grantedNetworkWhitelist}
-            onGrantedPermissionsChange={onGrantedPermissionsChange}
+            onGrantedCapabilitiesChange={onGrantedCapabilitiesChange}
             onGrantedNetworkWhitelistChange={onGrantedNetworkWhitelistChange}
           />
 

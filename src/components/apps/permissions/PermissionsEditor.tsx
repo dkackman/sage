@@ -3,9 +3,9 @@ import { AppPermissions } from './AppPermissions';
 
 interface Props {
   app: InstalledSageApp;
-  grantedPermissions: string[];
+  grantedCapabilities: string[];
   grantedNetworkWhitelist: SageNetworkPermissionTarget[];
-  onGrantedPermissionsChange: (next: string[]) => void;
+  onGrantedCapabilitiesChange: (next: string[]) => void;
   onGrantedNetworkWhitelistChange: (
     next: SageNetworkPermissionTarget[],
   ) => void;
@@ -27,9 +27,9 @@ function networkKey(entry: SageNetworkPermissionTarget): string {
 
 export function PermissionsEditor({
   app,
-  grantedPermissions,
+  grantedCapabilities,
   grantedNetworkWhitelist,
-  onGrantedPermissionsChange,
+  onGrantedCapabilitiesChange,
   onGrantedNetworkWhitelistChange,
 }: Props) {
   const manifest = app.pendingUpdate?.manifest ?? app.activeSnapshot.manifest;
@@ -78,13 +78,13 @@ export function PermissionsEditor({
   return (
     <div className='space-y-5'>
       <div className='space-y-3'>
-        <h3 className='text-sm font-medium'>Permissions</h3>
+        <h3 className='text-sm font-medium'>Capabilities</h3>
 
         <AppPermissions
           permissions={app.requestedPermissions}
-          grantedPermissions={grantedPermissions}
+          grantedCapabilities={grantedCapabilities}
           editable
-          onGrantedPermissionsChange={onGrantedPermissionsChange}
+          onGrantedCapabilitiesChange={onGrantedCapabilitiesChange}
         />
       </div>
 
@@ -123,7 +123,7 @@ export function PermissionsEditor({
           </div>
 
           <div className='text-xs text-muted-foreground'>
-            Network access is configured separately from permissions.
+            Network access is configured separately from capabilities.
           </div>
         </div>
       ) : null}

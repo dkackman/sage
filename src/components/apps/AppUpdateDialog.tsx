@@ -201,18 +201,18 @@ export function AppUpdateDialog({
                     <div className='rounded-md border p-3'>
                       <AppPermissions
                         permissions={buildAddedPermissionsViewModel(delta)}
-                        grantedPermissions={[
+                        grantedCapabilities={[
                           ...delta.addedRequestedCapabilities.required,
                           ...selectedAddedOptionalCapabilities,
                         ]}
                         editable
-                        onGrantedPermissionsChange={(next) => {
+                        onGrantedCapabilitiesChange={(next: string[]) => {
                           const requiredSet = new Set(
                             delta.addedRequestedCapabilities.required,
                           );
 
                           setSelectedAddedOptionalCapabilities(
-                            next.filter((key) => !requiredSet.has(key)),
+                            next.filter((key: string) => !requiredSet.has(key)),
                           );
                         }}
                       />

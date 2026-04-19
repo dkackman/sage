@@ -2,10 +2,12 @@ use anyhow::{anyhow, Result as AnyResult};
 use std::collections::BTreeSet;
 
 use crate::apps::{
-    permission_registry::get_permission_definition,
+    permission_registry::{
+        get_permission_definition, require_permission_definition,
+    },
     types::{
-        InstalledSageAppPermissionFlags, SageRequestedPermissions,
-        SageRequestedCapabilities, SageRequestedNetworkPermissions,
+        InstalledSageAppPermissionFlags, SageRequestedCapabilities,
+        SageRequestedNetworkPermissions, SageRequestedPermissions,
     },
 };
 use crate::apps::types::SageNetworkPermissionTarget;
@@ -18,27 +20,43 @@ pub struct PermissionSummary {
 }
 
 fn normalize_capability_keys(
-    permissions: &SageRequestedCapabilities,
-) -> SageRequestedCapabilities {
+    capabilities: &SageRequestedCapabilities,
+) -> AnyResult<SageRequestedCapabilities> {
     let mut required = BTreeSet::new();
     let mut optional = BTreeSet::new();
 
-    for key in &permissions.required {
-        if get_permission_definition(key).is_some() {
-            required.insert(key.clone());
+    for key in &capabilities.required {
+        let definition = require_permission_definition(key)?;
+
+        if !definition.requestable_by_app {
+            return Err(anyhow!(
+                "capability is not requestable by apps: {}",
+                key
+            ));
         }
+
+        required.insert(key.clone());
     }
 
-    for key in &permissions.optional {
-        if get_permission_definition(key).is_some() && !required.contains(key) {
+    for key in &capabilities.optional {
+        let definition = require_permission_definition(key)?;
+
+        if !definition.requestable_by_app {
+            return Err(anyhow!(
+                "capability is not requestable by apps: {}",
+                key
+            ));
+        }
+
+        if !required.contains(key) {
             optional.insert(key.clone());
         }
     }
 
-    SageRequestedCapabilities {
+    Ok(SageRequestedCapabilities {
         required: required.into_iter().collect(),
         optional: optional.into_iter().collect(),
-    }
+    })
 }
 
 pub fn normalize_network_key(scheme: &str, host: &str) -> AnyResult<(String, String)> {
@@ -81,23 +99,20 @@ fn normalize_requested_network_entries(
 fn normalize_requested_network_permissions(
     permissions: &SageRequestedNetworkPermissions,
 ) -> AnyResult<SageRequestedNetworkPermissions> {
-    let required = normalize_requested_network_entries(
-        &permissions.whitelist.required,
-    )?;
+    let required =
+        normalize_requested_network_entries(&permissions.whitelist.required)?;
 
     let required_keys: BTreeSet<_> = required
         .iter()
         .map(|entry| (entry.scheme.clone(), entry.host.clone()))
         .collect();
 
-    let optional = normalize_requested_network_entries(
-        &permissions.whitelist.optional,
-    )?
-    .into_iter()
-    .filter(|entry| {
-        !required_keys.contains(&(entry.scheme.clone(), entry.host.clone()))
-    })
-    .collect();
+    let optional = normalize_requested_network_entries(&permissions.whitelist.optional)?
+        .into_iter()
+        .filter(|entry| {
+            !required_keys.contains(&(entry.scheme.clone(), entry.host.clone()))
+        })
+        .collect();
 
     Ok(SageRequestedNetworkPermissions {
         whitelist: crate::apps::types::SageRequestedNetworkWhitelist {
@@ -112,7 +127,7 @@ pub fn normalize_and_validate_requested_permissions(
 ) -> AnyResult<SageRequestedPermissions> {
     let normalized = SageRequestedPermissions {
         network: normalize_requested_network_permissions(&permissions.network)?,
-        capabilities: normalize_capability_keys(&permissions.capabilities),
+        capabilities: normalize_capability_keys(&permissions.capabilities)?,
     };
 
     validate_requested_permission_policy(&normalized)?;
@@ -160,6 +175,22 @@ pub fn summarize_permissions(keys: &[String]) -> AnyResult<PermissionSummary> {
     }
 
     Ok(summary)
+}
+
+pub fn resolve_shared_capabilities(
+    granted_capabilities: &[String],
+) -> AnyResult<Vec<String>> {
+    let mut shared = BTreeSet::new();
+
+    for key in granted_capabilities {
+        let definition = require_permission_definition(key)?;
+
+        if definition.shared_with_app {
+            shared.insert(key.clone());
+        }
+    }
+
+    Ok(shared.into_iter().collect())
 }
 
 pub fn validate_requested_permission_policy(

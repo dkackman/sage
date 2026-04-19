@@ -31,7 +31,7 @@ use crate::{
     },
     error::Result,
 };
-use crate::apps::permissions::normalize_network_key;
+use crate::apps::permissions::{normalize_network_key, resolve_shared_capabilities};
 use crate::apps::types::{SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedNetworkPermissions, SageRequestedPermissions};
 
 pub fn current_millis() -> u128 {
@@ -125,6 +125,10 @@ fn build_installed_app(
     source: InstalledSageAppSource,
     snapshot: crate::apps::types::InstalledSageAppSnapshot,
 ) -> InstalledSageApp {
+    let shared_capabilities =
+        resolve_shared_capabilities(&granted_permissions.capabilities)
+            .expect("failed to resolve shared capabilities for installed app");
+
     InstalledSageApp {
         id: app_id,
         name: manifest.name.clone(),
@@ -134,6 +138,7 @@ fn build_installed_app(
         icon_file: manifest_icon_file(manifest).to_string(),
         requested_permissions: manifest.permissions.clone(),
         granted_permissions,
+        shared_capabilities,
         permission_flags,
         source,
         active_snapshot: snapshot,

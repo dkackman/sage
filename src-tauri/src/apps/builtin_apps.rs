@@ -8,7 +8,7 @@ use crate::apps::{
     install::{manifest_entry_file, manifest_icon_file},
     permissions::{
         normalize_and_validate_requested_permissions, resolve_granted_permission_flags,
-        validate_granted_permissions,
+        resolve_shared_capabilities, validate_granted_permissions,
     },
     types::{
         InstalledSageApp, InstalledSageAppSnapshot, InstalledSageAppSource, SageAppPackageManifest,
@@ -169,7 +169,10 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
     };
 
     validate_granted_permissions(&manifest.permissions, &granted_permissions.capabilities)?;
-    let permission_flags = resolve_granted_permission_flags(&granted_permissions.capabilities, None)?;
+    let permission_flags =
+        resolve_granted_permission_flags(&granted_permissions.capabilities, None)?;
+    let shared_capabilities =
+        resolve_shared_capabilities(&granted_permissions.capabilities)?;
 
     let entry_file_name = manifest_entry_file(&manifest).to_string();
     let icon_file_name = manifest_icon_file(&manifest).to_string();
@@ -201,6 +204,7 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
         icon_file: icon_file_name,
         requested_permissions: manifest.permissions.clone(),
         granted_permissions,
+        shared_capabilities,
         permission_flags,
         source: InstalledSageAppSource::Zip,
         active_snapshot: InstalledSageAppSnapshot {

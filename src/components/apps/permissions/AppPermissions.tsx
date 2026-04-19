@@ -7,7 +7,7 @@ import { SageRequestedPermissions } from '@sage-app/sdk';
 
 type Tone = 'default' | 'added' | 'removed' | 'warning';
 
-interface PermissionEntry {
+interface CapabilityEntry {
   key: string;
   required: boolean;
   granted: boolean;
@@ -15,17 +15,17 @@ interface PermissionEntry {
 
 interface Props {
   permissions: SageRequestedPermissions | null | undefined;
-  grantedPermissions?: string[];
+  grantedCapabilities?: string[];
   editable?: boolean;
   tone?: Tone;
-  onGrantedPermissionsChange?: (next: string[]) => void;
+  onGrantedCapabilitiesChange?: (next: string[]) => void;
 }
 
 function buildEntries(
   permissions: SageRequestedPermissions | null | undefined,
-  grantedPermissions: string[],
-): PermissionEntry[] {
-  const grantedSet = new Set(grantedPermissions);
+  grantedCapabilities: string[],
+): CapabilityEntry[] {
+  const grantedSet = new Set(grantedCapabilities);
 
   const requiredEntries = (permissions?.capabilities?.required ?? []).map(
     (key) => ({
@@ -48,7 +48,7 @@ function buildEntries(
   );
 }
 
-function buildTree(entries: PermissionEntry[]): AppPermissionTreeNode {
+function buildTree(entries: CapabilityEntry[]): AppPermissionTreeNode {
   const root: AppPermissionTreeNode = {
     segment: '',
     fullPath: '',
@@ -110,21 +110,21 @@ function currentSort(node: AppPermissionTreeNode) {
 
 export function AppPermissions({
   permissions,
-  grantedPermissions = [],
+  grantedCapabilities = [],
   editable = false,
   tone = 'default',
-  onGrantedPermissionsChange,
+  onGrantedCapabilitiesChange,
 }: Props) {
-  const [localGrantedPermissions, setLocalGrantedPermissions] =
-    useState<string[]>(grantedPermissions);
+  const [localGrantedCapabilities, setLocalGrantedCapabilities] =
+    useState<string[]>(grantedCapabilities);
 
   useEffect(() => {
-    setLocalGrantedPermissions(grantedPermissions);
-  }, [grantedPermissions]);
+    setLocalGrantedCapabilities(grantedCapabilities);
+  }, [grantedCapabilities]);
 
   const entries = useMemo(() => {
-    return buildEntries(permissions, localGrantedPermissions);
-  }, [permissions, localGrantedPermissions]);
+    return buildEntries(permissions, localGrantedCapabilities);
+  }, [permissions, localGrantedCapabilities]);
 
   const tree = useMemo(() => buildTree(entries), [entries]);
 
@@ -135,7 +135,7 @@ export function AppPermissions({
       return;
     }
 
-    setLocalGrantedPermissions((prev) => {
+    setLocalGrantedCapabilities((prev) => {
       const prevSet = new Set(prev);
 
       if (nextGranted) {
@@ -152,7 +152,7 @@ export function AppPermissions({
 
       const next = [...prevSet].sort((a, b) => a.localeCompare(b));
 
-      onGrantedPermissionsChange?.(next);
+      onGrantedCapabilitiesChange?.(next);
       return next;
     });
   }
@@ -160,7 +160,7 @@ export function AppPermissions({
   if (!hasEntries) {
     return (
       <div className='text-sm text-muted-foreground'>
-        This app does not request any permissions.
+        This app does not request any capabilities.
       </div>
     );
   }

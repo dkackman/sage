@@ -8,10 +8,10 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
+use crate::apps::permission_registry::require_permission_definition;
 use crate::apps::runtime::{apps_assert_bridge_origin, resolve_app};
 use crate::apps::state::AppsHostState;
 use crate::apps::types::InstalledSageApp;
-use crate::apps::permission_registry::require_permission_definition;
 
 pub mod methods;
 pub mod registry;
@@ -228,21 +228,32 @@ pub async fn apps_handle_bridge_request(
         });
     };
 
-    if let Some(permission) = method.permission() {
-        let permission_definition = require_permission_definition(permission)
-            .map_err(|err| format!("bridge method declared unknown permission {permission}: {err}"))?;
+    if let Some(capability_key) = method.permission() {
+        let capability_definition = require_permission_definition(capability_key)
+            .map_err(|err| {
+                format!(
+                    "bridge method declared unknown capability {capability_key}: {err}"
+                )
+            })?;
+
+        if !capability_definition.shared_with_app {
+            return Err(format!(
+                "bridge method {} declared non-shared capability {}",
+                request.method, capability_definition.key
+            ));
+        }
 
         if !resolved_app
             .granted_permissions
             .capabilities
             .iter()
-            .any(|cap| cap == permission_definition.key)
+            .any(|capability| capability == capability_definition.key)
         {
             return Ok(RustBridgeHandleResult::Immediate {
                 response: failure(
                     &request.id,
                     "permission_denied",
-                    format!("Permission denied for {}", permission_definition.key),
+                    format!("Permission denied for {}", capability_definition.key),
                 ),
             });
         }

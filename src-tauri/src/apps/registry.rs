@@ -6,6 +6,7 @@ use std::{
 use anyhow::{Context, Result as AnyResult};
 use serde::{Deserialize, Serialize};
 
+use crate::apps::permissions::resolve_shared_capabilities;
 use crate::apps::types::{
     CorruptedInstalledSageApp, InstalledSageApp, InstalledSageAppPendingUpdate,
     InstalledSageAppPermissionFlags, InstalledSageAppSnapshot, InstalledSageAppSource,
@@ -103,6 +104,9 @@ struct PersistedInstalledSageApp {
 
     #[serde(rename = "grantedPermissions", alias = "granted_permissions")]
     granted_permissions: SageGrantedPermissions,
+
+    #[serde(rename = "sharedCapabilities", alias = "shared_capabilities", default)]
+    shared_capabilities: Option<Vec<String>>,
 
     #[serde(rename = "permissionFlags", alias = "permission_flags")]
     permission_flags: InstalledSageAppPermissionFlags,
@@ -288,6 +292,7 @@ fn to_persisted_installed_app(app: &InstalledSageApp) -> PersistedInstalledSageA
             &app.requested_permissions,
         ),
         granted_permissions: app.granted_permissions.clone(),
+        shared_capabilities: Some(app.shared_capabilities.clone()),
         permission_flags: app.permission_flags.clone(),
         source: app.source.clone(),
         active_snapshot: to_persisted_snapshot(&app.active_snapshot),
@@ -301,6 +306,11 @@ fn to_persisted_installed_app(app: &InstalledSageApp) -> PersistedInstalledSageA
 fn from_persisted_installed_app(
     app: PersistedInstalledSageApp,
 ) -> AnyResult<InstalledSageApp> {
+    let shared_capabilities = match app.shared_capabilities {
+        Some(shared_capabilities) => shared_capabilities,
+        None => resolve_shared_capabilities(&app.granted_permissions.capabilities)?,
+    };
+
     Ok(InstalledSageApp {
         id: app.id,
         name: app.name,
@@ -312,6 +322,7 @@ fn from_persisted_installed_app(
             app.requested_permissions,
         )?,
         granted_permissions: app.granted_permissions,
+        shared_capabilities,
         permission_flags: app.permission_flags,
         source: app.source,
         active_snapshot: from_persisted_snapshot(app.active_snapshot)?,

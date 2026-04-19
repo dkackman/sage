@@ -53,13 +53,9 @@ function getSageWindow(): SageWindow {
 }
 
 function buildFallbackAppInfo(): SageAppInfo {
-  const appId =
-    new URL(window.location.href).searchParams.get('__sage_app_id') ??
-    'unknown-app';
-
   return {
-    id: appId,
-    name: document.title || appId,
+    id: 'unknown',
+    name: 'Unknown App',
     version: '0.0.0',
     requestedPermissions: {
       network: {
@@ -73,7 +69,7 @@ function buildFallbackAppInfo(): SageAppInfo {
         optional: [],
       },
     },
-    grantedPermissions: [],
+    sharedCapabilities: [],
     network: [],
   };
 }

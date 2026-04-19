@@ -879,9 +879,9 @@ export function Apps() {
 
               <PermissionsEditor
                 app={permissionsDialogApp}
-                grantedPermissions={editingGrantedPermissions}
+                grantedCapabilities={editingGrantedPermissions}
                 grantedNetworkWhitelist={editingGrantedNetworkWhitelist}
-                onGrantedPermissionsChange={setEditingGrantedPermissions}
+                onGrantedCapabilitiesChange={setEditingGrantedPermissions}
                 onGrantedNetworkWhitelistChange={
                   setEditingGrantedNetworkWhitelist
                 }
