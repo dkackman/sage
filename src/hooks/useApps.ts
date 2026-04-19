@@ -5,7 +5,6 @@ import {
   ListedSageApp,
   SageAppUrlPreview,
   SageGrantedPermissions,
-  SageNetworkPermissionTarget,
   SandboxStateView,
 } from '@/bindings.ts';
 import { formatAppError } from '@/lib/apps/formatAppError.ts';
@@ -98,19 +97,10 @@ export function useAppsInternal() {
   }, []);
 
   const installApp = useCallback(
-    async (
-      zipPath: string,
-      capabilities: string[],
-      networkWhitelist: SageNetworkPermissionTarget[],
-    ) => {
+    async (zipPath: string, grantedPermissions: SageGrantedPermissions) => {
       await invoke<InstalledSageApp>('install_app_zip', {
         zipPath,
-        grantedPermissions: {
-          capabilities,
-          network: {
-            whitelist: networkWhitelist,
-          },
-        },
+        grantedPermissions,
       });
       await refresh();
     },
@@ -118,19 +108,10 @@ export function useAppsInternal() {
   );
 
   const installUrlApp = useCallback(
-    async (
-      appUrl: string,
-      capabilities: string[],
-      networkWhitelist: SageNetworkPermissionTarget[],
-    ) => {
+    async (appUrl: string, grantedPermissions: SageGrantedPermissions) => {
       await invoke<InstalledSageApp>('install_app_url', {
         appUrl,
-        grantedPermissions: {
-          capabilities,
-          network: {
-            whitelist: networkWhitelist,
-          },
-        },
+        grantedPermissions,
       });
       await refresh();
     },

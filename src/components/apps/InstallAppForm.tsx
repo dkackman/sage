@@ -2,13 +2,13 @@ import { useState } from 'react';
 import type {
   SageAppPackageManifest,
   SageAppUrlPreview,
+  SageGrantedPermissions,
   SageNetworkPermissionTarget,
 } from '@/bindings';
 import { formatAppError } from '@/lib/apps/formatAppError.ts';
 import { InstallSourceCard } from './InstallSourceCard';
 import {
-  buildFullyForbiddenPermissions,
-  buildInitialGrantedNetworkWhitelist,
+  buildEmptyGrantedPermissions,
   buildInitialGrantedPermissions,
 } from '@/components/apps/permissions/permissionUtils.ts';
 import { InstallPermissionsDialog } from '@/components/apps/permissions/InstallDialog.tsx';
@@ -18,13 +18,11 @@ interface Props {
   onPreviewUrl: (appUrl: string) => Promise<SageAppUrlPreview>;
   onInstallZip: (
     zipPath: string,
-    permissions: string[],
-    networkWhitelist: SageNetworkPermissionTarget[],
+    grantedPermissions: SageGrantedPermissions,
   ) => Promise<void>;
   onInstallUrl: (
     appUrl: string,
-    permissions: string[],
-    networkWhitelist: SageNetworkPermissionTarget[],
+    grantedPermissions: SageGrantedPermissions,
   ) => Promise<void>;
 }
 
@@ -50,12 +48,24 @@ export function InstallAppForm({
   const [error, setError] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState('');
   const [source, setSource] = useState<InstallSource | null>(null);
-  const [grantedPermissions, setGrantedPermissions] = useState<string[]>(
-    buildFullyForbiddenPermissions(),
-  );
-  const [grantedNetworkWhitelist, setGrantedNetworkWhitelist] = useState<
-    SageNetworkPermissionTarget[]
-  >([]);
+  const [grantedPermissions, setGrantedPermissions] =
+    useState<SageGrantedPermissions>(buildEmptyGrantedPermissions());
+
+  function setGrantedCapabilities(next: string[]) {
+    setGrantedPermissions((prev) => ({
+      ...prev,
+      capabilities: next,
+    }));
+  }
+
+  function setGrantedNetworkWhitelist(next: SageNetworkPermissionTarget[]) {
+    setGrantedPermissions((prev) => ({
+      ...prev,
+      network: {
+        whitelist: next,
+      },
+    }));
+  }
 
   async function handleSelectZipPath(zipPath: string) {
     try {
@@ -70,9 +80,6 @@ export function InstallAppForm({
       });
 
       setGrantedPermissions(buildInitialGrantedPermissions(nextManifest));
-      setGrantedNetworkWhitelist(
-        buildInitialGrantedNetworkWhitelist(nextManifest),
-      );
     } catch (err) {
       setError(formatAppError(err));
     }
@@ -91,9 +98,6 @@ export function InstallAppForm({
       });
 
       setGrantedPermissions(buildInitialGrantedPermissions(preview.manifest));
-      setGrantedNetworkWhitelist(
-        buildInitialGrantedNetworkWhitelist(preview.manifest),
-      );
     } catch (err) {
       setError(formatAppError(err));
     }
@@ -109,22 +113,13 @@ export function InstallAppForm({
       setError(null);
 
       if (source.kind === 'zip') {
-        await onInstallZip(
-          source.zipPath,
-          grantedPermissions,
-          grantedNetworkWhitelist,
-        );
+        await onInstallZip(source.zipPath, grantedPermissions);
       } else {
-        await onInstallUrl(
-          source.appUrl,
-          grantedPermissions,
-          grantedNetworkWhitelist,
-        );
+        await onInstallUrl(source.appUrl, grantedPermissions);
       }
 
       setSource(null);
-      setGrantedPermissions(buildFullyForbiddenPermissions());
-      setGrantedNetworkWhitelist([]);
+      setGrantedPermissions(buildEmptyGrantedPermissions());
       setUrlInput('');
     } catch (err) {
       setError(formatAppError(err));
@@ -135,8 +130,7 @@ export function InstallAppForm({
 
   function resetDialog() {
     setSource(null);
-    setGrantedPermissions(buildFullyForbiddenPermissions());
-    setGrantedNetworkWhitelist([]);
+    setGrantedPermissions(buildEmptyGrantedPermissions());
     setError(null);
   }
 
@@ -155,9 +149,9 @@ export function InstallAppForm({
         source={source}
         error={error}
         installing={installing}
-        grantedCapabilities={grantedPermissions}
-        grantedNetworkWhitelist={grantedNetworkWhitelist}
-        onGrantedCapabilitiesChange={setGrantedPermissions}
+        grantedCapabilities={grantedPermissions.capabilities}
+        grantedNetworkWhitelist={grantedPermissions.network.whitelist}
+        onGrantedCapabilitiesChange={setGrantedCapabilities}
         onGrantedNetworkWhitelistChange={setGrantedNetworkWhitelist}
         onCancel={resetDialog}
         onConfirm={confirmInstall}

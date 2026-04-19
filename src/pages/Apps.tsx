@@ -456,6 +456,7 @@ export function Apps() {
       setPermissionsDialogBusy(false);
     }
   }, [
+    clearAppStorage,
     permissionsDialogApp,
     pendingPermissionsRetry,
     editingGrantedNetworkWhitelist,
@@ -843,12 +844,12 @@ export function Apps() {
             onPreviewUrl={(appUrl: string) =>
               invoke<SageAppUrlPreview>('preview_app_url', { appUrl })
             }
-            onInstallZip={async (zipPath, permissions, networkWhitelist) => {
-              await installApp(zipPath, permissions, networkWhitelist);
+            onInstallZip={async (zipPath, grantedPermissions) => {
+              await installApp(zipPath, grantedPermissions);
               setInstallOpen(false);
             }}
-            onInstallUrl={async (appUrl, permissions, networkWhitelist) => {
-              await installUrlApp(appUrl, permissions, networkWhitelist);
+            onInstallUrl={async (appUrl, grantedPermissions) => {
+              await installUrlApp(appUrl, grantedPermissions);
               setInstallOpen(false);
             }}
           />
