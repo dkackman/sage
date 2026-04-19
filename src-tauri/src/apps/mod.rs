@@ -9,7 +9,6 @@ pub mod permissions;
 pub mod protocol;
 pub mod registry;
 pub mod snapshot;
-pub mod storage;
 pub mod types;
 pub mod update;
 pub mod runtime;
