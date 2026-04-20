@@ -18,6 +18,7 @@ use crate::apps::types::{
 
 const INSTALLED_METADATA_FILE: &str = ".sage-installed.json";
 const PENDING_STORAGE_CLEANUP_FILE: &str = ".sage-pending-storage-cleanup.json";
+const RETIRED_APP_ORIGINS_FILE: &str = ".sage-retired-app-origins.json";
 
 pub fn apps_root(base_path: &Path) -> PathBuf {
     base_path.join("apps")
@@ -33,6 +34,10 @@ pub fn installed_metadata_path(install_dir: &Path) -> PathBuf {
 
 pub fn pending_storage_cleanup_path(base_path: &Path) -> PathBuf {
     apps_root(base_path).join(PENDING_STORAGE_CLEANUP_FILE)
+}
+
+pub fn retired_app_origins_path(base_path: &Path) -> PathBuf {
+    apps_root(base_path).join(RETIRED_APP_ORIGINS_FILE)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -93,6 +98,10 @@ struct PersistedInstalledSageAppPendingUpdate {
 #[derive(Debug, Serialize, Deserialize)]
 struct PersistedInstalledSageApp {
     id: String,
+
+    #[serde(rename = "originId", alias = "origin_id")]
+    origin_id: String,
+
     name: String,
     version: String,
 
@@ -288,6 +297,7 @@ fn from_persisted_pending_update(
 fn to_persisted_installed_app(app: &InstalledSageApp) -> PersistedInstalledSageApp {
     PersistedInstalledSageApp {
         id: app.id.clone(),
+        origin_id: app.origin_id.clone(),
         name: app.name.clone(),
         version: app.version.clone(),
         install_dir: app.install_dir.clone(),
@@ -313,6 +323,7 @@ fn from_persisted_installed_app(
 ) -> AnyResult<InstalledSageApp> {
     Ok(InstalledSageApp {
         id: app.id,
+        origin_id: app.origin_id,
         name: app.name,
         version: app.version,
         install_dir: app.install_dir,
@@ -458,4 +469,61 @@ pub fn write_pending_storage_cleanup_entries(
     fs::write(&path, format!("{text}\n"))
         .with_context(|| format!("failed to write {}", path.display()))?;
     Ok(())
+}
+
+pub fn read_retired_app_origins(
+    base_path: &Path,
+) -> AnyResult<Vec<crate::apps::types::RetiredAppOriginEntry>> {
+    let path = retired_app_origins_path(base_path);
+
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let text = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+
+    let entries =
+        serde_json::from_str::<Vec<crate::apps::types::RetiredAppOriginEntry>>(&text)
+            .with_context(|| format!("failed to parse {}", path.display()))?;
+
+    Ok(entries)
+}
+
+pub fn write_retired_app_origins(
+    base_path: &Path,
+    entries: &[crate::apps::types::RetiredAppOriginEntry],
+) -> AnyResult<()> {
+    let root = apps_root(base_path);
+    fs::create_dir_all(&root)
+        .with_context(|| format!("failed to create apps root {}", root.display()))?;
+
+    let path = retired_app_origins_path(base_path);
+    let text = serde_json::to_string_pretty(entries)
+        .map_err(|err| anyhow::anyhow!("failed to serialize retired app origins: {err}"))?;
+
+    fs::write(&path, format!("{text}\n"))
+        .with_context(|| format!("failed to write {}", path.display()))?;
+
+    Ok(())
+}
+
+pub fn read_installed_app_by_origin_id(
+    base_path: &Path,
+    origin_id: &str,
+) -> AnyResult<InstalledSageApp> {
+    let root = apps_root(base_path);
+
+    for entry in list_installed_apps_internal(&root)? {
+        if let ListedSageApp::Installed(app) = entry {
+            if app.origin_id == origin_id {
+                return Ok(app);
+            }
+        }
+    }
+
+    Err(anyhow::anyhow!(
+        "no installed app found for origin id {}",
+        origin_id
+    ))
 }

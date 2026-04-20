@@ -104,6 +104,32 @@ pub struct PendingStorageCleanupEntry {
     pub last_error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+pub struct RetiredAppOriginEntry {
+    pub id: String,
+
+    #[serde(rename = "appId", alias = "app_id")]
+    pub app_id: String,
+
+    #[serde(rename = "appName", alias = "app_name")]
+    pub app_name: String,
+
+    #[serde(rename = "originId", alias = "origin_id")]
+    pub origin_id: String,
+
+    #[serde(rename = "createdAtMs", alias = "created_at_ms")]
+    pub created_at_ms: u64,
+
+    #[serde(
+        rename = "storageMayContainSecrets",
+        alias = "storage_may_contain_secrets"
+    )]
+    pub storage_may_contain_secrets: bool,
+
+    #[serde(rename = "cleanupPending", alias = "cleanup_pending")]
+    pub cleanup_pending: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
 pub struct SageAppPackageManifest {
     pub name: String,
@@ -195,6 +221,10 @@ pub enum InstalledSageAppSource {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct InstalledSageApp {
     pub id: String,
+
+    #[serde(rename = "originId", alias = "origin_id")]
+    pub origin_id: String,
+
     pub name: String,
     pub version: String,
 

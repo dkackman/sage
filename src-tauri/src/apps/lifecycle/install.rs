@@ -8,14 +8,9 @@ use std::{
 use anyhow::{Context, Result as AnyResult, anyhow};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, State, command};
-
+use uuid::Uuid;
 use crate::app_state::AppState;
-use crate::apps::lifecycle::{
-    derive_manifest_url, download_url_snapshot, enqueue_pending_storage_cleanup,
-    fetch_url_manifest, list_installed_apps_internal, prepare_zip_snapshot, read_manifest,
-    retry_pending_storage_cleanup, unzip_to_dir, validate_package_structure,
-    write_installed_app_metadata,
-};
+use crate::apps::lifecycle::{derive_manifest_url, download_url_snapshot, enqueue_pending_storage_cleanup, enqueue_retired_app_origin, fetch_url_manifest, list_installed_apps_internal, prepare_zip_snapshot, read_manifest, read_retired_app_origins, retry_pending_storage_cleanup, unzip_to_dir, validate_package_structure, write_installed_app_metadata};
 use crate::apps::lifecycle::registry::{apps_root, read_installed_app_by_id};
 use crate::apps::permissions::{
     normalize_and_validate_requested_permissions, resolve_capability_flags,
@@ -68,6 +63,24 @@ fn generate_zip_app_id(name: &str) -> String {
 fn generate_url_app_id(manifest_url: &str) -> String {
     let hash = hash_string(manifest_url);
     format!("url-{}", &hash[..16])
+}
+
+fn default_url_origin_id(app_id: &str) -> String {
+    app_id.to_string()
+}
+
+fn generate_rotated_url_origin_id(app_id: &str) -> String {
+    let suffix = Uuid::new_v4().simple().to_string();
+    format!("r{}-{}", &suffix[..12], app_id)
+}
+
+fn should_rotate_url_origin_on_install(
+    base_path: &Path,
+    app_id: &str,
+) -> AnyResult<bool> {
+    let retired = read_retired_app_origins(base_path)?;
+
+    Ok(retired.iter().any(|entry| entry.app_id == app_id))
 }
 
 pub fn normalize_app_url(url: &str) -> AnyResult<String> {
@@ -124,6 +137,7 @@ fn find_existing_installed_app_by_name(
 
 fn build_installed_app(
     app_id: String,
+    origin_id: String,
     install_dir: &Path,
     manifest: &SageAppPackageManifest,
     granted_permissions: SageGrantedPermissions,
@@ -134,6 +148,7 @@ fn build_installed_app(
 ) -> InstalledSageApp {
     InstalledSageApp {
         id: app_id,
+        origin_id,
         name: manifest.name.clone(),
         version: manifest.version.clone(),
         install_dir: install_dir.to_string_lossy().to_string(),
@@ -446,6 +461,7 @@ pub async fn install_app_zip(
         let snapshot = prepare_zip_snapshot(&package_root, &install_dir, &manifest)?;
 
         let installed = build_installed_app(
+            app_id.clone(),
             app_id,
             &install_dir,
             &manifest,
@@ -522,8 +538,21 @@ pub async fn install_app_url(
     .await
     .map_err(|err| io::Error::other(format!("failed to download URL app snapshot: {err}")))?;
 
+    let origin_id = match existing_app.as_ref() {
+        Some(existing) => existing.origin_id.clone(),
+        None => {
+            if should_rotate_url_origin_on_install(&base_path, &app_id)
+                .map_err(|err| io::Error::other(format!("failed to inspect retired origins: {err}")))? {
+                generate_rotated_url_origin_id(&app_id)
+            } else {
+                default_url_origin_id(&app_id)
+            }
+        }
+    };
+
     let installed = build_installed_app(
         app_id.clone(),
+        origin_id,
         &install_dir,
         &preview.manifest,
         granted_permissions,
@@ -558,13 +587,29 @@ pub async fn uninstall_app(
     let installed = read_installed_app_by_id(&base_path, &app_id).ok();
 
     if let Some(installed) = &installed {
-        if let Err(err) = apps_clear_runtime_browsing_data(app.clone(), app_id.clone()).await {
-            enqueue_pending_storage_cleanup(&base_path, installed, &err)
-                .map_err(|queue_err| {
+        let cleanup_result = apps_clear_runtime_browsing_data(app.clone(), app_id.clone()).await;
+
+        match cleanup_result {
+            Ok(()) => {
+                enqueue_retired_app_origin(&base_path, installed, false).map_err(|err| {
+                    io::Error::other(format!(
+                        "failed to retire app origin after uninstall cleanup: {err}"
+                    ))
+                })?;
+            }
+            Err(err) => {
+                enqueue_pending_storage_cleanup(&base_path, installed, &err).map_err(|queue_err| {
                     io::Error::other(format!(
                         "failed to enqueue pending storage cleanup after clear failure ({err}): {queue_err}"
                     ))
                 })?;
+
+                enqueue_retired_app_origin(&base_path, installed, true).map_err(|origin_err| {
+                    io::Error::other(format!(
+                        "failed to retire app origin after cleanup failure ({err}): {origin_err}"
+                    ))
+                })?;
+            }
         }
     }
 

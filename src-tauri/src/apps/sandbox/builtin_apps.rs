@@ -226,6 +226,7 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
 
     let app = InstalledSageApp {
         id: spec.app_id.to_string(),
+        origin_id: spec.app_id.to_string(),
         name: manifest.name.clone(),
         version: manifest.version.clone(),
         install_dir: app_dir.to_string_lossy().to_string(),

@@ -14,8 +14,8 @@ fn app_id_from_inline_label(label: &str) -> Option<&str> {
     label.strip_prefix("app-inline-")
 }
 
-pub fn is_allowed_app_url(url: &Url, app_id: &str) -> bool {
-    url.scheme() == "sage-app" && url.host_str() == Some(app_id)
+pub fn is_allowed_app_url(url: &Url, origin_id: &str) -> bool {
+    url.scheme() == "sage-app" && url.host_str() == Some(origin_id)
 }
 
 pub fn build_entry_src(
@@ -24,7 +24,7 @@ pub fn build_entry_src(
     query: BTreeMap<String, String>,
 ) -> String {
     let entry_path = path.unwrap_or_else(|| format!("/{}", app.entry_file));
-    let mut url = Url::parse(&format!("sage-app://{}{}", app.id, entry_path))
+    let mut url = Url::parse(&format!("sage-app://{}{}", app.origin_id, entry_path))
         .expect("failed to build sage-app entry URL");
 
     for (key, value) in query {
@@ -78,6 +78,13 @@ pub fn apps_assert_bridge_origin(
         .ok_or_else(|| format!("invalid app runtime label: {source_label}"))?
         .to_string();
 
+    let base_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
+
+    let resolved = resolve_app(&base_path, &app_id)?;
+
     let host_window = app
         .get_window("main")
         .ok_or_else(|| "missing main window".to_string())?;
@@ -90,10 +97,11 @@ pub fn apps_assert_bridge_origin(
         .url()
         .map_err(|e| format!("failed to read current webview url: {e}"))?;
 
-    if !is_allowed_app_url(&current_url, &app_id) {
+    if !is_allowed_app_url(&current_url, &resolved.origin_id) {
         return Err(format!(
-            "bridge denied for {source_label}: current url {} is outside sage-app://{app_id}/...",
-            current_url
+            "bridge denied for {source_label}: current url {} is outside sage-app://{}/...",
+            current_url,
+            resolved.origin_id
         ));
     }
 

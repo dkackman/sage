@@ -5,14 +5,9 @@ use anyhow::Result as AnyResult;
 use tauri::AppHandle;
 use uuid::Uuid;
 
-use crate::apps::lifecycle::{
-    read_pending_storage_cleanup_entries, write_pending_storage_cleanup_entries,
-};
+use crate::apps::lifecycle::{read_pending_storage_cleanup_entries, read_retired_app_origins, write_pending_storage_cleanup_entries, write_retired_app_origins};
 use crate::apps::runtime::clear_app_storage_by_target;
-use crate::apps::types::{
-    InstalledSageApp, InstalledSageAppStorage, PendingStorageCleanupEntry,
-    PendingStorageCleanupTarget,
-};
+use crate::apps::types::{InstalledSageApp, InstalledSageAppSource, InstalledSageAppStorage, PendingStorageCleanupEntry, PendingStorageCleanupTarget, RetiredAppOriginEntry};
 
 fn now_ms() -> u64 {
     SystemTime::now()
@@ -95,4 +90,35 @@ pub async fn retry_pending_storage_cleanup(
     }
 
     write_pending_storage_cleanup_entries(base_path, &remaining)
+}
+
+pub fn enqueue_retired_app_origin(
+    base_path: &Path,
+    app: &InstalledSageApp,
+    cleanup_pending: bool,
+) -> AnyResult<()> {
+    let InstalledSageAppSource::Url { .. } = &app.source else {
+        return Ok(());
+    };
+
+    let mut entries = read_retired_app_origins(base_path)?;
+
+    if let Some(existing) = entries.iter_mut().find(|entry| entry.origin_id == app.origin_id) {
+        existing.app_id = app.id.clone();
+        existing.app_name = app.name.clone();
+        existing.cleanup_pending = cleanup_pending;
+        existing.storage_may_contain_secrets = app.capability_flags.storage_may_contain_secrets;
+    } else {
+        entries.push(RetiredAppOriginEntry {
+            id: Uuid::new_v4().to_string(),
+            app_id: app.id.clone(),
+            app_name: app.name.clone(),
+            origin_id: app.origin_id.clone(),
+            created_at_ms: now_ms(),
+            storage_may_contain_secrets: app.capability_flags.storage_may_contain_secrets,
+            cleanup_pending,
+        });
+    }
+
+    write_retired_app_origins(base_path, &entries)
 }

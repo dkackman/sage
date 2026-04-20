@@ -95,7 +95,7 @@ pub async fn apps_create_inline_runtime(
         let _ = existing.close();
     }
 
-    let app_id_for_nav = installed.id.clone();
+    let origin_id_for_nav = installed.origin_id.clone();
 
     let mut builder = tauri::webview::WebviewBuilder::new(
         &webview_label,
@@ -105,7 +105,7 @@ pub async fn apps_create_inline_runtime(
                 .map_err(|e| format!("invalid entry url: {e}"))?,
         ),
     )
-        .on_navigation(move |url| is_allowed_app_url(url, &app_id_for_nav))
+        .on_navigation(move |url| is_allowed_app_url(url, &origin_id_for_nav))
         .on_new_window(move |_url, _features| NewWindowResponse::Deny);
 
     if is_incognito {
