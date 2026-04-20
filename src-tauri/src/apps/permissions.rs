@@ -394,4 +394,205 @@ mod tests {
 
         assert_eq!(resolved, vec![shared]);
     }
+
+    #[test]
+    fn normalize_requested_permissions_deduplicates_and_sorts_capabilities() {
+        let mut requested = empty_requested_permissions();
+        requested.capabilities.required = vec![
+            "wallet.send_xch".to_string(),
+            "wallet.send_xch".to_string(),
+        ];
+        requested.capabilities.optional = vec![
+            "wallet.send_xch".to_string(),
+        ];
+
+        let normalized = normalize_and_validate_requested_permissions(&requested)
+            .expect("expected requested permissions to normalize");
+
+        assert_eq!(
+            normalized.capabilities.required,
+            vec!["wallet.send_xch".to_string()]
+        );
+        assert!(normalized.capabilities.optional.is_empty());
+    }
+
+    #[test]
+    fn normalize_requested_permissions_deduplicates_and_sorts_network_entries() {
+        let mut requested = empty_requested_permissions();
+        requested.network.whitelist.required = vec![
+            SageNetworkPermissionTarget {
+                scheme: "HTTPS".to_string(),
+                host: "Example.com".to_string(),
+            },
+            SageNetworkPermissionTarget {
+                scheme: "https".to_string(),
+                host: "example.com".to_string(),
+            },
+        ];
+        requested.network.whitelist.optional = vec![
+            SageNetworkPermissionTarget {
+                scheme: "WSS".to_string(),
+                host: "ws.example.com".to_string(),
+            },
+            SageNetworkPermissionTarget {
+                scheme: "https".to_string(),
+                host: "example.com".to_string(),
+            },
+        ];
+
+        let normalized = normalize_and_validate_requested_permissions(&requested)
+            .expect("expected requested permissions to normalize");
+
+        assert_eq!(
+            normalized.network.whitelist.required,
+            vec![SageNetworkPermissionTarget {
+                scheme: "https".to_string(),
+                host: "example.com".to_string(),
+            }]
+        );
+
+        assert_eq!(
+            normalized.network.whitelist.optional,
+            vec![SageNetworkPermissionTarget {
+                scheme: "wss".to_string(),
+                host: "ws.example.com".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn validate_granted_capabilities_rejects_unrequested_capability() {
+        let mut requested = empty_requested_permissions();
+        requested.capabilities.required = vec!["wallet.send_xch".to_string()];
+
+        let err = validate_granted_capabilities(
+            &requested,
+            &vec![
+                "wallet.send_xch".to_string(),
+                "persistent_storage".to_string(),
+            ],
+        )
+            .expect_err("expected unrequested capability to be rejected");
+
+        assert!(
+            err.to_string().contains("persistent_storage"),
+            "error should mention unrequested capability"
+        );
+    }
+
+    #[test]
+    fn validate_granted_capabilities_rejects_missing_required_capability() {
+        let mut requested = empty_requested_permissions();
+        requested.capabilities.required = vec!["wallet.send_xch".to_string()];
+
+        let err = validate_granted_capabilities(&requested, &[])
+            .expect_err("expected missing required capability to be rejected");
+
+        assert!(
+            err.to_string().contains("wallet.send_xch"),
+            "error should mention missing required capability"
+        );
+    }
+
+    #[test]
+    fn validate_granted_capabilities_allows_subset_of_optional_capabilities() {
+        let mut requested = empty_requested_permissions();
+        requested.capabilities.required = vec!["wallet.send_xch".to_string()];
+        requested.capabilities.optional = vec!["persistent_storage".to_string()];
+
+        validate_granted_capabilities(
+            &requested,
+            &vec!["wallet.send_xch".to_string()],
+        )
+            .expect("expected optional capability to be omittable");
+    }
+
+    #[test]
+    fn summarize_capabilities_rejects_unknown_capability() {
+        let err = summarize_capabilities(&vec!["does.not.exist".to_string()])
+            .expect_err("expected unknown capability to be rejected");
+
+        assert!(
+            err.to_string().contains("unknown capability"),
+            "error should mention unknown capability"
+        );
+    }
+
+    #[test]
+    #[ignore = "enable once a capability with accesses_sensitive_secret = true exists"]
+    fn requested_permissions_policy_rejects_secret_and_external_combination() {
+        let mut requested = empty_requested_permissions();
+        requested.capabilities.required = vec![
+            "wallet.send_xch".to_string(),
+            "wallet.send_xch_auto_submit".to_string(),
+        ];
+
+        let err = validate_requested_permission_policy(&requested)
+            .expect_err("expected incompatible requested capability policy to be rejected");
+
+        assert!(
+            err.to_string().contains("requested permissions cannot include both externally observable and sensitive secret access permissions"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn resolve_capability_flags_sets_expected_flags_for_shared_send_capability() {
+        let flags = resolve_capability_flags(&vec!["wallet.send_xch".to_string()], None)
+            .expect("expected capability flags to resolve");
+
+        assert!(flags.has_external_access);
+        assert!(!flags.has_secret_access);
+        assert!(!flags.storage_may_contain_secrets);
+        assert!(!flags.isolated);
+    }
+
+    #[test]
+    fn resolve_capability_flags_rejects_external_access_when_storage_is_tainted() {
+        let previous = InstalledSageAppCapabilityFlags {
+            has_secret_access: false,
+            has_external_access: false,
+            storage_may_contain_secrets: true,
+            isolated: true,
+        };
+
+        let err = resolve_capability_flags(
+            &vec!["wallet.send_xch".to_string()],
+            Some(&previous),
+        )
+            .expect_err("expected tainted storage to block externally observable capability");
+
+        assert_eq!(err.to_string(), "STORAGE_TAINTED");
+    }
+
+    #[test]
+    fn mark_storage_may_contain_secrets_sets_taint_and_isolation() {
+        let flags = InstalledSageAppCapabilityFlags {
+            has_secret_access: true,
+            has_external_access: false,
+            storage_may_contain_secrets: false,
+            isolated: true,
+        };
+
+        let updated = mark_storage_may_contain_secrets(&flags);
+        assert!(updated.storage_may_contain_secrets);
+        assert!(updated.isolated);
+        assert!(updated.has_secret_access);
+        assert!(!updated.has_external_access);
+    }
+
+    #[test]
+    fn clear_storage_may_contain_secrets_preserves_secret_access_isolation_only() {
+        let flags = InstalledSageAppCapabilityFlags {
+            has_secret_access: true,
+            has_external_access: false,
+            storage_may_contain_secrets: true,
+            isolated: true,
+        };
+
+        let updated = clear_storage_may_contain_secrets(&flags);
+        assert!(!updated.storage_may_contain_secrets);
+        assert!(updated.isolated);
+        assert!(updated.has_secret_access);
+    }
 }

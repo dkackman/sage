@@ -5,9 +5,13 @@ use super::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::apps::bridge::{success, RustBridgeRequest, RustBridgeResponse};
 use crate::apps::permissions::resolve_shared_capabilities;
 
+#[derive(Debug, Clone, Copy)]
 pub struct BridgePing;
+#[derive(Debug, Clone, Copy)]
 pub struct BridgeSend;
+#[derive(Debug, Clone, Copy)]
 pub struct AppGetInfo;
+#[derive(Debug, Clone, Copy)]
 pub struct SageGetCapabilities;
 
 #[async_trait]

@@ -35,7 +35,7 @@ pub struct SageAppRuntimeRecord {
     pub in_flight_request_count: u32,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct AppRuntimeState {
     pub by_runtime_id: Mutex<BTreeMap<String, SageAppRuntimeRecord>>,
     pub runtime_by_app_id: Mutex<BTreeMap<String, String>>,

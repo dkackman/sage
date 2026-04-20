@@ -113,7 +113,7 @@ pub struct SandboxStorageClearProbeResult {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SandboxStorageClearProbePhase {
     Write,

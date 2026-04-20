@@ -102,7 +102,7 @@ struct PendingBridgeApproval {
     request: RustBridgeRequest,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct BridgeState {
     pending_approvals: Mutex<BTreeMap<String, PendingBridgeApproval>>,
 }
@@ -118,7 +118,11 @@ pub(crate) fn success(id: &str, result: Value) -> RustBridgeResponse {
     })
 }
 
-pub(crate) fn failure(id: &str, code: &str, message: impl Into<String>) -> RustBridgeResponse {
+pub(crate) fn failure(
+    id: &str,
+    code: &str,
+    message: impl Into<String>,
+) -> RustBridgeResponse {
     RustBridgeResponse::Error(RustBridgeErrorResponse {
         channel: "sage-bridge".into(),
         bridge_version: "v1".into(),
@@ -131,7 +135,9 @@ pub(crate) fn failure(id: &str, code: &str, message: impl Into<String>) -> RustB
     })
 }
 
-fn validate_request_basics(request: &RustBridgeRequest) -> Result<(), RustBridgeResponse> {
+fn validate_request_basics(
+    request: &RustBridgeRequest,
+) -> Result<(), RustBridgeResponse> {
     if request.channel != "sage-bridge" {
         return Err(failure(
             &request.id,
@@ -183,6 +189,49 @@ async fn execute_bridge_request(
         .await
 }
 
+fn authorize_method_capability(
+    app: &InstalledSageApp,
+    request_id: &str,
+    capability_key: &str,
+) -> Result<(), RustBridgeResponse> {
+    let capability_definition = require_capability_definition(capability_key)
+        .map_err(|err| {
+            failure(
+                request_id,
+                "internal_error",
+                format!(
+                    "bridge method declared unknown capability {capability_key}: {err}"
+                ),
+            )
+        })?;
+
+    if !capability_definition.shared_with_app {
+        return Err(failure(
+            request_id,
+            "permission_denied",
+            format!(
+                "Capability {} is not shared with apps",
+                capability_definition.key
+            ),
+        ));
+    }
+
+    if !app
+        .granted_permissions
+        .capabilities
+        .iter()
+        .any(|capability| capability == capability_definition.key)
+    {
+        return Err(failure(
+            request_id,
+            "permission_denied",
+            format!("Permission denied for {}", capability_definition.key),
+        ));
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn apps_handle_bridge_request(
@@ -229,33 +278,10 @@ pub async fn apps_handle_bridge_request(
     };
 
     if let Some(capability_key) = method.permission() {
-        let capability_definition = require_capability_definition(capability_key)
-            .map_err(|err| {
-                format!(
-                    "bridge method declared unknown capability {capability_key}: {err}"
-                )
-            })?;
-
-        if !capability_definition.shared_with_app {
-            return Err(format!(
-                "bridge method {} declared non-shared capability {}",
-                request.method, capability_definition.key
-            ));
-        }
-
-        if !resolved_app
-            .granted_permissions
-            .capabilities
-            .iter()
-            .any(|capability| capability == capability_definition.key)
+        if let Err(response) =
+            authorize_method_capability(&resolved_app, &request.id, capability_key)
         {
-            return Ok(RustBridgeHandleResult::Immediate {
-                response: failure(
-                    &request.id,
-                    "permission_denied",
-                    format!("Permission denied for {}", capability_definition.key),
-                ),
-            });
+            return Ok(RustBridgeHandleResult::Immediate { response });
         }
     }
 
@@ -324,4 +350,115 @@ pub async fn apps_resolve_bridge_approval(
         )
             .await,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::apps::types::{
+        InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppSnapshot,
+        InstalledSageAppSource, SageAppManifestFile, SageAppPackageManifest,
+        SageGrantedNetworkPermissions, SageGrantedPermissions, SageRequestedCapabilities,
+        SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist,
+        SageRequestedPermissions,
+    };
+
+    fn sample_app(granted_capabilities: Vec<String>) -> InstalledSageApp {
+        InstalledSageApp {
+            id: "app-1".to_string(),
+            name: "App".to_string(),
+            version: "1.0.0".to_string(),
+            install_dir: "/tmp/app".to_string(),
+            entry_file: "index.html".to_string(),
+            icon_file: "icon.png".to_string(),
+            requested_permissions: SageRequestedPermissions {
+                network: SageRequestedNetworkPermissions {
+                    whitelist: SageRequestedNetworkWhitelist {
+                        required: vec![],
+                        optional: vec![],
+                    },
+                },
+                capabilities: SageRequestedCapabilities {
+                    required: vec!["wallet.send_xch".to_string()],
+                    optional: vec!["wallet.send_xch_auto_submit".to_string()],
+                },
+            },
+            granted_permissions: SageGrantedPermissions {
+                capabilities: granted_capabilities,
+                network: SageGrantedNetworkPermissions { whitelist: vec![] },
+            },
+            capability_flags: InstalledSageAppCapabilityFlags::default(),
+            source: InstalledSageAppSource::Zip,
+            active_snapshot: InstalledSageAppSnapshot {
+                manifest_hash: "hash".to_string(),
+                snapshot_dir: "/tmp/snapshot".to_string(),
+                total_bytes: 1,
+                manifest: SageAppPackageManifest {
+                    name: "App".to_string(),
+                    version: "1.0.0".to_string(),
+                    permissions: SageRequestedPermissions {
+                        network: SageRequestedNetworkPermissions {
+                            whitelist: SageRequestedNetworkWhitelist {
+                                required: vec![],
+                                optional: vec![],
+                            },
+                        },
+                        capabilities: SageRequestedCapabilities {
+                            required: vec!["wallet.send_xch".to_string()],
+                            optional: vec!["wallet.send_xch_auto_submit".to_string()],
+                        },
+                    },
+                    files: vec![SageAppManifestFile {
+                        path: "index.html".to_string(),
+                        sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            .to_string(),
+                        size: 1,
+                    }],
+                    entry: Some("index.html".to_string()),
+                    icon: Some("icon.png".to_string()),
+                },
+            },
+            pending_update: None,
+        }
+    }
+
+    #[test]
+    fn authorize_method_capability_allows_granted_shared_capability() {
+        let app = sample_app(vec!["wallet.send_xch".to_string()]);
+
+        authorize_method_capability(&app, "req-1", "wallet.send_xch")
+            .expect("expected granted shared capability to be allowed");
+    }
+
+    #[test]
+    fn authorize_method_capability_rejects_missing_capability() {
+        let app = sample_app(vec![]);
+
+        let err = authorize_method_capability(&app, "req-1", "wallet.send_xch")
+            .expect_err("expected missing capability to be rejected");
+
+        match err {
+            RustBridgeResponse::Error(error) => {
+                assert_eq!(error.error.code, "permission_denied");
+                assert!(error.error.message.contains("wallet.send_xch"));
+            }
+            RustBridgeResponse::Success(_) => panic!("expected error response"),
+        }
+    }
+
+    #[test]
+    fn authorize_method_capability_rejects_non_shared_capability_even_if_granted() {
+        let app = sample_app(vec!["wallet.send_xch_auto_submit".to_string()]);
+
+        let err =
+            authorize_method_capability(&app, "req-1", "wallet.send_xch_auto_submit")
+                .expect_err("expected non-shared capability to be rejected");
+
+        match err {
+            RustBridgeResponse::Error(error) => {
+                assert_eq!(error.error.code, "permission_denied");
+            }
+            RustBridgeResponse::Success(_) => panic!("expected error response"),
+        }
+    }
 }

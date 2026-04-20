@@ -7,6 +7,7 @@ use crate::apps::types::InstalledSageApp;
 // If this import fails, adjust only this line.
 use sage_api::SendXch;
 
+#[derive(Debug, Clone, Copy)]
 pub struct WalletSendXch;
 
 #[async_trait]

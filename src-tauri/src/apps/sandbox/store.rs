@@ -23,6 +23,7 @@ pub struct SandboxRunResults {
     pub network: Vec<SandboxAppResult<SandboxNetworkProbeResult>>,
 }
 
+#[derive(Debug)]
 pub struct SandboxStateStore {
     pub baseline: Mutex<super::types::SandboxState>,
     pub current_run: Mutex<Option<SandboxRunState>>,

@@ -95,7 +95,7 @@ pub struct InstalledSageAppSnapshot {
     pub manifest: SageAppPackageManifest,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, Default)]
 pub struct InstalledSageAppCapabilityFlags {
     #[serde(rename = "hasSecretAccess", alias = "has_secret_access")]
     pub has_secret_access: bool,

@@ -7,11 +7,13 @@ use crate::app_state::AppState;
 use crate::apps::bridge::{RustBridgeRequest, RustBridgeResponse};
 use crate::apps::types::InstalledSageApp;
 
+#[derive(Debug)]
 pub struct BridgeContext<'a> {
     pub app: &'a InstalledSageApp,
     pub source_label: &'a str,
 }
 
+#[derive(Debug)]
 pub struct BridgeTools<'a> {
     pub app_handle: &'a tauri::AppHandle,
     pub app_state: &'a tauri::State<'a, AppState>,

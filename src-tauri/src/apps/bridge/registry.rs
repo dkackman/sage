@@ -25,3 +25,11 @@ impl BridgeRegistry {
         self.methods.get(method).map(|m| m.as_ref())
     }
 }
+
+impl std::fmt::Debug for BridgeRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BridgeRegistry")
+            .field("method_count", &self.methods.len())
+            .finish()
+    }
+}

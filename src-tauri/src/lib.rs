@@ -7,7 +7,7 @@ use tauri::Manager;
 use tauri_specta::{Builder, ErrorHandlingMode, collect_commands, collect_events};
 use tokio::sync::Mutex;
 
-mod apps;
+pub mod apps;
 mod app_state;
 mod commands;
 mod error;

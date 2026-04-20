@@ -6536,6 +6536,7 @@ dependencies = [
  "tauri-plugin-sharesheet",
  "tauri-plugin-window-state",
  "tauri-specta",
+ "tempfile",
  "tokio",
  "tracing",
  "url",
