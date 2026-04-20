@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use tauri::{AppHandle, Manager, State};
 
 use crate::apps::state::AppsHostState;
-use crate::apps::types::InstalledSageAppStorage;
+use crate::apps::types::{InstalledSageAppStorage, PendingStorageCleanupTarget};
 
 use super::apps_create_inline_runtime;
 use super::inline::CreateInlineRuntimeArgs;
@@ -32,6 +32,72 @@ fn parse_data_store_id(identifier_hex: &str) -> Result<[u8; 16], String> {
     Ok(out)
 }
 
+pub async fn clear_app_storage_by_target(
+    app: &AppHandle,
+    target: &PendingStorageCleanupTarget,
+) -> Result<(), String> {
+    match target {
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        PendingStorageCleanupTarget::AppleDataStore { identifier_hex } => {
+            let target_id = parse_data_store_id(identifier_hex)?;
+            let existing_ids = app
+                .fetch_data_store_identifiers()
+                .await
+                .map_err(|e| format!("failed to fetch data store identifiers: {e}"))?;
+
+            if existing_ids.iter().any(|id| *id == target_id) {
+                app.remove_data_store(target_id)
+                    .await
+                    .map_err(|e| format!("failed to remove data store: {e}"))?;
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        PendingStorageCleanupTarget::WindowsProfile { directory_name } => {
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
+
+            let profile_dir = app_data_dir.join(data_directory_for(directory_name));
+
+            match std::fs::remove_dir_all(&profile_dir) {
+                Ok(()) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => {
+                    return Err(format!(
+                        "failed to remove profile dir {}: {err}",
+                        profile_dir.display()
+                    ));
+                }
+            }
+        }
+
+        PendingStorageCleanupTarget::Unsupported => {}
+
+        #[allow(unreachable_patterns)]
+        _ => {}
+    }
+
+    Ok(())
+}
+
+fn pending_target_from_storage(storage: &InstalledSageAppStorage) -> PendingStorageCleanupTarget {
+    match storage {
+        InstalledSageAppStorage::AppleDataStore { identifier_hex } => {
+            PendingStorageCleanupTarget::AppleDataStore {
+                identifier_hex: identifier_hex.clone(),
+            }
+        }
+        InstalledSageAppStorage::WindowsProfile { directory_name } => {
+            PendingStorageCleanupTarget::WindowsProfile {
+                directory_name: directory_name.clone(),
+            }
+        }
+        InstalledSageAppStorage::Unsupported => PendingStorageCleanupTarget::Unsupported,
+    }
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn apps_clear_runtime_browsing_data(
@@ -52,47 +118,9 @@ pub async fn apps_clear_runtime_browsing_data(
         .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
 
     let resolved = resolve_app(&base_path, &app_id)?;
-    match &resolved.storage {
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        InstalledSageAppStorage::AppleDataStore { identifier_hex } => {
-            let target_id = parse_data_store_id(identifier_hex)?;
-            let existing_ids = app
-                .fetch_data_store_identifiers()
-                .await
-                .map_err(|e| format!("failed to fetch data store identifiers: {e}"))?;
+    let target = pending_target_from_storage(&resolved.storage);
 
-            if existing_ids.iter().any(|id| *id == target_id) {
-                app.remove_data_store(target_id)
-                    .await
-                    .map_err(|e| format!("failed to remove data store for {app_id}: {e}"))?;
-            }
-        }
-
-        #[cfg(target_os = "windows")]
-        InstalledSageAppStorage::WindowsProfile { directory_name } => {
-            let app_data_dir = app
-                .path()
-                .app_data_dir()
-                .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
-
-            let profile_dir = app_data_dir.join(data_directory_for(directory_name));
-
-            match std::fs::remove_dir_all(&profile_dir) {
-                Ok(()) => {}
-                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-                Err(err) => {
-                    return Err(format!(
-                        "failed to remove profile dir {}: {err}",
-                        profile_dir.display()
-                    ));
-                }
-            }
-        }
-
-        _ => {}
-    }
-
-    Ok(())
+    clear_app_storage_by_target(&app, &target).await
 }
 
 pub(crate) async fn close_runtime_internal(

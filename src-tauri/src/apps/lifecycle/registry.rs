@@ -9,13 +9,15 @@ use serde::{Deserialize, Serialize};
 use crate::apps::types::{
     CorruptedInstalledSageApp, InstalledSageApp, InstalledSageAppCapabilityFlags,
     InstalledSageAppPendingUpdate, InstalledSageAppSnapshot, InstalledSageAppSource,
-    InstalledSageAppStorage, ListedSageApp, SageAppManifestFile,
-    SageAppPackageManifest, SageGrantedPermissions, SageNetworkPermissionTarget,
-    SageRequestedCapabilities, SageRequestedNetworkPermissions,
-    SageRequestedNetworkWhitelist, SageRequestedPermissions,
+    InstalledSageAppStorage, ListedSageApp, PendingStorageCleanupEntry,
+    SageAppManifestFile, SageAppPackageManifest, SageGrantedPermissions,
+    SageNetworkPermissionTarget, SageRequestedCapabilities,
+    SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist,
+    SageRequestedPermissions,
 };
 
 const INSTALLED_METADATA_FILE: &str = ".sage-installed.json";
+const PENDING_STORAGE_CLEANUP_FILE: &str = ".sage-pending-storage-cleanup.json";
 
 pub fn apps_root(base_path: &Path) -> PathBuf {
     base_path.join("apps")
@@ -27,6 +29,10 @@ pub fn app_install_dir(base_path: &Path, app_id: &str) -> PathBuf {
 
 pub fn installed_metadata_path(install_dir: &Path) -> PathBuf {
     install_dir.join(INSTALLED_METADATA_FILE)
+}
+
+pub fn pending_storage_cleanup_path(base_path: &Path) -> PathBuf {
+    apps_root(base_path).join(PENDING_STORAGE_CLEANUP_FILE)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -418,4 +424,38 @@ pub fn list_installed_apps_internal(root: &Path) -> AnyResult<Vec<ListedSageApp>
     });
 
     Ok(apps)
+}
+
+pub fn read_pending_storage_cleanup_entries(
+    base_path: &Path,
+) -> AnyResult<Vec<PendingStorageCleanupEntry>> {
+    let path = pending_storage_cleanup_path(base_path);
+
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let text = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+
+    let entries = serde_json::from_str::<Vec<PendingStorageCleanupEntry>>(&text)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+
+    Ok(entries)
+}
+
+pub fn write_pending_storage_cleanup_entries(
+    base_path: &Path,
+    entries: &[PendingStorageCleanupEntry],
+) -> AnyResult<()> {
+    let root = apps_root(base_path);
+    fs::create_dir_all(&root)
+        .with_context(|| format!("failed to create apps root {}", root.display()))?;
+
+    let path = pending_storage_cleanup_path(base_path);
+    let text = serde_json::to_string_pretty(entries)
+        .map_err(|err| anyhow::anyhow!("failed to serialize pending storage cleanup entries: {err}"))?;
+    fs::write(&path, format!("{text}\n"))
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(())
 }

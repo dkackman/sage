@@ -4,6 +4,7 @@ pub mod manifest;
 pub mod package;
 pub mod registry;
 pub mod snapshot;
+pub mod storage_cleanup;
 pub mod update;
 
 pub use install::*;
@@ -12,4 +13,5 @@ pub use manifest::*;
 pub use package::*;
 pub use registry::*;
 pub use snapshot::*;
+pub use storage_cleanup::*;
 pub use update::*;

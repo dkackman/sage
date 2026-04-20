@@ -11,8 +11,9 @@ use tauri::{AppHandle, State, command};
 
 use crate::app_state::AppState;
 use crate::apps::lifecycle::{
-    derive_manifest_url, download_url_snapshot, fetch_url_manifest, list_installed_apps_internal,
-    prepare_zip_snapshot, read_manifest, unzip_to_dir, validate_package_structure,
+    derive_manifest_url, download_url_snapshot, enqueue_pending_storage_cleanup,
+    fetch_url_manifest, list_installed_apps_internal, prepare_zip_snapshot, read_manifest,
+    retry_pending_storage_cleanup, unzip_to_dir, validate_package_structure,
     write_installed_app_metadata,
 };
 use crate::apps::lifecycle::registry::{apps_root, read_installed_app_by_id};
@@ -60,8 +61,13 @@ fn slugify_name(name: &str) -> String {
     }
 }
 
-fn generate_app_id(name: &str) -> String {
+fn generate_zip_app_id(name: &str) -> String {
     format!("{}-{}", slugify_name(name), current_millis())
+}
+
+fn generate_url_app_id(manifest_url: &str) -> String {
+    let hash = hash_string(manifest_url);
+    format!("url-{}", &hash[..16])
 }
 
 pub fn normalize_app_url(url: &str) -> AnyResult<String> {
@@ -88,9 +94,15 @@ pub fn normalize_app_url(url: &str) -> AnyResult<String> {
         }
     }
 
+    parsed.set_fragment(None);
+
     let path = parsed.path();
     if !path.ends_with('/') {
         parsed.set_path(&format!("{path}/"));
+    }
+
+    if parsed.query().is_some() {
+        parsed.set_query(None);
     }
 
     Ok(parsed.to_string())
@@ -150,7 +162,7 @@ fn recreate_install_dir(install_dir: &Path) -> AnyResult<()> {
     Ok(())
 }
 
-fn resolve_install_target(
+fn resolve_zip_install_target(
     root: &Path,
     app_name: &str,
 ) -> AnyResult<(String, std::path::PathBuf, Option<InstalledSageApp>)> {
@@ -159,8 +171,24 @@ fn resolve_install_target(
         return Ok((existing.id.clone(), install_dir, Some(existing)));
     }
 
-    let app_id = generate_app_id(app_name);
+    let app_id = generate_zip_app_id(app_name);
     Ok((app_id.clone(), root.join(&app_id), None))
+}
+
+fn resolve_url_install_target(
+    root: &Path,
+    manifest_url: &str,
+) -> AnyResult<(String, std::path::PathBuf, Option<InstalledSageApp>)> {
+    let app_id = generate_url_app_id(manifest_url);
+    let install_dir = root.join(&app_id);
+
+    let existing = if install_dir.exists() {
+        Some(read_installed_app_by_id(root.parent().unwrap_or(root), &app_id)?)
+    } else {
+        None
+    };
+
+    Ok((app_id.clone(), install_dir, existing))
 }
 
 pub fn hash_string(input: &str) -> String {
@@ -411,7 +439,7 @@ pub async fn install_app_zip(
 
         let permission_flags = resolve_capability_flags(&granted_permissions.capabilities, None)?;
 
-        let (app_id, install_dir, existing_app) = resolve_install_target(&root, &manifest.name)?;
+        let (app_id, install_dir, existing_app) = resolve_zip_install_target(&root, &manifest.name)?;
         let storage = resolve_storage_for_install(&app, &base_path, existing_app.as_ref()).await?;
 
         recreate_install_dir(&install_dir)?;
@@ -431,7 +459,7 @@ pub async fn install_app_zip(
         write_installed_app_metadata(&installed, &install_dir)?;
         Ok(installed)
     }
-        .await;
+    .await;
 
     if unpack_dir.exists() {
         let _ = fs::remove_dir_all(&unpack_dir);
@@ -474,8 +502,10 @@ pub async fn install_app_url(
             io::Error::other(format!("invalid granted permission policy for URL app {}: {err}", app_url))
         })?;
 
-    let (app_id, install_dir, existing_app) = resolve_install_target(&root, &preview.manifest.name)
-        .map_err(|err| io::Error::other(format!("failed to resolve install dir: {err}")))?;
+    let (app_id, install_dir, existing_app) =
+        resolve_url_install_target(&root, &preview.manifest_url)
+            .map_err(|err| io::Error::other(format!("failed to resolve install dir: {err}")))?;
+
     let storage = resolve_storage_for_install(&app, &base_path, existing_app.as_ref())
         .await
         .map_err(|err| io::Error::other(format!("failed to resolve storage for install: {err}")))?;
@@ -489,8 +519,8 @@ pub async fn install_app_url(
         &preview.manifest,
         &preview.manifest_hash,
     )
-        .await
-        .map_err(|err| io::Error::other(format!("failed to download URL app snapshot: {err}")))?;
+    .await
+    .map_err(|err| io::Error::other(format!("failed to download URL app snapshot: {err}")))?;
 
     let installed = build_installed_app(
         app_id.clone(),
@@ -525,8 +555,17 @@ pub async fn uninstall_app(
         state.path.clone()
     };
 
-    if read_installed_app_by_id(&base_path, &app_id).is_ok() {
-        let _ = apps_clear_runtime_browsing_data(app.clone(), app_id.clone()).await;
+    let installed = read_installed_app_by_id(&base_path, &app_id).ok();
+
+    if let Some(installed) = &installed {
+        if let Err(err) = apps_clear_runtime_browsing_data(app.clone(), app_id.clone()).await {
+            enqueue_pending_storage_cleanup(&base_path, installed, &err)
+                .map_err(|queue_err| {
+                    io::Error::other(format!(
+                        "failed to enqueue pending storage cleanup after clear failure ({err}): {queue_err}"
+                    ))
+                })?;
+        }
     }
 
     let install_dir = apps_root(&base_path).join(&app_id);
@@ -541,4 +580,11 @@ pub async fn uninstall_app(
     }
 
     Ok(())
+}
+
+pub async fn retry_pending_storage_cleanup_on_startup(
+    app: &AppHandle,
+    base_path: &Path,
+) -> AnyResult<()> {
+    retry_pending_storage_cleanup(app, base_path).await
 }

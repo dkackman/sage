@@ -65,6 +65,45 @@ pub enum InstalledSageAppStorage {
     Unsupported,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PendingStorageCleanupTarget {
+    AppleDataStore {
+        #[serde(rename = "identifierHex", alias = "identifier_hex")]
+        identifier_hex: String,
+    },
+    WindowsProfile {
+        #[serde(rename = "directoryName", alias = "directory_name")]
+        directory_name: String,
+    },
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+pub struct PendingStorageCleanupEntry {
+    pub id: String,
+
+    #[serde(rename = "appId", alias = "app_id")]
+    pub app_id: String,
+
+    #[serde(rename = "appName", alias = "app_name")]
+    pub app_name: String,
+
+    pub target: PendingStorageCleanupTarget,
+
+    #[serde(rename = "createdAtMs", alias = "created_at_ms")]
+    pub created_at_ms: u64,
+
+    #[serde(rename = "lastAttemptAtMs", alias = "last_attempt_at_ms")]
+    pub last_attempt_at_ms: Option<u64>,
+
+    #[serde(rename = "attemptCount", alias = "attempt_count")]
+    pub attempt_count: u32,
+
+    #[serde(rename = "lastError", alias = "last_error")]
+    pub last_error: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
 pub struct SageAppPackageManifest {
     pub name: String,
