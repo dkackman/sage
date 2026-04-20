@@ -13,7 +13,6 @@ import {
   SageAppPackageManifest,
   SageAppUrlPreview,
   SageGrantedPermissions,
-  SageNetworkPermissionTarget,
 } from '@/bindings.ts';
 import { invoke } from '@tauri-apps/api/core';
 import { useApps } from '@/contexts/AppsContext.tsx';
@@ -242,24 +241,6 @@ export function Apps() {
     },
     [handleConfirmUpdate],
   );
-
-  function setEditingGrantedCapabilities(next: string[]) {
-    setEditingGrantedPermissions((prev) => ({
-      ...prev,
-      capabilities: next,
-    }));
-  }
-
-  function setEditingGrantedNetworkWhitelist(
-    next: SageNetworkPermissionTarget[],
-  ) {
-    setEditingGrantedPermissions((prev) => ({
-      ...prev,
-      network: {
-        whitelist: next,
-      },
-    }));
-  }
 
   const closeContextMenu = useCallback(() => {
     setContextMenu((prevContextMenu) => {
@@ -885,14 +866,8 @@ export function Apps() {
 
               <PermissionsEditor
                 app={permissionsDialogApp}
-                grantedCapabilities={editingGrantedPermissions.capabilities}
-                grantedNetworkWhitelist={
-                  editingGrantedPermissions.network.whitelist
-                }
-                onGrantedCapabilitiesChange={setEditingGrantedCapabilities}
-                onGrantedNetworkWhitelistChange={
-                  setEditingGrantedNetworkWhitelist
-                }
+                grantedPermissions={editingGrantedPermissions}
+                onGrantedPermissionsChange={setEditingGrantedPermissions}
               />
 
               <div className='flex items-center justify-end gap-2'>

@@ -1,6 +1,6 @@
 use tauri::{AppHandle, State};
 
-use crate::apps::builtin_apps::{BUILTIN_NETWORK_ALLOW_A_ID, BUILTIN_NETWORK_ALLOW_B_ID};
+use crate::apps::sandbox::{BUILTIN_NETWORK_ALLOW_A_ID, BUILTIN_NETWORK_ALLOW_B_ID};
 use crate::apps::state::AppsHostState;
 
 use super::poll::poll_network;

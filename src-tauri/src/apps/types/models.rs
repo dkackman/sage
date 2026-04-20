@@ -1,6 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use specta::Type;
-use crate::apps::registry::parse_network_permission_target;
+
+use crate::apps::lifecycle::parse_network_permission_target;
 
 #[derive(
     Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord,

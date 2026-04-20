@@ -61,8 +61,13 @@ export interface AppUpdatePermissionsDelta {
     required: SageNetworkPermissionTarget[];
     optional: SageNetworkPermissionTarget[];
   };
+
+  requiredCapabilitiesToGrant: string[];
+  requiredNetworkToGrant: SageNetworkPermissionTarget[];
+
   removedGrantedCapabilities: string[];
   removedGrantedNetwork: SageNetworkPermissionTarget[];
+
   nextGrantedPermissions: SageGrantedPermissions;
   requiresUserReview: boolean;
 }
@@ -82,6 +87,9 @@ export function getAppUpdatePermissionsDelta(
 
   const oldGrantedCapabilities = app.grantedPermissions.capabilities ?? [];
   const oldGrantedNetwork = app.grantedPermissions.network.whitelist ?? [];
+
+  const oldGrantedCapabilitiesSet = new Set(oldGrantedCapabilities);
+  const oldGrantedNetworkSet = new Set(oldGrantedNetwork.map(networkKey));
 
   const previousRequestedCapsSet = new Set([
     ...previousCaps.required,
@@ -114,6 +122,16 @@ export function getAppUpdatePermissionsDelta(
       ),
     ),
   };
+
+  const requiredCapabilitiesToGrant = sortStrings(
+    nextCaps.required.filter((key) => !oldGrantedCapabilitiesSet.has(key)),
+  );
+
+  const requiredNetworkToGrant = sortNetwork(
+    nextNetwork.required.filter(
+      (entry) => !oldGrantedNetworkSet.has(networkKey(entry)),
+    ),
+  );
 
   const nextAllowedCapsSet = new Set([
     ...nextCaps.required,
@@ -169,24 +187,14 @@ export function getAppUpdatePermissionsDelta(
     },
   };
 
-  const oldGrantedCapabilitiesSet = new Set(oldGrantedCapabilities);
-  const oldGrantedNetworkSet = new Set(oldGrantedNetwork.map(networkKey));
-
-  const grantedCapabilitiesExpanded = nextGrantedCapabilities.some(
-    (key) => !oldGrantedCapabilitiesSet.has(key),
-  );
-
-  const nextGrantedNetwork = nextGrantedPermissions.network.whitelist;
-  const grantedNetworkExpanded = nextGrantedNetwork.some(
-    (entry) => !oldGrantedNetworkSet.has(networkKey(entry)),
-  );
-
   const requiresUserReview =
-    grantedCapabilitiesExpanded || grantedNetworkExpanded;
+    requiredCapabilitiesToGrant.length > 0 || requiredNetworkToGrant.length > 0;
 
   return {
     addedRequestedCapabilities,
     addedRequestedNetwork,
+    requiredCapabilitiesToGrant,
+    requiredNetworkToGrant,
     removedGrantedCapabilities,
     removedGrantedNetwork,
     nextGrantedPermissions,

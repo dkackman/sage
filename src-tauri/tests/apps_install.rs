@@ -1,4 +1,4 @@
-use sage_lib::apps::install::normalize_and_validate_granted_network_whitelist;
+use sage_lib::apps::lifecycle::install::normalize_and_validate_granted_network_whitelist;
 use sage_lib::apps::permissions::validate_granted_capabilities;
 use sage_lib::apps::types::{
     SageNetworkPermissionTarget, SageRequestedCapabilities, SageRequestedNetworkPermissions,

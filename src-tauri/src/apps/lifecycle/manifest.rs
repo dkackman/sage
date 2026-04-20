@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 
-use anyhow::{anyhow, Result as AnyResult};
+use anyhow::{Result as AnyResult, anyhow};
 
 use crate::apps::{
-    limits::{
+    lifecycle::limits::{
         MAX_APP_FILE_COUNT, MAX_APP_PATH_LENGTH, MAX_APP_TOTAL_SIZE_BYTES,
     },
     permissions::normalize_and_validate_requested_permissions,
@@ -28,10 +28,16 @@ pub fn validate_manifest_file_path(path: &str) -> AnyResult<()> {
     }
 
     if path.contains('\\') {
-        return Err(anyhow!("manifest file path must use forward slashes: {}", path));
+        return Err(anyhow!(
+            "manifest file path must use forward slashes: {}",
+            path
+        ));
     }
 
-    if path.split('/').any(|part| part == "." || part == ".." || part.is_empty()) {
+    if path
+        .split('/')
+        .any(|part| part == "." || part == ".." || part.is_empty())
+    {
         return Err(anyhow!("manifest file path is invalid: {}", path));
     }
 
@@ -86,7 +92,9 @@ pub fn validate_manifest_files(files: &[SageAppManifestFile]) -> AnyResult<u64> 
     Ok(total)
 }
 
-pub fn validate_package_manifest(manifest: &SageAppPackageManifest) -> AnyResult<u64> {
+pub fn validate_package_manifest(
+    manifest: &SageAppPackageManifest,
+) -> AnyResult<u64> {
     if manifest.name.trim().is_empty() {
         return Err(anyhow!("manifest name cannot be empty"));
     }

@@ -1,38 +1,36 @@
 use std::{
-    collections::{BTreeSet},
+    collections::BTreeSet,
     fs, io,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use anyhow::{anyhow, Context, Result as AnyResult};
+use anyhow::{Context, Result as AnyResult, anyhow};
 use sha2::{Digest, Sha256};
-use tauri::{command, State};
+use tauri::{State, command};
 
-use crate::{
-    app_state::AppState,
-    apps::{
-        package::{
-            detect_package_root, prepare_zip_snapshot, read_manifest, unzip_to_dir,
-            validate_package_structure,
-        },
-        permissions::{
-            normalize_and_validate_requested_permissions,
-            resolve_capability_flags, validate_granted_capabilities,
-        },
-        registry::{
-            apps_root, list_installed_apps_internal, write_installed_app_metadata,
-        },
-        snapshot::{derive_manifest_url, download_url_snapshot, fetch_url_manifest},
-        types::{
-            InstalledSageApp, InstalledSageAppSource, ListedSageApp,
-            SageAppPackageManifest, SageAppUrlPreview,
-        },
-    },
-    error::Result,
+use crate::app_state::AppState;
+use crate::apps::lifecycle::{
+    derive_manifest_url, download_url_snapshot, fetch_url_manifest, list_installed_apps_internal,
+    prepare_zip_snapshot, read_manifest, unzip_to_dir, validate_package_structure,
+    write_installed_app_metadata,
 };
-use crate::apps::permissions::normalize_network_key;
-use crate::apps::types::{SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedNetworkPermissions, SageRequestedPermissions};
+use crate::apps::permissions::{
+    normalize_and_validate_requested_permissions, resolve_capability_flags,
+    validate_granted_capabilities,
+};
+use crate::apps::types::{
+    InstalledSageApp, InstalledSageAppSource, ListedSageApp, SageAppPackageManifest,
+    SageAppUrlPreview,
+};
+use crate::apps::types::{
+    SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedNetworkPermissions,
+    SageRequestedPermissions,
+};
+use crate::apps::lifecycle::registry::{
+    apps_root,
+};
+use crate::error::Result;
 
 pub fn current_millis() -> u128 {
     SystemTime::now()
@@ -63,8 +61,6 @@ fn slugify_name(name: &str) -> String {
     }
 }
 
-
-
 fn generate_app_id(name: &str) -> String {
     format!("{}-{}", slugify_name(name), current_millis())
 }
@@ -78,8 +74,7 @@ pub fn normalize_app_url(url: &str) -> AnyResult<String> {
         .ok_or_else(|| anyhow!("app URL is missing host"))?
         .to_ascii_lowercase();
 
-    let is_local_dev_host =
-        host == "localhost" || host == "127.0.0.1" || host == "::1";
+    let is_local_dev_host = host == "localhost" || host == "127.0.0.1" || host == "::1";
 
     match scheme {
         "https" => {}
@@ -102,10 +97,7 @@ pub fn normalize_app_url(url: &str) -> AnyResult<String> {
     Ok(parsed.to_string())
 }
 
-fn find_existing_app_id_by_name(
-    root: &Path,
-    app_name: &str,
-) -> AnyResult<Option<String>> {
+fn find_existing_app_id_by_name(root: &Path, app_name: &str) -> AnyResult<Option<String>> {
     Ok(list_installed_apps_internal(root)?
         .into_iter()
         .find_map(|app| match app {
@@ -144,27 +136,17 @@ fn build_installed_app(
 fn recreate_install_dir(install_dir: &Path) -> AnyResult<()> {
     if install_dir.exists() {
         fs::remove_dir_all(install_dir).with_context(|| {
-            format!(
-                "failed to remove existing install dir {}",
-                install_dir.display()
-            )
+            format!("failed to remove existing install dir {}", install_dir.display())
         })?;
     }
 
-    fs::create_dir_all(install_dir).with_context(|| {
-        format!(
-            "failed to create install dir {}",
-            install_dir.display()
-        )
-    })?;
+    fs::create_dir_all(install_dir)
+        .with_context(|| format!("failed to create install dir {}", install_dir.display()))?;
 
     Ok(())
 }
 
-fn resolve_install_dir(
-    root: &Path,
-    app_name: &str,
-) -> AnyResult<(String, std::path::PathBuf)> {
+fn resolve_install_dir(root: &Path, app_name: &str) -> AnyResult<(String, std::path::PathBuf)> {
     let app_id = find_existing_app_id_by_name(root, app_name)?
         .unwrap_or_else(|| generate_app_id(app_name));
 
@@ -180,8 +162,7 @@ pub fn hash_string(input: &str) -> String {
 fn normalize_manifest_permissions(
     mut manifest: SageAppPackageManifest,
 ) -> AnyResult<SageAppPackageManifest> {
-    manifest.permissions =
-        normalize_and_validate_requested_permissions(&manifest.permissions)?;
+    manifest.permissions = normalize_and_validate_requested_permissions(&manifest.permissions)?;
     Ok(manifest)
 }
 
@@ -197,18 +178,14 @@ fn normalize_and_validate_granted_permissions(
     requested: &SageRequestedPermissions,
     granted: SageGrantedPermissions,
 ) -> AnyResult<SageGrantedPermissions> {
-    validate_granted_capabilities(&requested, &granted.capabilities)?;
+    validate_granted_capabilities(requested, &granted.capabilities)?;
 
-    let whitelist = normalize_and_validate_granted_network_whitelist(
-        &requested.network,
-        &granted.network.whitelist,
-    )?;
+    let whitelist =
+        normalize_and_validate_granted_network_whitelist(&requested.network, &granted.network.whitelist)?;
 
     Ok(SageGrantedPermissions {
         capabilities: granted.capabilities,
-        network: crate::apps::types::SageGrantedNetworkPermissions {
-            whitelist,
-        },
+        network: crate::apps::types::SageGrantedNetworkPermissions { whitelist },
     })
 }
 
@@ -220,11 +197,14 @@ pub fn normalize_and_validate_granted_network_whitelist(
     let mut requested_optional = BTreeSet::<(String, String)>::new();
 
     for entry in &requested.whitelist.required {
-        requested_required.insert(normalize_network_key(&entry.scheme, &entry.host)?);
+        requested_required.insert(crate::apps::permissions::normalize_network_key(
+            &entry.scheme,
+            &entry.host,
+        )?);
     }
 
     for entry in &requested.whitelist.optional {
-        let key = normalize_network_key(&entry.scheme, &entry.host)?;
+        let key = crate::apps::permissions::normalize_network_key(&entry.scheme, &entry.host)?;
         if !requested_required.contains(&key) {
             requested_optional.insert(key);
         }
@@ -233,7 +213,7 @@ pub fn normalize_and_validate_granted_network_whitelist(
     let mut granted_keys = BTreeSet::<(String, String)>::new();
 
     for entry in granted {
-        let key = normalize_network_key(&entry.scheme, &entry.host)?;
+        let key = crate::apps::permissions::normalize_network_key(&entry.scheme, &entry.host)?;
         if !requested_required.contains(&key) && !requested_optional.contains(&key) {
             return Err(anyhow!(
                 "granted network whitelist entry not requested in manifest: {}://{}",
@@ -254,18 +234,13 @@ pub fn normalize_and_validate_granted_network_whitelist(
     }
 
     for (scheme, host) in granted_keys {
-        result.insert(SageNetworkPermissionTarget {
-            scheme,
-            host,
-        });
+        result.insert(SageNetworkPermissionTarget { scheme, host });
     }
 
     Ok(result.into_iter().collect())
 }
 
-pub async fn preview_app_url_internal(
-    app_url: String,
-) -> AnyResult<SageAppUrlPreview> {
+pub async fn preview_app_url_internal(app_url: String) -> AnyResult<SageAppUrlPreview> {
     let app_url = normalize_app_url(&app_url)?;
 
     let manifest_url = derive_manifest_url(&app_url)?;
@@ -283,12 +258,11 @@ pub async fn preview_app_url_internal(
 #[command]
 #[specta::specta]
 pub async fn preview_app_zip(zip_path: String) -> Result<SageAppPackageManifest> {
-    let unpack_dir =
-        std::env::temp_dir().join(format!(".sage-preview-{}", current_millis()));
+    let unpack_dir = std::env::temp_dir().join(format!(".sage-preview-{}", current_millis()));
 
     let result = (|| -> AnyResult<SageAppPackageManifest> {
         unzip_to_dir(Path::new(&zip_path), &unpack_dir)?;
-        let package_root = detect_package_root(&unpack_dir)?;
+        let package_root = crate::apps::lifecycle::detect_package_root(&unpack_dir)?;
         let manifest = read_manifest(&package_root)?;
         validate_package_structure(&package_root)?;
         normalize_manifest_permissions(manifest)
@@ -296,28 +270,20 @@ pub async fn preview_app_zip(zip_path: String) -> Result<SageAppPackageManifest>
 
     let _ = fs::remove_dir_all(&unpack_dir);
 
-    result.map_err(|err| {
-        io::Error::other(format!(
-            "failed to preview app zip {}: {err}",
-            zip_path
-        ))
-            .into()
-    })
+    result.map_err(|err| io::Error::other(format!("failed to preview app zip {}: {err}", zip_path)).into())
 }
 
 #[command]
 #[specta::specta]
 pub async fn preview_app_url(app_url: String) -> Result<SageAppUrlPreview> {
-    preview_app_url_internal(app_url).await.map_err(|err| {
-        io::Error::other(format!("failed to preview app URL: {err}")).into()
-    })
+    preview_app_url_internal(app_url)
+        .await
+        .map_err(|err| io::Error::other(format!("failed to preview app URL: {err}")).into())
 }
 
 #[command]
 #[specta::specta]
-pub async fn list_installed_apps(
-    state: State<'_, AppState>,
-) -> Result<Vec<ListedSageApp>> {
+pub async fn list_installed_apps(state: State<'_, AppState>) -> Result<Vec<ListedSageApp>> {
     let base_path = {
         let state = state.lock().await;
         state.path.clone()
@@ -326,15 +292,11 @@ pub async fn list_installed_apps(
     let root = apps_root(&base_path);
 
     fs::create_dir_all(&root).map_err(|err| {
-        io::Error::other(format!(
-            "failed to create apps directory {}: {err}",
-            root.display()
-        ))
+        io::Error::other(format!("failed to create apps directory {}: {err}", root.display()))
     })?;
 
-    list_installed_apps_internal(&root).map_err(|err| {
-        io::Error::other(format!("failed to list installed apps: {err}")).into()
-    })
+    list_installed_apps_internal(&root)
+        .map_err(|err| io::Error::other(format!("failed to list installed apps: {err}")).into())
 }
 
 #[command]
@@ -352,10 +314,7 @@ pub async fn install_app_zip(
     let root = apps_root(&base_path);
 
     fs::create_dir_all(&root).map_err(|err| {
-        io::Error::other(format!(
-            "failed to create apps directory {}: {err}",
-            root.display()
-        ))
+        io::Error::other(format!("failed to create apps directory {}: {err}", root.display()))
     })?;
 
     let unpack_dir = root.join(format!(".tmp-{}", current_millis()));
@@ -370,23 +329,19 @@ pub async fn install_app_zip(
 
     let result = (|| -> AnyResult<InstalledSageApp> {
         unzip_to_dir(Path::new(&zip_path), &unpack_dir)?;
-        let package_root = detect_package_root(&unpack_dir)?;
+        let package_root = crate::apps::lifecycle::detect_package_root(&unpack_dir)?;
         validate_package_structure(&package_root)?;
 
         let manifest = normalize_manifest_permissions(read_manifest(&package_root)?)?;
 
-        let granted_permissions = normalize_and_validate_granted_permissions(
-            &manifest.permissions,
-            granted_permissions,
-        )?;
+        let granted_permissions =
+            normalize_and_validate_granted_permissions(&manifest.permissions, granted_permissions)?;
 
-        let permission_flags =
-            resolve_capability_flags(&granted_permissions.capabilities, None)?;
+        let permission_flags = resolve_capability_flags(&granted_permissions.capabilities, None)?;
 
         let (app_id, install_dir) = resolve_install_dir(&root, &manifest.name)?;
         recreate_install_dir(&install_dir)?;
-        let snapshot =
-            prepare_zip_snapshot(&package_root, &install_dir, &manifest)?;
+        let snapshot = prepare_zip_snapshot(&package_root, &install_dir, &manifest)?;
 
         let installed = build_installed_app(
             app_id,
@@ -406,13 +361,7 @@ pub async fn install_app_zip(
         let _ = fs::remove_dir_all(&unpack_dir);
     }
 
-    result.map_err(|err| {
-        io::Error::other(format!(
-            "failed to install app zip {}: {err}",
-            zip_path
-        ))
-            .into()
-    })
+    result.map_err(|err| io::Error::other(format!("failed to install app zip {}: {err}", zip_path)).into())
 }
 
 #[command]
@@ -430,40 +379,23 @@ pub async fn install_app_url(
     let root = apps_root(&base_path);
 
     fs::create_dir_all(&root).map_err(|err| {
-        io::Error::other(format!(
-            "failed to create apps directory {}: {err}",
-            root.display()
-        ))
+        io::Error::other(format!("failed to create apps directory {}: {err}", root.display()))
     })?;
 
     let preview = preview_app_url_internal(app_url.clone())
         .await
-        .map_err(|err| {
-            io::Error::other(format!(
-                "failed to preview app URL {}: {err}",
-                app_url
-            ))
-        })?;
+        .map_err(|err| io::Error::other(format!("failed to preview app URL {}: {err}", app_url)))?;
 
-    let granted_permissions = normalize_and_validate_granted_permissions(
-        &preview.manifest.permissions,
-        granted_permissions,
-    )
-        .map_err(|err| {
-            io::Error::other(format!(
-                "invalid granted permissions for URL app {}: {err}",
-                app_url
-            ))
-        })?;
-
-    let permission_flags =
-        resolve_capability_flags(&granted_permissions.capabilities, None)
+    let granted_permissions =
+        normalize_and_validate_granted_permissions(&preview.manifest.permissions, granted_permissions)
             .map_err(|err| {
-                io::Error::other(format!(
-                    "invalid granted permission policy for URL app {}: {err}",
-                    app_url
-                ))
+                io::Error::other(format!("invalid granted permissions for URL app {}: {err}", app_url))
             })?;
+
+    let permission_flags = resolve_capability_flags(&granted_permissions.capabilities, None)
+        .map_err(|err| {
+            io::Error::other(format!("invalid granted permission policy for URL app {}: {err}", app_url))
+        })?;
 
     let (app_id, install_dir) = resolve_install_dir(&root, &preview.manifest.name)
         .map_err(|err| io::Error::other(format!("failed to resolve install dir: {err}")))?;
@@ -477,11 +409,7 @@ pub async fn install_app_url(
         &preview.manifest_hash,
     )
         .await
-        .map_err(|err| {
-            io::Error::other(format!(
-                "failed to download URL app snapshot: {err}"
-            ))
-        })?;
+        .map_err(|err| io::Error::other(format!("failed to download URL app snapshot: {err}")))?;
 
     let installed = build_installed_app(
         app_id.clone(),
@@ -497,10 +425,7 @@ pub async fn install_app_url(
     );
 
     write_installed_app_metadata(&installed, &install_dir).map_err(|err| {
-        io::Error::other(format!(
-            "failed to write installed app metadata for {}: {err}",
-            app_id
-        ))
+        io::Error::other(format!("failed to write installed app metadata for {}: {err}", app_id))
     })?;
 
     Ok(installed)
@@ -508,10 +433,7 @@ pub async fn install_app_url(
 
 #[command]
 #[specta::specta]
-pub async fn uninstall_app(
-    state: State<'_, AppState>,
-    app_id: String,
-) -> Result<()> {
+pub async fn uninstall_app(state: State<'_, AppState>, app_id: String) -> Result<()> {
     let base_path = {
         let state = state.lock().await;
         state.path.clone()

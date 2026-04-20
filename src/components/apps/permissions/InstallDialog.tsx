@@ -2,7 +2,7 @@ import type {
   InstalledSageApp,
   SageAppPackageManifest,
   SageAppUrlPreview,
-  SageNetworkPermissionTarget,
+  SageGrantedPermissions,
 } from '@/bindings';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,20 +30,15 @@ interface Props {
   source: InstallSource | null;
   error: string | null;
   installing: boolean;
-  grantedCapabilities: string[];
-  grantedNetworkWhitelist: SageNetworkPermissionTarget[];
-  onGrantedCapabilitiesChange: (next: string[]) => void;
-  onGrantedNetworkWhitelistChange: (
-    next: SageNetworkPermissionTarget[],
-  ) => void;
+  grantedPermissions: SageGrantedPermissions;
+  onGrantedPermissionsChange: (next: SageGrantedPermissions) => void;
   onCancel: () => void;
   onConfirm: () => void;
 }
 
 function buildPreviewApp(
   manifest: SageAppPackageManifest,
-  grantedCapabilities: string[],
-  grantedNetworkWhitelist: SageNetworkPermissionTarget[],
+  grantedPermissions: SageGrantedPermissions,
 ): InstalledSageApp {
   return {
     id: '__install_preview__',
@@ -64,12 +59,7 @@ function buildPreviewApp(
         optional: [],
       },
     },
-    grantedPermissions: {
-      capabilities: grantedCapabilities,
-      network: {
-        whitelist: grantedNetworkWhitelist,
-      },
-    },
+    grantedPermissions,
     capabilityFlags: {
       hasSecretAccess: false,
       hasExternalAccess: false,
@@ -91,10 +81,8 @@ export function InstallPermissionsDialog({
   source,
   error,
   installing,
-  grantedCapabilities,
-  grantedNetworkWhitelist,
-  onGrantedCapabilitiesChange,
-  onGrantedNetworkWhitelistChange,
+  grantedPermissions,
+  onGrantedPermissionsChange,
   onCancel,
   onConfirm,
 }: Props) {
@@ -111,11 +99,7 @@ export function InstallPermissionsDialog({
   const manifest =
     source.kind === 'zip' ? source.manifest : source.preview.manifest;
 
-  const previewApp = buildPreviewApp(
-    manifest,
-    grantedCapabilities,
-    grantedNetworkWhitelist,
-  );
+  const previewApp = buildPreviewApp(manifest, grantedPermissions);
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onCancel()}>
@@ -132,10 +116,8 @@ export function InstallPermissionsDialog({
 
           <PermissionsEditor
             app={previewApp}
-            grantedCapabilities={grantedCapabilities}
-            grantedNetworkWhitelist={grantedNetworkWhitelist}
-            onGrantedCapabilitiesChange={onGrantedCapabilitiesChange}
-            onGrantedNetworkWhitelistChange={onGrantedNetworkWhitelistChange}
+            grantedPermissions={grantedPermissions}
+            onGrantedPermissionsChange={onGrantedPermissionsChange}
           />
 
           {error ? (

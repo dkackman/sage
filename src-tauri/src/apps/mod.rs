@@ -1,19 +1,10 @@
 pub mod bridge;
-pub mod builtin_apps;
-pub mod csp;
-pub mod install;
-pub mod limits;
-pub mod manifest;
-pub mod package;
-pub mod capability_registry;
+pub mod lifecycle;
 pub mod permissions;
-pub mod protocol;
-pub mod registry;
-pub mod snapshot;
-pub mod types;
-pub mod update;
 pub mod runtime;
 pub mod sandbox;
+pub mod security;
 pub mod state;
+pub mod types;
 
-pub use protocol::handle_app_protocol_request;
+pub use security::protocol::handle_app_protocol_request;

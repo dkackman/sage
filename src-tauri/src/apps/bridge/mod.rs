@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
-use crate::apps::capability_registry::require_capability_definition;
+use crate::apps::permissions::require_capability_definition;
 use crate::apps::runtime::{apps_assert_bridge_origin, resolve_app};
 use crate::apps::state::AppsHostState;
 use crate::apps::types::InstalledSageApp;

@@ -1,14 +1,11 @@
-import type { InstalledSageApp, SageNetworkPermissionTarget } from '@/bindings';
+import type { InstalledSageApp, SageGrantedPermissions, SageNetworkPermissionTarget, } from '@/bindings';
 import { AppPermissions } from './AppPermissions';
 
 interface Props {
   app: InstalledSageApp;
-  grantedCapabilities: string[];
-  grantedNetworkWhitelist: SageNetworkPermissionTarget[];
-  onGrantedCapabilitiesChange: (next: string[]) => void;
-  onGrantedNetworkWhitelistChange: (
-    next: SageNetworkPermissionTarget[],
-  ) => void;
+  grantedPermissions: SageGrantedPermissions;
+  onGrantedPermissionsChange?: (next: SageGrantedPermissions) => void;
+  editable?: boolean;
 }
 
 function sortNetworkEntries(
@@ -27,12 +24,14 @@ function networkKey(entry: SageNetworkPermissionTarget): string {
 
 export function PermissionsEditor({
   app,
-  grantedCapabilities,
-  grantedNetworkWhitelist,
-  onGrantedCapabilitiesChange,
-  onGrantedNetworkWhitelistChange,
+  grantedPermissions,
+  onGrantedPermissionsChange,
+  editable = true,
 }: Props) {
   const manifest = app.pendingUpdate?.manifest ?? app.activeSnapshot.manifest;
+
+  const grantedCapabilities = grantedPermissions.capabilities ?? [];
+  const grantedNetworkWhitelist = grantedPermissions.network.whitelist ?? [];
 
   const requestedRequiredNetwork =
     manifest.permissions?.network?.whitelist?.required ?? [];
@@ -53,14 +52,24 @@ export function PermissionsEditor({
     grantedNetworkWhitelist.map((entry) => networkKey(entry)),
   );
 
+  function emitGrantedPermissions(next: SageGrantedPermissions) {
+    onGrantedPermissionsChange?.(next);
+  }
+
+  function handleGrantedCapabilitiesChange(next: string[]) {
+    emitGrantedPermissions({
+      ...grantedPermissions,
+      capabilities: next,
+    });
+  }
+
   function handleToggleNetwork(
     entry: SageNetworkPermissionTarget,
     nextGranted: boolean,
   ) {
     const requiredEntries = requestedRequiredNetwork;
-    const optionalEntries = requestedOptionalNetwork;
 
-    const nextOptional = optionalEntries.filter((item) => {
+    const nextOptional = requestedOptionalNetwork.filter((item) => {
       const key = networkKey(item);
 
       if (key !== networkKey(entry)) {
@@ -70,9 +79,12 @@ export function PermissionsEditor({
       return nextGranted;
     });
 
-    onGrantedNetworkWhitelistChange(
-      sortNetworkEntries([...requiredEntries, ...nextOptional]),
-    );
+    emitGrantedPermissions({
+      ...grantedPermissions,
+      network: {
+        whitelist: sortNetworkEntries([...requiredEntries, ...nextOptional]),
+      },
+    });
   }
 
   return (
@@ -83,8 +95,10 @@ export function PermissionsEditor({
         <AppPermissions
           permissions={app.requestedPermissions}
           grantedCapabilities={grantedCapabilities}
-          editable
-          onGrantedCapabilitiesChange={onGrantedCapabilitiesChange}
+          editable={editable}
+          onGrantedCapabilitiesChange={
+            editable ? handleGrantedCapabilitiesChange : undefined
+          }
         />
       </div>
 
@@ -105,8 +119,14 @@ export function PermissionsEditor({
                   <div className='min-w-0 font-mono break-all'>{key}</div>
 
                   <div className='shrink-0'>
-                    {required ? (
-                      <span className='text-muted-foreground'>required</span>
+                    {required || !editable ? (
+                      <span className='text-muted-foreground'>
+                        {required
+                          ? 'required'
+                          : checked
+                            ? 'granted'
+                            : 'not granted'}
+                      </span>
                     ) : (
                       <input
                         type='checkbox'

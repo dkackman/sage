@@ -1,4 +1,4 @@
-use sage_lib::apps::manifest::{
+use sage_lib::apps::lifecycle::manifest::{
     validate_manifest_file_path, validate_sha256_hex,
 };
 

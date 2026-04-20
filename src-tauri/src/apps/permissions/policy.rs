@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result as AnyResult};
 use std::collections::BTreeSet;
 
 use crate::apps::{
-    capability_registry::{
+    permissions::{
         get_capability_definition, require_capability_definition,
     },
     types::{
@@ -269,7 +269,7 @@ pub fn clear_storage_may_contain_secrets(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::apps::capability_registry::registry;
+    use crate::apps::permissions::registry;
     use crate::apps::types::{
         SageRequestedCapabilities, SageRequestedNetworkPermissions,
         SageRequestedNetworkWhitelist, SageRequestedPermissions,

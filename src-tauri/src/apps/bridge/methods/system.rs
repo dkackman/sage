@@ -12,9 +12,9 @@ use crate::apps::bridge::{
     RustBridgeResponse,
 };
 use crate::apps::permissions::resolve_shared_capabilities;
-use crate::apps::registry::parse_network_permission_target;
+use crate::apps::lifecycle::parse_network_permission_target;
 use crate::apps::types::SageNetworkPermissionTarget;
-use crate::apps::update::{
+use crate::apps::lifecycle::{
     grant_requested_capability_internal, grant_requested_network_whitelist_entry_internal,
     GrantCapabilityOutcome, GrantNetworkWhitelistOutcome,
 };

@@ -1,6 +1,6 @@
 use tauri::{AppHandle, State};
 
-use crate::apps::builtin_apps::BUILTIN_STORAGE_CLEAR_PERSISTENT_ID;
+use crate::apps::sandbox::BUILTIN_STORAGE_CLEAR_PERSISTENT_ID;
 use crate::apps::runtime;
 use crate::apps::state::AppsHostState;
 

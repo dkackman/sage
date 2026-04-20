@@ -1,15 +1,15 @@
 use std::{fs, path::Path};
 
-use anyhow::{anyhow, Result as AnyResult};
+use anyhow::{Result as AnyResult, anyhow};
 use tauri::http::{Response, StatusCode};
 
 use crate::apps::{
-    builtin_apps::{
-        build_builtin_test_app, builtin_runtime_apps_root, builtin_test_app_dir, builtin_test_app_spec,
+    lifecycle::{read_installed_app_by_id, read_snapshot_file},
+    sandbox::{
+        build_builtin_test_app, builtin_runtime_apps_root, builtin_test_app_dir,
+        builtin_test_app_spec,
     },
-    csp::build_app_csp,
-    registry::read_installed_app_by_id,
-    snapshot::read_snapshot_file,
+    security::build_app_csp,
 };
 
 fn serve_runtime_app_asset(

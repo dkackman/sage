@@ -1,6 +1,6 @@
 use tauri::{AppHandle, State};
 
-use crate::apps::builtin_apps::{
+use crate::apps::sandbox::{
     BUILTIN_STORAGE_ISOLATION_INCOGNITO_ID, BUILTIN_STORAGE_ISOLATION_PERSISTENT_ID,
 };
 use crate::apps::state::AppsHostState;

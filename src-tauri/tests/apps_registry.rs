@@ -1,6 +1,12 @@
 use std::fs;
 
-use sage_lib::apps::registry::{app_install_dir, apps_root, list_installed_apps_internal, read_installed_app_by_id, write_installed_app_metadata};
+use sage_lib::apps::lifecycle::registry::{
+    app_install_dir,
+    apps_root,
+    list_installed_apps_internal,
+    read_installed_app_by_id,
+    write_installed_app_metadata,
+};
 use sage_lib::apps::types::{
     InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppSnapshot,
     InstalledSageAppSource, ListedSageApp, SageAppManifestFile, SageAppPackageManifest,

@@ -1,33 +1,24 @@
-use std::{
-    collections::BTreeSet,
-    io,
-    path::{Path, PathBuf},
-};
+use std::{io, path::{Path, PathBuf}, collections::BTreeSet};
 
 use anyhow::Result as AnyResult;
-use tauri::{command, State};
+use tauri::{State, command};
 
-use crate::apps::install::{
-    manifest_entry_file, manifest_icon_file,
-    normalize_and_validate_granted_network_whitelist, preview_app_url_internal,
+use crate::apps::lifecycle::{
+    download_url_snapshot, manifest_entry_file, manifest_icon_file, normalize_and_validate_granted_network_whitelist,
+    preview_app_url_internal,
 };
-use crate::{
-    app_state::AppState,
-    apps::{
-        permissions::{
-            clear_storage_may_contain_secrets, mark_storage_may_contain_secrets,
-            resolve_capability_flags, validate_granted_capabilities,
-        },
-        registry::{parse_network_permission_target, read_installed_app_by_id, write_installed_app_metadata},
-        snapshot::download_url_snapshot,
-        types::{
-            InstalledSageApp, InstalledSageAppPendingUpdate, InstalledSageAppSource,
-            SageAppUrlPreview, SageGrantedNetworkPermissions, SageGrantedPermissions,
-            SageNetworkPermissionTarget,
-        },
-    },
-    error::Result,
+use crate::apps::lifecycle::registry::{
+    parse_network_permission_target, read_installed_app_by_id, write_installed_app_metadata,
 };
+use crate::apps::types::{
+    InstalledSageApp, InstalledSageAppPendingUpdate, InstalledSageAppSource, SageAppUrlPreview,
+    SageGrantedNetworkPermissions, SageGrantedPermissions, SageNetworkPermissionTarget,
+};
+use crate::apps::permissions::{
+    clear_storage_may_contain_secrets, mark_storage_may_contain_secrets,
+    resolve_capability_flags, validate_granted_capabilities,
+};
+use crate::{app_state::AppState, error::Result};
 
 #[derive(Debug, Clone)]
 pub struct GrantedCapabilitiesChange {

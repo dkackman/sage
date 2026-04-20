@@ -3,7 +3,6 @@ import type {
   SageAppPackageManifest,
   SageAppUrlPreview,
   SageGrantedPermissions,
-  SageNetworkPermissionTarget,
 } from '@/bindings';
 import { formatAppError } from '@/lib/apps/formatAppError.ts';
 import { InstallSourceCard } from './InstallSourceCard';
@@ -50,22 +49,6 @@ export function InstallAppForm({
   const [source, setSource] = useState<InstallSource | null>(null);
   const [grantedPermissions, setGrantedPermissions] =
     useState<SageGrantedPermissions>(buildEmptyGrantedPermissions());
-
-  function setGrantedCapabilities(next: string[]) {
-    setGrantedPermissions((prev) => ({
-      ...prev,
-      capabilities: next,
-    }));
-  }
-
-  function setGrantedNetworkWhitelist(next: SageNetworkPermissionTarget[]) {
-    setGrantedPermissions((prev) => ({
-      ...prev,
-      network: {
-        whitelist: next,
-      },
-    }));
-  }
 
   async function handleSelectZipPath(zipPath: string) {
     try {
@@ -149,10 +132,8 @@ export function InstallAppForm({
         source={source}
         error={error}
         installing={installing}
-        grantedCapabilities={grantedPermissions.capabilities}
-        grantedNetworkWhitelist={grantedPermissions.network.whitelist}
-        onGrantedCapabilitiesChange={setGrantedCapabilities}
-        onGrantedNetworkWhitelistChange={setGrantedNetworkWhitelist}
+        grantedPermissions={grantedPermissions}
+        onGrantedPermissionsChange={setGrantedPermissions}
         onCancel={resetDialog}
         onConfirm={confirmInstall}
       />

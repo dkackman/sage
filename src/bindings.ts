@@ -401,9 +401,6 @@ async installAppUrl(appUrl: string, grantedPermissions: SageGrantedPermissions) 
 async uninstallApp(appId: string) : Promise<null> {
     return await TAURI_INVOKE("uninstall_app", { appId });
 },
-async getBuiltinTestApp(appId: string) : Promise<InstalledSageApp | null> {
-    return await TAURI_INVOKE("get_builtin_test_app", { appId });
-},
 async checkAppUpdate(appId: string) : Promise<SageAppUrlPreview | null> {
     return await TAURI_INVOKE("check_app_update", { appId });
 },
@@ -418,6 +415,9 @@ async appsUpdatePermissions(appId: string, grantedPermissions: SageGrantedPermis
 },
 async appsMarkStorageMayContainSecrets(appId: string) : Promise<null> {
     return await TAURI_INVOKE("apps_mark_storage_may_contain_secrets", { appId });
+},
+async getBuiltinTestApp(appId: string) : Promise<InstalledSageApp | null> {
+    return await TAURI_INVOKE("get_builtin_test_app", { appId });
 }
 }
 

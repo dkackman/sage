@@ -3,16 +3,14 @@ use std::{fs, path::PathBuf};
 use anyhow::{Context, Result as AnyResult, anyhow};
 use tauri::command;
 
-use crate::apps::types::{SageGrantedNetworkPermissions, SageGrantedPermissions};
-use crate::apps::{
-    install::{manifest_entry_file, manifest_icon_file},
-    permissions::{
-        normalize_and_validate_requested_permissions, resolve_capability_flags,
-        validate_granted_capabilities,
-    },
-    types::{
-        InstalledSageApp, InstalledSageAppSnapshot, InstalledSageAppSource, SageAppPackageManifest,
-    },
+use crate::apps::lifecycle::{manifest_entry_file, manifest_icon_file};
+use crate::apps::permissions::{
+    normalize_and_validate_requested_permissions, resolve_capability_flags,
+    validate_granted_capabilities,
+};
+use crate::apps::types::{
+    InstalledSageApp, InstalledSageAppSnapshot, InstalledSageAppSource,
+    SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions,
 };
 use crate::error::Result;
 
@@ -20,9 +18,12 @@ pub const BUILTIN_STORAGE_ISOLATION_PERSISTENT_ID: &str =
     "__sage_test_storage_isolation_persistent";
 pub const BUILTIN_STORAGE_ISOLATION_INCOGNITO_ID: &str =
     "__sage_test_storage_isolation_incognito";
-pub const BUILTIN_PERSISTENCE_PERSISTENT_ID: &str = "__sage_test_persistence_persistent";
-pub const BUILTIN_PERSISTENCE_INCOGNITO_ID: &str = "__sage_test_persistence_incognito";
-pub const BUILTIN_STORAGE_CLEAR_PERSISTENT_ID: &str = "__sage_test_storage_clear_persistent";
+pub const BUILTIN_PERSISTENCE_PERSISTENT_ID: &str =
+    "__sage_test_persistence_persistent";
+pub const BUILTIN_PERSISTENCE_INCOGNITO_ID: &str =
+    "__sage_test_persistence_incognito";
+pub const BUILTIN_STORAGE_CLEAR_PERSISTENT_ID: &str =
+    "__sage_test_storage_clear_persistent";
 pub const BUILTIN_NETWORK_ALLOW_A_ID: &str = "__sage_test_network_allow_a";
 pub const BUILTIN_NETWORK_ALLOW_B_ID: &str = "__sage_test_network_allow_b";
 
@@ -99,12 +100,13 @@ fn read_builtin_manifest(app_dir: &PathBuf) -> AnyResult<SageAppPackageManifest>
         )
     })?;
 
-    let manifest: SageAppPackageManifest = serde_json::from_str(&manifest_text).with_context(|| {
-        format!(
-            "failed to parse builtin test app manifest {}",
-            manifest_path.display()
-        )
-    })?;
+    let manifest: SageAppPackageManifest =
+        serde_json::from_str(&manifest_text).with_context(|| {
+            format!(
+                "failed to parse builtin test app manifest {}",
+                manifest_path.display()
+            )
+        })?;
 
     Ok(manifest)
 }
@@ -154,7 +156,8 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
     }
 
     let mut manifest = read_builtin_manifest(&app_dir)?;
-    manifest.permissions = normalize_and_validate_requested_permissions(&manifest.permissions)?;
+    manifest.permissions =
+        normalize_and_validate_requested_permissions(&manifest.permissions)?;
 
     let mut requested_capabilities = manifest.permissions.capabilities.required.clone();
     requested_capabilities.extend(manifest.permissions.capabilities.optional.clone());
@@ -168,7 +171,10 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
         },
     };
 
-    validate_granted_capabilities(&manifest.permissions, &granted_permissions.capabilities)?;
+    validate_granted_capabilities(
+        &manifest.permissions,
+        &granted_permissions.capabilities,
+    )?;
     let permission_flags =
         resolve_capability_flags(&granted_permissions.capabilities, None)?;
 
@@ -218,7 +224,9 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
 
 #[command]
 #[specta::specta]
-pub async fn get_builtin_test_app(app_id: String) -> Result<Option<InstalledSageApp>> {
+pub async fn get_builtin_test_app(
+    app_id: String,
+) -> Result<Option<InstalledSageApp>> {
     build_builtin_test_app(&app_id).map_err(|err| {
         std::io::Error::other(format!("failed to load builtin test app: {err}")).into()
     })

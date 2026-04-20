@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
   InstalledSageApp,
+  SageAppPackageManifest,
   SageAppUrlPreview,
   SageGrantedPermissions,
   SageNetworkPermissionTarget,
@@ -13,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { AppPermissions } from '@/components/apps/permissions/AppPermissions.tsx';
+import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEditor';
 import {
   getAppUpdatePermissionsDelta,
   type AppUpdatePermissionsDelta,
@@ -33,25 +34,99 @@ function networkKey(entry: SageNetworkPermissionTarget): string {
   return `${entry.scheme}://${entry.host}`;
 }
 
+function sortStrings(values: Iterable<string>): string[] {
+  return [...values].sort((a, b) => a.localeCompare(b));
+}
+
 function sortNetwork(
   values: Iterable<SageNetworkPermissionTarget>,
 ): SageNetworkPermissionTarget[] {
   return [...values].sort((a, b) => networkKey(a).localeCompare(networkKey(b)));
 }
 
-function buildAddedPermissionsViewModel(
+function buildReviewManifest(
+  preview: SageAppUrlPreview,
   delta: AppUpdatePermissionsDelta,
-): InstalledSageApp['requestedPermissions'] {
+): SageAppPackageManifest {
   return {
-    capabilities: {
-      required: delta.addedRequestedCapabilities.required,
-      optional: delta.addedRequestedCapabilities.optional,
+    ...preview.manifest,
+    permissions: {
+      capabilities: {
+        required: delta.requiredCapabilitiesToGrant,
+        optional: delta.addedRequestedCapabilities.optional,
+      },
+      network: {
+        whitelist: {
+          required: delta.requiredNetworkToGrant,
+          optional: delta.addedRequestedNetwork.optional,
+        },
+      },
     },
-    network: {
-      whitelist: {
-        required: [],
+  };
+}
+
+function buildReviewApp(
+  app: InstalledSageApp,
+  preview: SageAppUrlPreview,
+  delta: AppUpdatePermissionsDelta,
+  grantedPermissions: SageGrantedPermissions,
+): InstalledSageApp {
+  const reviewManifest = buildReviewManifest(preview, delta);
+
+  return {
+    ...app,
+    version: preview.manifest.version,
+    requestedPermissions: reviewManifest.permissions,
+    grantedPermissions,
+    activeSnapshot: {
+      ...app.activeSnapshot,
+      manifest: reviewManifest,
+    },
+  };
+}
+
+function buildRemovedPermissionsApp(
+  app: InstalledSageApp,
+  preview: SageAppUrlPreview,
+  delta: AppUpdatePermissionsDelta,
+): InstalledSageApp | null {
+  const hasRemoved =
+    delta.removedGrantedCapabilities.length > 0 ||
+    delta.removedGrantedNetwork.length > 0;
+
+  if (!hasRemoved) {
+    return null;
+  }
+
+  const manifest: SageAppPackageManifest = {
+    ...preview.manifest,
+    permissions: {
+      capabilities: {
+        required: delta.removedGrantedCapabilities,
         optional: [],
       },
+      network: {
+        whitelist: {
+          required: delta.removedGrantedNetwork,
+          optional: [],
+        },
+      },
+    },
+  };
+
+  return {
+    ...app,
+    version: preview.manifest.version,
+    requestedPermissions: manifest.permissions,
+    grantedPermissions: {
+      capabilities: delta.removedGrantedCapabilities,
+      network: {
+        whitelist: delta.removedGrantedNetwork,
+      },
+    },
+    activeSnapshot: {
+      ...app.activeSnapshot,
+      manifest,
     },
   };
 }
@@ -67,17 +142,24 @@ export function AppUpdateDialog({
 }: Props) {
   const [showRemoved, setShowRemoved] = useState(false);
   const [
-    selectedAddedOptionalCapabilities,
-    setSelectedAddedOptionalCapabilities,
-  ] = useState<string[]>([]);
-  const [selectedAddedOptionalNetwork, setSelectedAddedOptionalNetwork] =
-    useState<SageNetworkPermissionTarget[]>([]);
+    selectedOptionalGrantedPermissions,
+    setSelectedOptionalGrantedPermissions,
+  ] = useState<SageGrantedPermissions>({
+    capabilities: [],
+    network: {
+      whitelist: [],
+    },
+  });
 
   useEffect(() => {
     if (!open) {
       setShowRemoved(false);
-      setSelectedAddedOptionalCapabilities([]);
-      setSelectedAddedOptionalNetwork([]);
+      setSelectedOptionalGrantedPermissions({
+        capabilities: [],
+        network: {
+          whitelist: [],
+        },
+      });
     }
   }, [open]);
 
@@ -89,40 +171,43 @@ export function AppUpdateDialog({
     return getAppUpdatePermissionsDelta(app, preview);
   }, [app, preview]);
 
+  const reviewGrantedPermissions = useMemo(() => {
+    if (!delta) {
+      return null;
+    }
+
+    return {
+      capabilities: sortStrings([
+        ...delta.requiredCapabilitiesToGrant,
+        ...selectedOptionalGrantedPermissions.capabilities,
+      ]),
+      network: {
+        whitelist: sortNetwork([
+          ...delta.requiredNetworkToGrant,
+          ...selectedOptionalGrantedPermissions.network.whitelist,
+        ]),
+      },
+    } satisfies SageGrantedPermissions;
+  }, [delta, selectedOptionalGrantedPermissions]);
+
   const finalGranted = useMemo(() => {
     if (!delta) {
       return null;
     }
 
-    const selectedOptionalCapabilitySet = new Set(
-      selectedAddedOptionalCapabilities,
-    );
-    const selectedOptionalNetworkSet = new Set(
-      selectedAddedOptionalNetwork.map(networkKey),
-    );
-
-    const nextCapabilities = [
+    const nextCapabilities = sortStrings([
       ...delta.nextGrantedPermissions.capabilities,
-      ...delta.addedRequestedCapabilities.optional.filter((key) =>
-        selectedOptionalCapabilitySet.has(key),
-      ),
-    ].sort((a, b) => a.localeCompare(b));
+      ...selectedOptionalGrantedPermissions.capabilities,
+    ]);
 
-    const nextNetworkMap = new Map<string, SageNetworkPermissionTarget>(
-      delta.nextGrantedPermissions.network.whitelist.map((item) => [
-        networkKey(item),
-        item,
-      ]),
-    );
+    const nextNetworkMap = new Map<string, SageNetworkPermissionTarget>();
 
-    for (const item of delta.addedRequestedNetwork.optional) {
-      if (selectedOptionalNetworkSet.has(networkKey(item))) {
-        nextNetworkMap.set(networkKey(item), item);
-      }
+    for (const entry of delta.nextGrantedPermissions.network.whitelist) {
+      nextNetworkMap.set(networkKey(entry), entry);
     }
 
-    for (const item of delta.addedRequestedNetwork.required) {
-      nextNetworkMap.set(networkKey(item), item);
+    for (const entry of selectedOptionalGrantedPermissions.network.whitelist) {
+      nextNetworkMap.set(networkKey(entry), entry);
     }
 
     return {
@@ -131,9 +216,32 @@ export function AppUpdateDialog({
         whitelist: sortNetwork(nextNetworkMap.values()),
       },
     } satisfies SageGrantedPermissions;
-  }, [delta, selectedAddedOptionalCapabilities, selectedAddedOptionalNetwork]);
+  }, [delta, selectedOptionalGrantedPermissions]);
 
-  if (!app || !preview || !delta || !finalGranted) {
+  const reviewApp = useMemo(() => {
+    if (!app || !preview || !delta || !reviewGrantedPermissions) {
+      return null;
+    }
+
+    return buildReviewApp(app, preview, delta, reviewGrantedPermissions);
+  }, [app, preview, delta, reviewGrantedPermissions]);
+
+  const removedPermissionsApp = useMemo(() => {
+    if (!app || !preview || !delta) {
+      return null;
+    }
+
+    return buildRemovedPermissionsApp(app, preview, delta);
+  }, [app, preview, delta]);
+
+  if (
+    !app ||
+    !preview ||
+    !delta ||
+    !reviewGrantedPermissions ||
+    !finalGranted ||
+    !reviewApp
+  ) {
     return (
       <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onCancel()}>
         <DialogContent />
@@ -141,36 +249,17 @@ export function AppUpdateDialog({
     );
   }
 
-  const addedRequiredCapabilitiesCount =
-    delta.addedRequestedCapabilities.required.length;
-  const addedOptionalCapabilitiesCount =
-    delta.addedRequestedCapabilities.optional.length;
   const addedCapabilityCount =
-    addedRequiredCapabilitiesCount + addedOptionalCapabilitiesCount;
+    delta.requiredCapabilitiesToGrant.length +
+    delta.addedRequestedCapabilities.optional.length;
 
-  const addedRequiredNetworkCount = delta.addedRequestedNetwork.required.length;
-  const addedOptionalNetworkCount = delta.addedRequestedNetwork.optional.length;
   const addedNetworkCount =
-    addedRequiredNetworkCount + addedOptionalNetworkCount;
+    delta.requiredNetworkToGrant.length +
+    delta.addedRequestedNetwork.optional.length;
 
   const removedCount =
     delta.removedGrantedCapabilities.length +
     delta.removedGrantedNetwork.length;
-
-  const selectedAddedOptionalNetworkKeys = new Set(
-    selectedAddedOptionalNetwork.map(networkKey),
-  );
-
-  const addedNetworkItems = [
-    ...delta.addedRequestedNetwork.required.map((entry) => ({
-      entry,
-      required: true,
-    })),
-    ...delta.addedRequestedNetwork.optional.map((entry) => ({
-      entry,
-      required: false,
-    })),
-  ];
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onCancel()}>
@@ -189,101 +278,41 @@ export function AppUpdateDialog({
 
           {addedCapabilityCount > 0 || addedNetworkCount > 0 ? (
             <div className='space-y-3'>
-              <h3 className='text-sm font-medium'>New permissions requested</h3>
+              <h3 className='text-sm font-medium'>
+                New permissions requiring review
+              </h3>
 
-              <div className='space-y-4'>
-                {addedCapabilityCount > 0 ? (
-                  <div className='space-y-2'>
-                    <div className='text-xs text-muted-foreground'>
-                      Capabilities
-                    </div>
+              <PermissionsEditor
+                app={reviewApp}
+                grantedPermissions={reviewGrantedPermissions}
+                onGrantedPermissionsChange={(next) => {
+                  const requiredCapabilitySet = new Set(
+                    delta.requiredCapabilitiesToGrant,
+                  );
+                  const requiredNetworkSet = new Set(
+                    delta.requiredNetworkToGrant.map(networkKey),
+                  );
 
-                    <div className='rounded-md border p-3'>
-                      <AppPermissions
-                        permissions={buildAddedPermissionsViewModel(delta)}
-                        grantedCapabilities={[
-                          ...delta.addedRequestedCapabilities.required,
-                          ...selectedAddedOptionalCapabilities,
-                        ]}
-                        editable
-                        onGrantedCapabilitiesChange={(next: string[]) => {
-                          const requiredSet = new Set(
-                            delta.addedRequestedCapabilities.required,
-                          );
-
-                          setSelectedAddedOptionalCapabilities(
-                            next.filter((key: string) => !requiredSet.has(key)),
-                          );
-                        }}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-
-                {addedNetworkCount > 0 ? (
-                  <div className='space-y-2'>
-                    <div className='text-xs text-muted-foreground'>
-                      Network access
-                    </div>
-
-                    <div className='space-y-2 rounded-md border p-3'>
-                      {addedNetworkItems.map(({ entry, required }) => {
-                        const key = networkKey(entry);
-                        const checked =
-                          required || selectedAddedOptionalNetworkKeys.has(key);
-
-                        return (
-                          <label
-                            key={key}
-                            className='flex items-center justify-between gap-3 text-xs'
-                          >
-                            <div className='min-w-0 font-mono break-all'>
-                              {key}
-                            </div>
-
-                            <div className='shrink-0'>
-                              {required ? (
-                                <span className='text-muted-foreground'>
-                                  required
-                                </span>
-                              ) : (
-                                <input
-                                  type='checkbox'
-                                  checked={checked}
-                                  onChange={(event) => {
-                                    const nextChecked = event.target.checked;
-
-                                    setSelectedAddedOptionalNetwork((prev) => {
-                                      const prevMap = new Map(
-                                        prev.map((item) => [
-                                          networkKey(item),
-                                          item,
-                                        ]),
-                                      );
-
-                                      if (nextChecked) {
-                                        prevMap.set(key, entry);
-                                      } else {
-                                        prevMap.delete(key);
-                                      }
-
-                                      return sortNetwork(prevMap.values());
-                                    });
-                                  }}
-                                />
-                              )}
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+                  setSelectedOptionalGrantedPermissions({
+                    capabilities: sortStrings(
+                      next.capabilities.filter(
+                        (key) => !requiredCapabilitySet.has(key),
+                      ),
+                    ),
+                    network: {
+                      whitelist: sortNetwork(
+                        next.network.whitelist.filter(
+                          (entry) => !requiredNetworkSet.has(networkKey(entry)),
+                        ),
+                      ),
+                    },
+                  });
+                }}
+              />
             </div>
           ) : null}
 
-          {removedCount > 0 ? (
+          {removedCount > 0 && removedPermissionsApp ? (
             <div className='space-y-2'>
               <button
                 type='button'
@@ -297,41 +326,14 @@ export function AppUpdateDialog({
               </button>
 
               {showRemoved ? (
-                <div className='space-y-4 rounded-md border p-3'>
-                  {delta.removedGrantedCapabilities.length > 0 ? (
-                    <div className='space-y-2'>
-                      <div className='text-xs text-muted-foreground'>
-                        Previously granted capabilities that will be removed
-                      </div>
-
-                      <div className='space-y-1'>
-                        {delta.removedGrantedCapabilities.map((key) => (
-                          <div key={key} className='text-sm'>
-                            {key}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {delta.removedGrantedNetwork.length > 0 ? (
-                    <div className='space-y-2'>
-                      <div className='text-xs text-muted-foreground'>
-                        Previously granted network access that will be removed
-                      </div>
-
-                      <div className='space-y-1'>
-                        {delta.removedGrantedNetwork.map((entry) => (
-                          <div
-                            key={networkKey(entry)}
-                            className='font-mono text-sm break-all'
-                          >
-                            {networkKey(entry)}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
+                <div className='rounded-md border p-3'>
+                  <PermissionsEditor
+                    app={removedPermissionsApp}
+                    grantedPermissions={
+                      removedPermissionsApp.grantedPermissions
+                    }
+                    editable={false}
+                  />
                 </div>
               ) : null}
             </div>
