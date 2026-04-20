@@ -13,10 +13,11 @@ use crate::apps::bridge::{
 };
 use crate::apps::permissions::resolve_shared_capabilities;
 use crate::apps::registry::parse_network_permission_target;
-use crate::apps::types::{
-    SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedNetworkPermissions,
+use crate::apps::types::SageNetworkPermissionTarget;
+use crate::apps::update::{
+    grant_requested_capability_internal, grant_requested_network_whitelist_entry_internal,
+    GrantCapabilityOutcome, GrantNetworkWhitelistOutcome,
 };
-use crate::apps::update::update_app_permissions_internal;
 
 #[derive(Debug, Clone, Copy)]
 pub struct BridgePing;
@@ -100,60 +101,35 @@ fn parse_network_whitelist_grant_params(
     Ok(params)
 }
 
-fn requested_capability_set(app: &crate::apps::types::InstalledSageApp) -> BTreeSet<String> {
-    let mut requested = BTreeSet::new();
-    requested.extend(app.requested_permissions.capabilities.required.iter().cloned());
-    requested.extend(app.requested_permissions.capabilities.optional.iter().cloned());
-    requested
-}
-
-fn requested_network_set(
-    requested: &SageRequestedNetworkPermissions,
-) -> Result<BTreeSet<(String, String)>, String> {
-    let mut out = BTreeSet::new();
-
-    for entry in &requested.whitelist.required {
-        out.insert(
-            parse_network_permission_target(&format!("{}://{}", entry.scheme, entry.host))
-                .map(|value| (value.scheme, value.host))?,
-        );
-    }
-
-    for entry in &requested.whitelist.optional {
-        out.insert(
-            parse_network_permission_target(&format!("{}://{}", entry.scheme, entry.host))
-                .map(|value| (value.scheme, value.host))?,
-        );
-    }
-
-    Ok(out)
-}
-
 fn required_network_set(
-    requested: &SageRequestedNetworkPermissions,
-) -> Result<BTreeSet<(String, String)>, String> {
+    ctx: &BridgeContext<'_>,
+) -> Result<BTreeSet<(String, String)>, RustBridgeResponse> {
     let mut out = BTreeSet::new();
 
-    for entry in &requested.whitelist.required {
-        out.insert(
-            parse_network_permission_target(&format!("{}://{}", entry.scheme, entry.host))
-                .map(|value| (value.scheme, value.host))?,
-        );
+    for entry in &ctx.app.requested_permissions.network.whitelist.required {
+        let normalized = parse_network_permission_target(&format!("{}://{}", entry.scheme, entry.host))
+            .map_err(|err| failure("app.getInfo", "internal_error", err))?;
+        out.insert((normalized.scheme, normalized.host));
     }
 
     Ok(out)
 }
 
-fn sort_unique_strings(values: impl IntoIterator<Item = String>) -> Vec<String> {
-    let set: BTreeSet<String> = values.into_iter().collect();
-    set.into_iter().collect()
-}
-
-fn sort_unique_network(
-    values: impl IntoIterator<Item = SageNetworkPermissionTarget>,
-) -> Vec<SageNetworkPermissionTarget> {
-    let set: BTreeSet<SageNetworkPermissionTarget> = values.into_iter().collect();
-    set.into_iter().collect()
+fn resolve_app_base_path(
+    tools: &BridgeTools<'_>,
+    request_id: &str,
+) -> Result<PathBuf, RustBridgeResponse> {
+    tools
+        .app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|err| {
+            failure(
+                request_id,
+                "internal_error",
+                format!("failed to resolve app data dir: {err}"),
+            )
+        })
 }
 
 #[async_trait]
@@ -214,8 +190,10 @@ impl BridgeMethod for AppGetInfo {
             resolve_shared_capabilities(&ctx.app.granted_permissions.capabilities)
                 .unwrap_or_default();
 
-        let required_network = required_network_set(&ctx.app.requested_permissions.network)
-            .unwrap_or_default();
+        let required_network = match required_network_set(&ctx) {
+            Ok(value) => value,
+            Err(err) => return err,
+        };
 
         let network = ctx
             .app
@@ -276,7 +254,11 @@ impl BridgeMethod for SageRequestCapabilityGrant {
             return false;
         };
 
-        !app.granted_permissions.capabilities.iter().any(|cap| cap == &params.capability)
+        !app
+            .granted_permissions
+            .capabilities
+            .iter()
+            .any(|cap| cap == &params.capability)
     }
 
     fn approval_request(
@@ -312,119 +294,52 @@ impl BridgeMethod for SageRequestCapabilityGrant {
             Err(err) => return err,
         };
 
-        let requested = requested_capability_set(ctx.app);
-        if !requested.contains(&params.capability) {
-            return failure(
-                &request.id,
-                "permission_denied",
-                format!(
-                    "Capability was not requested by app manifest: {}",
-                    params.capability
-                ),
-            );
-        }
+        let base_path = match resolve_app_base_path(&tools, &request.id) {
+            Ok(path) => path,
+            Err(err) => return err,
+        };
 
-        if ctx
-            .app
-            .granted_permissions
-            .capabilities
-            .iter()
-            .any(|cap| cap == &params.capability)
-        {
-            let full_granted_capabilities = sort_unique_strings(
-                ctx.app.granted_permissions.capabilities.clone(),
-            );
-
-            return success(
+        match grant_requested_capability_internal(&base_path, &ctx.app.id, &params.capability) {
+            Ok(GrantCapabilityOutcome::AlreadyGranted {
+                   capability,
+                   full_granted_capabilities,
+               }) => success(
                 &request.id,
                 json!({
                     "granted": true,
                     "alreadyGranted": true,
-                    "capability": params.capability,
+                    "capability": capability,
                     "fullGrantedCapabilities": full_granted_capabilities,
                 }),
-            );
+            ),
+            Ok(GrantCapabilityOutcome::Granted { capability, change }) => {
+                let _ = emit_bridge_event_to_source(
+                    tools.app_handle,
+                    ctx.source_label,
+                    json!({
+                        "channel": "sage-bridge",
+                        "type": "grantedCapabilitiesChange",
+                        "removedGrantedCapabilities": change.removed,
+                        "addedGrantedCapabilities": change.added,
+                        "fullGrantedCapabilities": change.full,
+                    }),
+                );
+
+                success(
+                    &request.id,
+                    json!({
+                        "granted": true,
+                        "capability": capability,
+                        "fullGrantedCapabilities": change.full,
+                    }),
+                )
+            }
+            Err(err) => failure(
+                &request.id,
+                "internal_error",
+                format!("failed to grant requested capability: {err}"),
+            ),
         }
-
-        let mut next_capabilities = ctx.app.granted_permissions.capabilities.clone();
-        next_capabilities.push(params.capability.clone());
-        next_capabilities = sort_unique_strings(next_capabilities);
-
-        let next_granted_permissions = SageGrantedPermissions {
-            capabilities: next_capabilities.clone(),
-            network: ctx.app.granted_permissions.network.clone(),
-        };
-
-        let base_path: PathBuf = match tools.app_handle.path().app_data_dir() {
-            Ok(path) => path,
-            Err(err) => {
-                return failure(
-                    &request.id,
-                    "internal_error",
-                    format!("failed to resolve app data dir: {err}"),
-                );
-            }
-        };
-
-        let updated = match update_app_permissions_internal(
-            &base_path,
-            &ctx.app.id,
-            next_granted_permissions,
-            false,
-        ) {
-            Ok(updated) => updated,
-            Err(err) => {
-                return failure(
-                    &request.id,
-                    "internal_error",
-                    format!("failed to update granted permissions: {err}"),
-                );
-            }
-        };
-
-        let previous_set: BTreeSet<String> = ctx
-            .app
-            .granted_permissions
-            .capabilities
-            .iter()
-            .cloned()
-            .collect();
-        let next_set: BTreeSet<String> = updated
-            .granted_permissions
-            .capabilities
-            .iter()
-            .cloned()
-            .collect();
-
-        let added_granted_capabilities = next_set
-            .difference(&previous_set)
-            .cloned()
-            .collect::<Vec<_>>();
-        let removed_granted_capabilities = previous_set
-            .difference(&next_set)
-            .cloned()
-            .collect::<Vec<_>>();
-
-        let _ = emit_bridge_event_to_source(
-            tools.app_handle,
-            ctx.source_label,
-            json!({
-                "channel": "sage-bridge",
-                "type": "grantedCapabilitiesChange",
-                "removedGrantedCapabilities": removed_granted_capabilities,
-                "addedGrantedCapabilities": added_granted_capabilities,
-                "fullGrantedCapabilities": updated.granted_permissions.capabilities,
-            }),
-        );
-
-        success(
-            &request.id,
-            json!({
-                "granted": true,
-                "capability": params.capability,
-                "fullGrantedCapabilities": updated.granted_permissions.capabilities,
-            }),
-        )
     }
 }
 
@@ -480,129 +395,55 @@ impl BridgeMethod for SageRequestNetworkWhitelistGrant {
             Err(err) => return err,
         };
 
-        let requested = match requested_network_set(&ctx.app.requested_permissions.network) {
-            Ok(requested) => requested,
-            Err(err) => {
-                return failure(&request.id, "internal_error", err);
-            }
+        let base_path = match resolve_app_base_path(&tools, &request.id) {
+            Ok(path) => path,
+            Err(err) => return err,
         };
 
-        let entry_key = (params.entry.scheme.clone(), params.entry.host.clone());
-        if !requested.contains(&entry_key) {
-            return failure(
-                &request.id,
-                "permission_denied",
-                format!(
-                    "Network whitelist entry was not requested by app manifest: {}://{}",
-                    params.entry.scheme, params.entry.host
-                ),
-            );
-        }
-
-        if ctx
-            .app
-            .granted_permissions
-            .network
-            .whitelist
-            .iter()
-            .any(|entry| entry == &params.entry)
-        {
-            let full_granted_network_whitelist =
-                sort_unique_network(ctx.app.granted_permissions.network.whitelist.clone());
-
-            return success(
+        match grant_requested_network_whitelist_entry_internal(
+            &base_path,
+            &ctx.app.id,
+            &params.entry,
+        ) {
+            Ok(GrantNetworkWhitelistOutcome::AlreadyGranted {
+                   entry,
+                   full_granted_network_whitelist,
+               }) => success(
                 &request.id,
                 json!({
                     "granted": true,
                     "alreadyGranted": true,
-                    "entry": params.entry,
+                    "entry": entry,
                     "fullGrantedNetworkWhitelist": full_granted_network_whitelist,
                 }),
-            );
+            ),
+            Ok(GrantNetworkWhitelistOutcome::Granted { entry, change }) => {
+                let _ = emit_bridge_event_to_source(
+                    tools.app_handle,
+                    ctx.source_label,
+                    json!({
+                        "channel": "sage-bridge",
+                        "type": "grantedNetworkWhitelistChange",
+                        "removedGrantedNetworkWhitelist": change.removed,
+                        "addedGrantedNetworkWhitelist": change.added,
+                        "fullGrantedNetworkWhitelist": change.full,
+                    }),
+                );
+
+                success(
+                    &request.id,
+                    json!({
+                        "granted": true,
+                        "entry": entry,
+                        "fullGrantedNetworkWhitelist": change.full,
+                    }),
+                )
+            }
+            Err(err) => failure(
+                &request.id,
+                "internal_error",
+                format!("failed to grant requested network whitelist entry: {err}"),
+            ),
         }
-
-        let mut next_whitelist = ctx.app.granted_permissions.network.whitelist.clone();
-        next_whitelist.push(params.entry.clone());
-        next_whitelist = sort_unique_network(next_whitelist);
-
-        let next_granted_permissions = SageGrantedPermissions {
-            capabilities: ctx.app.granted_permissions.capabilities.clone(),
-            network: crate::apps::types::SageGrantedNetworkPermissions {
-                whitelist: next_whitelist.clone(),
-            },
-        };
-
-        let base_path: PathBuf = match tools.app_handle.path().app_data_dir() {
-            Ok(path) => path,
-            Err(err) => {
-                return failure(
-                    &request.id,
-                    "internal_error",
-                    format!("failed to resolve app data dir: {err}"),
-                );
-            }
-        };
-
-        let updated = match update_app_permissions_internal(
-            &base_path,
-            &ctx.app.id,
-            next_granted_permissions,
-            false,
-        ) {
-            Ok(updated) => updated,
-            Err(err) => {
-                return failure(
-                    &request.id,
-                    "internal_error",
-                    format!("failed to update granted permissions: {err}"),
-                );
-            }
-        };
-
-        let previous_set: BTreeSet<SageNetworkPermissionTarget> = ctx
-            .app
-            .granted_permissions
-            .network
-            .whitelist
-            .iter()
-            .cloned()
-            .collect();
-        let next_set: BTreeSet<SageNetworkPermissionTarget> = updated
-            .granted_permissions
-            .network
-            .whitelist
-            .iter()
-            .cloned()
-            .collect();
-
-        let added_granted_network_whitelist = next_set
-            .difference(&previous_set)
-            .cloned()
-            .collect::<Vec<_>>();
-        let removed_granted_network_whitelist = previous_set
-            .difference(&next_set)
-            .cloned()
-            .collect::<Vec<_>>();
-
-        let _ = emit_bridge_event_to_source(
-            tools.app_handle,
-            ctx.source_label,
-            json!({
-                "channel": "sage-bridge",
-                "type": "grantedNetworkWhitelistChange",
-                "removedGrantedNetworkWhitelist": removed_granted_network_whitelist,
-                "addedGrantedNetworkWhitelist": added_granted_network_whitelist,
-                "fullGrantedNetworkWhitelist": updated.granted_permissions.network.whitelist,
-            }),
-        );
-
-        success(
-            &request.id,
-            json!({
-                "granted": true,
-                "entry": params.entry,
-                "fullGrantedNetworkWhitelist": updated.granted_permissions.network.whitelist,
-            }),
-        )
     }
 }
