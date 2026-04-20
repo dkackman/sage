@@ -69,7 +69,7 @@ function buildFallbackAppInfo(): SageAppInfo {
         optional: [],
       },
     },
-    sharedCapabilities: [],
+    capabilities: [],
     network: [],
   };
 }
@@ -257,8 +257,8 @@ export function initSageRuntimeBridge(): boolean {
         return await callHost<SageAppInfo>('app.getInfo');
       },
 
-      async getPermissions() {
-        return await callHost<string[]>('sage.getPermissions');
+      async getCapabilities() {
+        return await callHost<string[]>('sage.getCapabilities');
       },
     },
 

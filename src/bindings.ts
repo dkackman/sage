@@ -1757,9 +1757,9 @@ index: number }
  */
 export type IncreaseDerivationIndexResponse = Record<string, never>
 export type InheritedNetwork = "mainnet" | "testnet11"
-export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; sharedCapabilities?: string[]; permissionFlags: InstalledSageAppPermissionFlags; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot; pendingUpdate: InstalledSageAppPendingUpdate | null }
+export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; permissionFlags: InstalledSageAppCapabilityFlags; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot; pendingUpdate: InstalledSageAppPendingUpdate | null }
+export type InstalledSageAppCapabilityFlags = { hasSecretAccess: boolean; hasExternalAccess: boolean; storageMayContainSecrets: boolean; isolated: boolean }
 export type InstalledSageAppPendingUpdate = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
-export type InstalledSageAppPermissionFlags = { hasSecretAccess: boolean; hasExternalAccess: boolean; storageMayContainSecrets: boolean; isolated: boolean }
 export type InstalledSageAppSnapshot = { manifestHash: string; snapshotDir: string; totalBytes: number; manifest: SageAppPackageManifest }
 export type InstalledSageAppSource = { kind: "zip" } | { kind: "url"; appUrl: string; manifestUrl: string }
 /**

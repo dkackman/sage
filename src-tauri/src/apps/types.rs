@@ -1,5 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use specta::Type;
+use crate::apps::registry::parse_network_permission_target;
 
 #[derive(
     Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord,
@@ -95,7 +96,7 @@ pub struct InstalledSageAppSnapshot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
-pub struct InstalledSageAppPermissionFlags {
+pub struct InstalledSageAppCapabilityFlags {
     #[serde(rename = "hasSecretAccess", alias = "has_secret_access")]
     pub has_secret_access: bool,
 
@@ -158,11 +159,8 @@ pub struct InstalledSageApp {
     #[serde(rename = "grantedPermissions", alias = "granted_permissions")]
     pub granted_permissions: SageGrantedPermissions,
 
-    #[serde(rename = "sharedCapabilities", alias = "shared_capabilities", default)]
-    pub shared_capabilities: Vec<String>,
-
     #[serde(rename = "permissionFlags", alias = "permission_flags")]
-    pub permission_flags: InstalledSageAppPermissionFlags,
+    pub permission_flags: InstalledSageAppCapabilityFlags,
 
     pub source: InstalledSageAppSource,
 
@@ -288,35 +286,4 @@ impl<'de> Deserialize<'de> for SageAppPackageManifest {
             icon: raw.icon,
         })
     }
-}
-
-fn parse_network_permission_target(
-    value: &str,
-) -> Result<SageNetworkPermissionTarget, String> {
-    let value = value.trim().to_ascii_lowercase();
-
-    let (scheme, host) = value
-        .split_once("://")
-        .ok_or_else(|| format!("invalid network entry (missing scheme): {}", value))?;
-
-    if scheme != "https" && scheme != "wss" {
-        return Err(format!(
-            "invalid scheme '{}', only https and wss allowed",
-            scheme
-        ));
-    }
-
-    if host.is_empty()
-        || host.contains('/')
-        || host.contains('?')
-        || host.contains('#')
-        || host.contains(' ')
-    {
-        return Err(format!("invalid host in network entry: {}", value));
-    }
-
-    Ok(SageNetworkPermissionTarget {
-        scheme: scheme.to_string(),
-        host: host.to_string(),
-    })
 }

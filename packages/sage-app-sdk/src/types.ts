@@ -41,7 +41,7 @@ export type SageAppInfo = {
   name: string;
   version: string;
   requestedPermissions: SageRequestedPermissions;
-  sharedCapabilities: string[];
+  capabilities: string[];
   network: SageNetworkPermission[];
 };
 
@@ -163,7 +163,7 @@ export type SageAppClient = {
   bridgePing(): Promise<unknown>;
   bridgeSend(input: SageBridgeSendPayload): Promise<unknown>;
   getInfo(): Promise<SageAppInfo>;
-  getPermissions(): Promise<string[]>;
+  getCapabilities(): Promise<string[]>;
 };
 
 export type SageLifecycleClient = {

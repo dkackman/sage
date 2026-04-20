@@ -5,7 +5,7 @@ pub mod install;
 pub mod limits;
 pub mod manifest;
 pub mod package;
-pub mod permission_registry;
+pub mod capability_registry;
 pub mod permissions;
 pub mod protocol;
 pub mod registry;

@@ -70,7 +70,6 @@ function buildPreviewApp(
         whitelist: grantedNetworkWhitelist,
       },
     },
-    sharedCapabilities: grantedCapabilities,
     permissionFlags: {
       hasSecretAccess: false,
       hasExternalAccess: false,

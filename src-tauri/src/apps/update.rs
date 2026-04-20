@@ -23,7 +23,6 @@ use crate::{
     },
     error::Result,
 };
-use crate::apps::permissions::resolve_shared_capabilities;
 use crate::apps::types::SageGrantedPermissions;
 
 #[command]
@@ -182,12 +181,6 @@ pub async fn apply_app_update(
             whitelist: granted_network_whitelist,
         },
     };
-    app.shared_capabilities = resolve_shared_capabilities(
-        &app.granted_permissions.capabilities,
-    )
-        .map_err(|err| {
-            io::Error::other(format!("failed to resolve shared capabilities: {err}"))
-        })?;
 
     app.permission_flags = permission_flags;
     app.active_snapshot = snapshot;
@@ -242,10 +235,6 @@ pub async fn apps_update_permissions(
             whitelist: granted_network_whitelist,
         },
     };
-    app.shared_capabilities = resolve_shared_capabilities(
-        &app.granted_permissions.capabilities,
-    )
-        .map_err(|err| io::Error::other(format!("failed to resolve shared capabilities: {err}")))?;
 
     app.permission_flags = resolve_granted_permission_flags(
         &app.granted_permissions.capabilities,

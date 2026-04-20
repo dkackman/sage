@@ -47,7 +47,7 @@ type AppContextMenuState = {
 
 type PendingPermissionsRetry = {
   appId: string;
-  nextPermissions: string[];
+  nextGrantedPermissions: SageGrantedPermissions;
 } | null;
 
 function clampContextMenuPosition(args: {
@@ -126,11 +126,11 @@ export function Apps() {
   );
   const [pendingPermissionsRetry, setPendingPermissionsRetry] =
     useState<PendingPermissionsRetry>(null);
-  const [editingGrantedPermissions, setEditingGrantedPermissions] = useState<
-    string[]
-  >([]);
-  const [editingGrantedNetworkWhitelist, setEditingGrantedNetworkWhitelist] =
-    useState<SageNetworkPermissionTarget[]>([]);
+  const [editingGrantedPermissions, setEditingGrantedPermissions] =
+    useState<SageGrantedPermissions>({
+      capabilities: [],
+      network: { whitelist: [] },
+    });
   const showSandboxDebugResults =
     import.meta.env.DEV && import.meta.env.VITE_SAGE_DEBUG_TEST_APPS === '1';
 
@@ -243,6 +243,24 @@ export function Apps() {
     [handleConfirmUpdate],
   );
 
+  function setEditingGrantedCapabilities(next: string[]) {
+    setEditingGrantedPermissions((prev) => ({
+      ...prev,
+      capabilities: next,
+    }));
+  }
+
+  function setEditingGrantedNetworkWhitelist(
+    next: SageNetworkPermissionTarget[],
+  ) {
+    setEditingGrantedPermissions((prev) => ({
+      ...prev,
+      network: {
+        whitelist: next,
+      },
+    }));
+  }
+
   const closeContextMenu = useCallback(() => {
     setContextMenu((prevContextMenu) => {
       if (prevContextMenu) {
@@ -299,10 +317,7 @@ export function Apps() {
 
   function openPermissionsDialog(app: InstalledEntry) {
     setPermissionsDialogApp(app);
-    setEditingGrantedPermissions(app.grantedPermissions?.capabilities);
-    setEditingGrantedNetworkWhitelist(
-      app.grantedPermissions?.network?.whitelist ?? [],
-    );
+    setEditingGrantedPermissions(app.grantedPermissions);
     setPermissionsDialogBusy(false);
     setPermissionsDialogError(null);
     setPendingPermissionsRetry(null);
@@ -310,8 +325,10 @@ export function Apps() {
 
   function closePermissionsDialog() {
     setPermissionsDialogApp(null);
-    setEditingGrantedPermissions([]);
-    setEditingGrantedNetworkWhitelist([]);
+    setEditingGrantedPermissions({
+      capabilities: [],
+      network: { whitelist: [] },
+    });
     setPermissionsDialogBusy(false);
     setPermissionsDialogError(null);
     setPendingPermissionsRetry(null);
@@ -366,8 +383,7 @@ export function Apps() {
   const handleApplyPermissions = useCallback(
     async (
       app: InstalledEntry,
-      nextPermissions: string[],
-      nextNetworkWhitelist: SageNetworkPermissionTarget[],
+      nextGrantedPermissions: SageGrantedPermissions,
     ): Promise<void> => {
       setPermissionsDialogBusy(true);
       setPermissionsDialogError(null);
@@ -376,12 +392,7 @@ export function Apps() {
       try {
         await invoke('apps_update_permissions', {
           appId: app.id,
-          grantedPermissions: {
-            capabilities: nextPermissions,
-            network: {
-              whitelist: nextNetworkWhitelist,
-            },
-          },
+          grantedPermissions: nextGrantedPermissions,
           clearStorageTaint: false,
         });
 
@@ -402,7 +413,7 @@ export function Apps() {
         if (isStorageTaintPermissionError(message)) {
           setPendingPermissionsRetry({
             appId: app.id,
-            nextPermissions,
+            nextGrantedPermissions,
           });
           setPermissionsDialogError(
             'This app storage may still contain cached secrets from a previous persistent run. Clear the app storage with verification to apply these permissions.',
@@ -430,12 +441,7 @@ export function Apps() {
 
       await invoke('apps_update_permissions', {
         appId: permissionsDialogApp.id,
-        grantedPermissions: {
-          capabilities: pendingPermissionsRetry.nextPermissions,
-          network: {
-            whitelist: editingGrantedNetworkWhitelist,
-          },
-        },
+        grantedPermissions: pendingPermissionsRetry.nextGrantedPermissions,
         clearStorageTaint: true,
       });
 
@@ -459,7 +465,6 @@ export function Apps() {
     clearAppStorage,
     permissionsDialogApp,
     pendingPermissionsRetry,
-    editingGrantedNetworkWhitelist,
     runningAppIds,
     navigate,
     refresh,
@@ -880,9 +885,11 @@ export function Apps() {
 
               <PermissionsEditor
                 app={permissionsDialogApp}
-                grantedCapabilities={editingGrantedPermissions}
-                grantedNetworkWhitelist={editingGrantedNetworkWhitelist}
-                onGrantedCapabilitiesChange={setEditingGrantedPermissions}
+                grantedCapabilities={editingGrantedPermissions.capabilities}
+                grantedNetworkWhitelist={
+                  editingGrantedPermissions.network.whitelist
+                }
+                onGrantedCapabilitiesChange={setEditingGrantedCapabilities}
                 onGrantedNetworkWhitelistChange={
                   setEditingGrantedNetworkWhitelist
                 }
@@ -919,7 +926,6 @@ export function Apps() {
                       void handleApplyPermissions(
                         permissionsDialogApp,
                         editingGrantedPermissions,
-                        editingGrantedNetworkWhitelist,
                       );
                     }}
                   >

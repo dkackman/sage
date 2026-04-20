@@ -21,14 +21,14 @@ export type SageBridgeMethod =
   | 'bridge.ping'
   | 'bridge.send'
   | 'app.getInfo'
-  | 'sage.getPermissions'
+  | 'sage.getCapabilities'
   | 'wallet.sendXch';
 
 export interface SageBridgeRequestParamsMap {
   'bridge.ping': undefined;
   'bridge.send': SageBridgeSendPayload;
   'app.getInfo': undefined;
-  'sage.getPermissions': undefined;
+  'sage.getCapabilities': undefined;
   'wallet.sendXch': SageWalletSendXchRequest;
 }
 
@@ -114,7 +114,7 @@ export function isKnownSageBridgeMethod(
     method === 'bridge.ping' ||
     method === 'bridge.send' ||
     method === 'app.getInfo' ||
-    method === 'sage.getPermissions' ||
+    method === 'sage.getCapabilities' ||
     method === 'wallet.sendXch'
   );
 }

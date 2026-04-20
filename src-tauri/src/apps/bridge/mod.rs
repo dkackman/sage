@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
-use crate::apps::permission_registry::require_permission_definition;
+use crate::apps::capability_registry::require_capability_definition;
 use crate::apps::runtime::{apps_assert_bridge_origin, resolve_app};
 use crate::apps::state::AppsHostState;
 use crate::apps::types::InstalledSageApp;
@@ -229,7 +229,7 @@ pub async fn apps_handle_bridge_request(
     };
 
     if let Some(capability_key) = method.permission() {
-        let capability_definition = require_permission_definition(capability_key)
+        let capability_definition = require_capability_definition(capability_key)
             .map_err(|err| {
                 format!(
                     "bridge method declared unknown capability {capability_key}: {err}"

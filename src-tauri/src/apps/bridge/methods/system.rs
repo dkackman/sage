@@ -3,11 +3,12 @@ use serde_json::json;
 
 use super::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::apps::bridge::{success, RustBridgeRequest, RustBridgeResponse};
+use crate::apps::permissions::resolve_shared_capabilities;
 
 pub struct BridgePing;
 pub struct BridgeSend;
 pub struct AppGetInfo;
-pub struct SageGetPermissions;
+pub struct SageGetCapabilities;
 
 #[async_trait]
 impl BridgeMethod for BridgePing {
@@ -63,6 +64,10 @@ impl BridgeMethod for AppGetInfo {
         _tools: BridgeTools<'_>,
         request: &RustBridgeRequest,
     ) -> RustBridgeResponse {
+        let capabilities =
+            resolve_shared_capabilities(&ctx.app.granted_permissions.capabilities)
+                .unwrap_or_default();
+
         success(
             &request.id,
             json!({
@@ -70,7 +75,7 @@ impl BridgeMethod for AppGetInfo {
                 "name": ctx.app.name,
                 "version": ctx.app.version,
                 "requestedPermissions": ctx.app.requested_permissions,
-                "sharedCapabilities": ctx.app.shared_capabilities,
+                "capabilities": capabilities,
                 "network": ctx.app.active_snapshot.manifest.permissions.network.whitelist.required,
             }),
         )
@@ -78,16 +83,20 @@ impl BridgeMethod for AppGetInfo {
 }
 
 #[async_trait]
-impl BridgeMethod for SageGetPermissions {
+impl BridgeMethod for SageGetCapabilities {
     async fn handle(
         &self,
         ctx: BridgeContext<'_>,
         _tools: BridgeTools<'_>,
         request: &RustBridgeRequest,
     ) -> RustBridgeResponse {
+        let capabilities =
+            resolve_shared_capabilities(&ctx.app.granted_permissions.capabilities)
+                .unwrap_or_default();
+
         success(
             &request.id,
-            serde_json::to_value(&ctx.app.shared_capabilities)
+            serde_json::to_value(&capabilities)
                 .unwrap_or_else(|_| json!([])),
         )
     }

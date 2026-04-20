@@ -2,18 +2,18 @@ use anyhow::{anyhow, Result as AnyResult};
 use std::collections::BTreeSet;
 
 use crate::apps::{
-    permission_registry::{
-        get_permission_definition, require_permission_definition,
+    capability_registry::{
+        get_capability_definition, require_capability_definition,
     },
     types::{
-        InstalledSageAppPermissionFlags, SageRequestedCapabilities,
+        InstalledSageAppCapabilityFlags, SageRequestedCapabilities,
         SageRequestedNetworkPermissions, SageRequestedPermissions,
     },
 };
 use crate::apps::types::SageNetworkPermissionTarget;
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct PermissionSummary {
+pub struct CapabilitySummary {
     pub externally_observable: bool,
     pub accesses_sensitive_secret: bool,
     pub persistent_storage: bool,
@@ -26,7 +26,7 @@ fn normalize_capability_keys(
     let mut optional = BTreeSet::new();
 
     for key in &capabilities.required {
-        let definition = require_permission_definition(key)?;
+        let definition = require_capability_definition(key)?;
 
         if !definition.requestable_by_app {
             return Err(anyhow!(
@@ -39,7 +39,7 @@ fn normalize_capability_keys(
     }
 
     for key in &capabilities.optional {
-        let definition = require_permission_definition(key)?;
+        let definition = require_capability_definition(key)?;
 
         if !definition.requestable_by_app {
             return Err(anyhow!(
@@ -162,12 +162,12 @@ pub fn validate_granted_permissions(
     Ok(())
 }
 
-pub fn summarize_permissions(keys: &[String]) -> AnyResult<PermissionSummary> {
-    let mut summary = PermissionSummary::default();
+pub fn summarize_capabilities(keys: &[String]) -> AnyResult<CapabilitySummary> {
+    let mut summary = CapabilitySummary::default();
 
     for key in keys {
-        let def = get_permission_definition(key)
-            .ok_or_else(|| anyhow!("unknown permission: {}", key))?;
+        let def = get_capability_definition(key)
+            .ok_or_else(|| anyhow!("unknown capability: {}", key))?;
 
         summary.externally_observable |= def.flags.externally_observable;
         summary.accesses_sensitive_secret |= def.flags.accesses_sensitive_secret;
@@ -183,7 +183,7 @@ pub fn resolve_shared_capabilities(
     let mut shared = BTreeSet::new();
 
     for key in granted_capabilities {
-        let definition = require_permission_definition(key)?;
+        let definition = require_capability_definition(key)?;
 
         if definition.shared_with_app {
             shared.insert(key.clone());
@@ -200,7 +200,7 @@ pub fn validate_requested_permission_policy(
     requested.extend(permissions.capabilities.required.iter().cloned());
     requested.extend(permissions.capabilities.optional.iter().cloned());
 
-    let summary = summarize_permissions(&requested)?;
+    let summary = summarize_capabilities(&requested)?;
 
     if summary.externally_observable && summary.accesses_sensitive_secret {
         return Err(anyhow!(
@@ -213,9 +213,9 @@ pub fn validate_requested_permission_policy(
 
 pub fn resolve_granted_permission_flags(
     granted: &[String],
-    previous_flags: Option<&InstalledSageAppPermissionFlags>,
-) -> AnyResult<InstalledSageAppPermissionFlags> {
-    let summary = summarize_permissions(granted)?;
+    previous_flags: Option<&InstalledSageAppCapabilityFlags>,
+) -> AnyResult<InstalledSageAppCapabilityFlags> {
+    let summary = summarize_capabilities(granted)?;
 
     let previous_storage_may_contain_secrets = previous_flags
         .map(|flags| flags.storage_may_contain_secrets)
@@ -236,7 +236,7 @@ pub fn resolve_granted_permission_flags(
         return Err(anyhow!("STORAGE_TAINTED"));
     }
 
-    Ok(InstalledSageAppPermissionFlags {
+    Ok(InstalledSageAppCapabilityFlags {
         has_secret_access,
         has_external_access,
         storage_may_contain_secrets,
@@ -245,9 +245,9 @@ pub fn resolve_granted_permission_flags(
 }
 
 pub fn mark_storage_may_contain_secrets(
-    flags: &InstalledSageAppPermissionFlags,
-) -> InstalledSageAppPermissionFlags {
-    InstalledSageAppPermissionFlags {
+    flags: &InstalledSageAppCapabilityFlags,
+) -> InstalledSageAppCapabilityFlags {
+    InstalledSageAppCapabilityFlags {
         has_secret_access: flags.has_secret_access,
         has_external_access: flags.has_external_access,
         storage_may_contain_secrets: true,
@@ -256,9 +256,9 @@ pub fn mark_storage_may_contain_secrets(
 }
 
 pub fn clear_storage_may_contain_secrets(
-    flags: &InstalledSageAppPermissionFlags,
-) -> InstalledSageAppPermissionFlags {
-    InstalledSageAppPermissionFlags {
+    flags: &InstalledSageAppCapabilityFlags,
+) -> InstalledSageAppCapabilityFlags {
+    InstalledSageAppCapabilityFlags {
         has_secret_access: flags.has_secret_access,
         has_external_access: flags.has_external_access,
         storage_may_contain_secrets: false,
