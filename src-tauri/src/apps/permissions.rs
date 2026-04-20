@@ -134,7 +134,7 @@ pub fn normalize_and_validate_requested_permissions(
     Ok(normalized)
 }
 
-pub fn validate_granted_permissions(
+pub fn validate_granted_capabilities(
     permissions: &SageRequestedPermissions,
     granted: &[String],
 ) -> AnyResult<()> {
@@ -211,7 +211,7 @@ pub fn validate_requested_permission_policy(
     Ok(())
 }
 
-pub fn resolve_granted_permission_flags(
+pub fn resolve_capability_flags(
     granted: &[String],
     previous_flags: Option<&InstalledSageAppCapabilityFlags>,
 ) -> AnyResult<InstalledSageAppCapabilityFlags> {

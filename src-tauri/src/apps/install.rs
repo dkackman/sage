@@ -18,7 +18,7 @@ use crate::{
         },
         permissions::{
             normalize_and_validate_requested_permissions,
-            resolve_granted_permission_flags, validate_granted_permissions,
+            resolve_capability_flags, validate_granted_capabilities,
         },
         registry::{
             apps_root, list_installed_apps_internal, write_installed_app_metadata,
@@ -197,7 +197,7 @@ fn normalize_and_validate_granted_permissions(
     requested: &SageRequestedPermissions,
     granted: SageGrantedPermissions,
 ) -> AnyResult<SageGrantedPermissions> {
-    validate_granted_permissions(&requested, &granted.capabilities)?;
+    validate_granted_capabilities(&requested, &granted.capabilities)?;
 
     let whitelist = normalize_and_validate_granted_network_whitelist(
         &requested.network,
@@ -381,7 +381,7 @@ pub async fn install_app_zip(
         )?;
 
         let permission_flags =
-            resolve_granted_permission_flags(&granted_permissions.capabilities, None)?;
+            resolve_capability_flags(&granted_permissions.capabilities, None)?;
 
         let (app_id, install_dir) = resolve_install_dir(&root, &manifest.name)?;
         recreate_install_dir(&install_dir)?;
@@ -457,7 +457,7 @@ pub async fn install_app_url(
         })?;
 
     let permission_flags =
-        resolve_granted_permission_flags(&granted_permissions.capabilities, None)
+        resolve_capability_flags(&granted_permissions.capabilities, None)
             .map_err(|err| {
                 io::Error::other(format!(
                     "invalid granted permission policy for URL app {}: {err}",

@@ -7,8 +7,8 @@ use crate::apps::types::{SageGrantedNetworkPermissions, SageGrantedPermissions};
 use crate::apps::{
     install::{manifest_entry_file, manifest_icon_file},
     permissions::{
-        normalize_and_validate_requested_permissions, resolve_granted_permission_flags,
-        validate_granted_permissions,
+        normalize_and_validate_requested_permissions, resolve_capability_flags,
+        validate_granted_capabilities,
     },
     types::{
         InstalledSageApp, InstalledSageAppSnapshot, InstalledSageAppSource, SageAppPackageManifest,
@@ -168,9 +168,9 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
         },
     };
 
-    validate_granted_permissions(&manifest.permissions, &granted_permissions.capabilities)?;
+    validate_granted_capabilities(&manifest.permissions, &granted_permissions.capabilities)?;
     let permission_flags =
-        resolve_granted_permission_flags(&granted_permissions.capabilities, None)?;
+        resolve_capability_flags(&granted_permissions.capabilities, None)?;
 
     let entry_file_name = manifest_entry_file(&manifest).to_string();
     let icon_file_name = manifest_icon_file(&manifest).to_string();

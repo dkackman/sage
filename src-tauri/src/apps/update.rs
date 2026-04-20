@@ -12,7 +12,7 @@ use crate::{
     apps::{
         permissions::{
             clear_storage_may_contain_secrets, mark_storage_may_contain_secrets,
-            resolve_granted_permission_flags, validate_granted_permissions,
+            resolve_capability_flags, validate_granted_capabilities,
         },
         registry::{read_installed_app_by_id, write_installed_app_metadata},
         snapshot::download_url_snapshot,
@@ -138,7 +138,7 @@ pub async fn apply_app_update(
         .clone()
         .ok_or_else(|| io::Error::other(format!("app {} has no pending update", app_id)))?;
 
-    validate_granted_permissions(
+    validate_granted_capabilities(
         &pending.manifest.permissions,
         &granted_permissions.capabilities,
     )
@@ -152,7 +152,7 @@ pub async fn apply_app_update(
             io::Error::other(format!("invalid granted network whitelist for update: {err}"))
         })?;
 
-    let permission_flags = resolve_granted_permission_flags(
+    let permission_flags = resolve_capability_flags(
         &granted_permissions.capabilities,
         Some(&app.permission_flags),
     )
@@ -210,7 +210,7 @@ pub async fn apps_update_permissions(
     let mut app = read_installed_app_by_id(&base_path, &app_id)
         .map_err(|err| io::Error::other(format!("failed to read app {app_id}: {err}")))?;
 
-    validate_granted_permissions(&app.requested_permissions, &granted_permissions.capabilities)
+    validate_granted_capabilities(&app.requested_permissions, &granted_permissions.capabilities)
         .map_err(|err| io::Error::other(format!("invalid granted permissions: {err}")))?;
 
     let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
@@ -219,7 +219,7 @@ pub async fn apps_update_permissions(
     )
         .map_err(|err| io::Error::other(format!("invalid granted network whitelist: {err}")))?;
 
-    let mut permission_flags = resolve_granted_permission_flags(
+    let mut permission_flags = resolve_capability_flags(
         &granted_permissions.capabilities,
         Some(&app.permission_flags),
     )
@@ -236,7 +236,7 @@ pub async fn apps_update_permissions(
         },
     };
 
-    app.permission_flags = resolve_granted_permission_flags(
+    app.permission_flags = resolve_capability_flags(
         &app.granted_permissions.capabilities,
         Some(&permission_flags),
     )
