@@ -1757,11 +1757,12 @@ index: number }
  */
 export type IncreaseDerivationIndexResponse = Record<string, never>
 export type InheritedNetwork = "mainnet" | "testnet11"
-export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; capabilityFlags: InstalledSageAppCapabilityFlags; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot; pendingUpdate: InstalledSageAppPendingUpdate | null }
+export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; capabilityFlags: InstalledSageAppCapabilityFlags; storage: InstalledSageAppStorage; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot; pendingUpdate: InstalledSageAppPendingUpdate | null }
 export type InstalledSageAppCapabilityFlags = { hasSecretAccess: boolean; hasExternalAccess: boolean; storageMayContainSecrets: boolean; isolated: boolean }
 export type InstalledSageAppPendingUpdate = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type InstalledSageAppSnapshot = { manifestHash: string; snapshotDir: string; totalBytes: number; manifest: SageAppPackageManifest }
 export type InstalledSageAppSource = { kind: "zip" } | { kind: "url"; appUrl: string; manifestUrl: string }
+export type InstalledSageAppStorage = { kind: "appleDataStore"; identifierHex: string } | { kind: "windowsProfile"; directoryName: string } | { kind: "unsupported" }
 /**
  * Check if an asset is owned
  */

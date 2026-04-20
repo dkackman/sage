@@ -3,10 +3,34 @@ use std::collections::BTreeMap;
 use tauri::{AppHandle, Manager, State};
 
 use crate::apps::state::AppsHostState;
+use crate::apps::types::InstalledSageAppStorage;
 
+use super::apps_create_inline_runtime;
 use super::inline::CreateInlineRuntimeArgs;
 use super::records::inline_label_for;
-use super::inline::apps_create_inline_runtime;
+use super::resolve::resolve_app;
+
+#[cfg(target_os = "windows")]
+fn data_directory_for(directory_name: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from("profiles").join(directory_name)
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn parse_data_store_id(identifier_hex: &str) -> Result<[u8; 16], String> {
+    let bytes = hex::decode(identifier_hex)
+        .map_err(|err| format!("invalid data store identifier hex: {err}"))?;
+
+    if bytes.len() != 16 {
+        return Err(format!(
+            "invalid data store identifier length {}, expected 16 bytes",
+            bytes.len()
+        ));
+    }
+
+    let mut out = [0_u8; 16];
+    out.copy_from_slice(&bytes);
+    Ok(out)
+}
 
 #[tauri::command]
 #[specta::specta]
@@ -22,55 +46,50 @@ pub async fn apps_clear_runtime_browsing_data(
         }
     }
 
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    {
-        fn data_store_id_for(app_id: &str) -> [u8; 16] {
-            let bytes = app_id.as_bytes();
-            let mut out = [0_u8; 16];
+    let base_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
 
-            for (i, byte) in bytes.iter().enumerate() {
-                out[i % 16] = out[i % 16].wrapping_add(*byte).wrapping_add(i as u8);
-            }
-
-            out
-        }
-
-        let target_id = data_store_id_for(&app_id);
-        let existing_ids = app
-            .fetch_data_store_identifiers()
-            .await
-            .map_err(|e| format!("failed to fetch data store identifiers: {e}"))?;
-
-        if existing_ids.iter().any(|id| *id == target_id) {
-            app.remove_data_store(target_id)
+    let resolved = resolve_app(&base_path, &app_id)?;
+    match &resolved.storage {
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        InstalledSageAppStorage::AppleDataStore { identifier_hex } => {
+            let target_id = parse_data_store_id(identifier_hex)?;
+            let existing_ids = app
+                .fetch_data_store_identifiers()
                 .await
-                .map_err(|e| format!("failed to remove data store for {app_id}: {e}"))?;
-        }
-    }
+                .map_err(|e| format!("failed to fetch data store identifiers: {e}"))?;
 
-    #[cfg(target_os = "windows")]
-    {
-        fn data_directory_for(app_id: &str) -> std::path::PathBuf {
-            std::path::PathBuf::from("profiles").join(app_id)
-        }
-
-        let app_data_dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
-
-        let profile_dir = app_data_dir.join(data_directory_for(&app_id));
-
-        match std::fs::remove_dir_all(&profile_dir) {
-            Ok(()) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-            Err(err) => {
-                return Err(format!(
-                    "failed to remove profile dir {}: {err}",
-                    profile_dir.display()
-                ));
+            if existing_ids.iter().any(|id| *id == target_id) {
+                app.remove_data_store(target_id)
+                    .await
+                    .map_err(|e| format!("failed to remove data store for {app_id}: {e}"))?;
             }
         }
+
+        #[cfg(target_os = "windows")]
+        InstalledSageAppStorage::WindowsProfile { directory_name } => {
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
+
+            let profile_dir = app_data_dir.join(data_directory_for(directory_name));
+
+            match std::fs::remove_dir_all(&profile_dir) {
+                Ok(()) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => {
+                    return Err(format!(
+                        "failed to remove profile dir {}: {err}",
+                        profile_dir.display()
+                    ));
+                }
+            }
+        }
+
+        _ => {}
     }
 
     Ok(())

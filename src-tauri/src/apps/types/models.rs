@@ -51,6 +51,20 @@ pub struct SageGrantedPermissions {
     pub network: SageGrantedNetworkPermissions,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum InstalledSageAppStorage {
+    AppleDataStore {
+        #[serde(rename = "identifierHex", alias = "identifier_hex")]
+        identifier_hex: String,
+    },
+    WindowsProfile {
+        #[serde(rename = "directoryName", alias = "directory_name")]
+        directory_name: String,
+    },
+    Unsupported,
+}
+
 #[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
 pub struct SageAppPackageManifest {
     pub name: String,
@@ -162,6 +176,8 @@ pub struct InstalledSageApp {
 
     #[serde(rename = "capabilityFlags", alias = "capability_flags")]
     pub capability_flags: InstalledSageAppCapabilityFlags,
+
+    pub storage: InstalledSageAppStorage,
 
     pub source: InstalledSageAppSource,
 

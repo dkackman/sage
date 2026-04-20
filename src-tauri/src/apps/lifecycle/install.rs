@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::{Context, Result as AnyResult, anyhow};
 use sha2::{Digest, Sha256};
-use tauri::{State, command};
+use tauri::{AppHandle, State, command};
 
 use crate::app_state::AppState;
 use crate::apps::lifecycle::{
@@ -15,20 +15,19 @@ use crate::apps::lifecycle::{
     prepare_zip_snapshot, read_manifest, unzip_to_dir, validate_package_structure,
     write_installed_app_metadata,
 };
+use crate::apps::lifecycle::registry::{apps_root, read_installed_app_by_id};
 use crate::apps::permissions::{
     normalize_and_validate_requested_permissions, resolve_capability_flags,
     validate_granted_capabilities,
 };
+use crate::apps::runtime::apps_clear_runtime_browsing_data;
 use crate::apps::types::{
-    InstalledSageApp, InstalledSageAppSource, ListedSageApp, SageAppPackageManifest,
-    SageAppUrlPreview,
+    InstalledSageApp, InstalledSageAppSource, InstalledSageAppStorage, ListedSageApp,
+    SageAppPackageManifest, SageAppUrlPreview,
 };
 use crate::apps::types::{
     SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedNetworkPermissions,
     SageRequestedPermissions,
-};
-use crate::apps::lifecycle::registry::{
-    apps_root,
 };
 use crate::error::Result;
 
@@ -97,12 +96,15 @@ pub fn normalize_app_url(url: &str) -> AnyResult<String> {
     Ok(parsed.to_string())
 }
 
-fn find_existing_app_id_by_name(root: &Path, app_name: &str) -> AnyResult<Option<String>> {
+fn find_existing_installed_app_by_name(
+    root: &Path,
+    app_name: &str,
+) -> AnyResult<Option<InstalledSageApp>> {
     Ok(list_installed_apps_internal(root)?
         .into_iter()
         .find_map(|app| match app {
             ListedSageApp::Installed(installed) if installed.name == app_name => {
-                Some(installed.id)
+                Some(installed)
             }
             _ => None,
         }))
@@ -114,6 +116,7 @@ fn build_installed_app(
     manifest: &SageAppPackageManifest,
     granted_permissions: SageGrantedPermissions,
     permission_flags: crate::apps::types::InstalledSageAppCapabilityFlags,
+    storage: InstalledSageAppStorage,
     source: InstalledSageAppSource,
     snapshot: crate::apps::types::InstalledSageAppSnapshot,
 ) -> InstalledSageApp {
@@ -127,6 +130,7 @@ fn build_installed_app(
         requested_permissions: manifest.permissions.clone(),
         granted_permissions,
         capability_flags: permission_flags,
+        storage,
         source,
         active_snapshot: snapshot,
         pending_update: None,
@@ -146,11 +150,17 @@ fn recreate_install_dir(install_dir: &Path) -> AnyResult<()> {
     Ok(())
 }
 
-fn resolve_install_dir(root: &Path, app_name: &str) -> AnyResult<(String, std::path::PathBuf)> {
-    let app_id = find_existing_app_id_by_name(root, app_name)?
-        .unwrap_or_else(|| generate_app_id(app_name));
+fn resolve_install_target(
+    root: &Path,
+    app_name: &str,
+) -> AnyResult<(String, std::path::PathBuf, Option<InstalledSageApp>)> {
+    if let Some(existing) = find_existing_installed_app_by_name(root, app_name)? {
+        let install_dir = Path::new(&existing.install_dir).to_path_buf();
+        return Ok((existing.id.clone(), install_dir, Some(existing)));
+    }
 
-    Ok((app_id.clone(), root.join(app_id)))
+    let app_id = generate_app_id(app_name);
+    Ok((app_id.clone(), root.join(&app_id), None))
 }
 
 pub fn hash_string(input: &str) -> String {
@@ -180,8 +190,10 @@ fn normalize_and_validate_granted_permissions(
 ) -> AnyResult<SageGrantedPermissions> {
     validate_granted_capabilities(requested, &granted.capabilities)?;
 
-    let whitelist =
-        normalize_and_validate_granted_network_whitelist(&requested.network, &granted.network.whitelist)?;
+    let whitelist = normalize_and_validate_granted_network_whitelist(
+        &requested.network,
+        &granted.network.whitelist,
+    )?;
 
     Ok(SageGrantedPermissions {
         capabilities: granted.capabilities,
@@ -238,6 +250,65 @@ pub fn normalize_and_validate_granted_network_whitelist(
     }
 
     Ok(result.into_iter().collect())
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+async fn allocate_new_storage(
+    app: &AppHandle,
+    _base_path: &Path,
+) -> AnyResult<InstalledSageAppStorage> {
+    loop {
+        let identifier = *uuid::Uuid::new_v4().as_bytes();
+        let existing_ids = app
+            .fetch_data_store_identifiers()
+            .await
+            .map_err(|err| anyhow!("failed to fetch data store identifiers: {err}"))?;
+
+        if existing_ids.iter().all(|existing| *existing != identifier) {
+            return Ok(InstalledSageAppStorage::AppleDataStore {
+                identifier_hex: hex::encode(identifier),
+            });
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+async fn allocate_new_storage(
+    _app: &AppHandle,
+    base_path: &Path,
+) -> AnyResult<InstalledSageAppStorage> {
+    let profiles_root = base_path.join("profiles");
+    fs::create_dir_all(&profiles_root)
+        .with_context(|| format!("failed to create profiles directory {}", profiles_root.display()))?;
+
+    loop {
+        let directory_name = format!("profile-{}", uuid::Uuid::new_v4());
+        let candidate = profiles_root.join(&directory_name);
+
+        if !candidate.exists() {
+            return Ok(InstalledSageAppStorage::WindowsProfile { directory_name });
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "windows")))]
+async fn allocate_new_storage(
+    _app: &AppHandle,
+    _base_path: &Path,
+) -> AnyResult<InstalledSageAppStorage> {
+    Ok(InstalledSageAppStorage::Unsupported)
+}
+
+async fn resolve_storage_for_install(
+    app: &AppHandle,
+    base_path: &Path,
+    existing: Option<&InstalledSageApp>,
+) -> AnyResult<InstalledSageAppStorage> {
+    if let Some(existing) = existing {
+        return Ok(existing.storage.clone());
+    }
+
+    allocate_new_storage(app, base_path).await
 }
 
 pub async fn preview_app_url_internal(app_url: String) -> AnyResult<SageAppUrlPreview> {
@@ -302,6 +373,7 @@ pub async fn list_installed_apps(state: State<'_, AppState>) -> Result<Vec<Liste
 #[command]
 #[specta::specta]
 pub async fn install_app_zip(
+    app: AppHandle,
     state: State<'_, AppState>,
     zip_path: String,
     granted_permissions: SageGrantedPermissions,
@@ -327,7 +399,7 @@ pub async fn install_app_zip(
         })?;
     }
 
-    let result = (|| -> AnyResult<InstalledSageApp> {
+    let result: AnyResult<InstalledSageApp> = async {
         unzip_to_dir(Path::new(&zip_path), &unpack_dir)?;
         let package_root = crate::apps::lifecycle::detect_package_root(&unpack_dir)?;
         validate_package_structure(&package_root)?;
@@ -339,7 +411,9 @@ pub async fn install_app_zip(
 
         let permission_flags = resolve_capability_flags(&granted_permissions.capabilities, None)?;
 
-        let (app_id, install_dir) = resolve_install_dir(&root, &manifest.name)?;
+        let (app_id, install_dir, existing_app) = resolve_install_target(&root, &manifest.name)?;
+        let storage = resolve_storage_for_install(&app, &base_path, existing_app.as_ref()).await?;
+
         recreate_install_dir(&install_dir)?;
         let snapshot = prepare_zip_snapshot(&package_root, &install_dir, &manifest)?;
 
@@ -349,13 +423,15 @@ pub async fn install_app_zip(
             &manifest,
             granted_permissions,
             permission_flags,
+            storage,
             InstalledSageAppSource::Zip,
             snapshot,
         );
 
         write_installed_app_metadata(&installed, &install_dir)?;
         Ok(installed)
-    })();
+    }
+        .await;
 
     if unpack_dir.exists() {
         let _ = fs::remove_dir_all(&unpack_dir);
@@ -367,6 +443,7 @@ pub async fn install_app_zip(
 #[command]
 #[specta::specta]
 pub async fn install_app_url(
+    app: AppHandle,
     state: State<'_, AppState>,
     app_url: String,
     granted_permissions: SageGrantedPermissions,
@@ -397,8 +474,12 @@ pub async fn install_app_url(
             io::Error::other(format!("invalid granted permission policy for URL app {}: {err}", app_url))
         })?;
 
-    let (app_id, install_dir) = resolve_install_dir(&root, &preview.manifest.name)
+    let (app_id, install_dir, existing_app) = resolve_install_target(&root, &preview.manifest.name)
         .map_err(|err| io::Error::other(format!("failed to resolve install dir: {err}")))?;
+    let storage = resolve_storage_for_install(&app, &base_path, existing_app.as_ref())
+        .await
+        .map_err(|err| io::Error::other(format!("failed to resolve storage for install: {err}")))?;
+
     recreate_install_dir(&install_dir)
         .map_err(|err| io::Error::other(format!("failed to recreate install dir: {err}")))?;
 
@@ -417,6 +498,7 @@ pub async fn install_app_url(
         &preview.manifest,
         granted_permissions,
         permission_flags,
+        storage,
         InstalledSageAppSource::Url {
             app_url: preview.app_url.clone(),
             manifest_url: preview.manifest_url.clone(),
@@ -433,11 +515,19 @@ pub async fn install_app_url(
 
 #[command]
 #[specta::specta]
-pub async fn uninstall_app(state: State<'_, AppState>, app_id: String) -> Result<()> {
+pub async fn uninstall_app(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    app_id: String,
+) -> Result<()> {
     let base_path = {
         let state = state.lock().await;
         state.path.clone()
     };
+
+    if read_installed_app_by_id(&base_path, &app_id).is_ok() {
+        let _ = apps_clear_runtime_browsing_data(app.clone(), app_id.clone()).await;
+    }
 
     let install_dir = apps_root(&base_path).join(&app_id);
     if install_dir.exists() {

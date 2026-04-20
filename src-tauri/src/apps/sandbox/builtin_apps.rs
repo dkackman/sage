@@ -1,6 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use anyhow::{Context, Result as AnyResult, anyhow};
+use sha2::{Digest, Sha256};
 use tauri::command;
 
 use crate::apps::lifecycle::{manifest_entry_file, manifest_icon_file};
@@ -10,7 +11,8 @@ use crate::apps::permissions::{
 };
 use crate::apps::types::{
     InstalledSageApp, InstalledSageAppSnapshot, InstalledSageAppSource,
-    SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions,
+    InstalledSageAppStorage, SageAppPackageManifest, SageGrantedNetworkPermissions,
+    SageGrantedPermissions,
 };
 use crate::error::Result;
 
@@ -88,6 +90,29 @@ pub fn builtin_test_app_dir(app_id: &str) -> AnyResult<Option<PathBuf>> {
     };
 
     Ok(Some(builtin_test_apps_root().join(spec.dir_name)))
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn builtin_storage(app_id: &str) -> InstalledSageAppStorage {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("builtin-storage:{app_id}").as_bytes());
+    let digest = hasher.finalize();
+
+    InstalledSageAppStorage::AppleDataStore {
+        identifier_hex: hex::encode(&digest[..16]),
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn builtin_storage(app_id: &str) -> InstalledSageAppStorage {
+    InstalledSageAppStorage::WindowsProfile {
+        directory_name: format!("builtin-profile-{app_id}"),
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "windows")))]
+fn builtin_storage(_app_id: &str) -> InstalledSageAppStorage {
+    InstalledSageAppStorage::Unsupported
 }
 
 fn read_builtin_manifest(app_dir: &PathBuf) -> AnyResult<SageAppPackageManifest> {
@@ -209,6 +234,7 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
         requested_permissions: manifest.permissions.clone(),
         granted_permissions,
         capability_flags: permission_flags,
+        storage: builtin_storage(spec.app_id),
         source: InstalledSageAppSource::Zip,
         active_snapshot: InstalledSageAppSnapshot {
             manifest_hash: format!("builtin:{}", spec.app_id),

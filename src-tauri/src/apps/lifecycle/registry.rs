@@ -7,10 +7,11 @@ use anyhow::{Context, Result as AnyResult};
 use serde::{Deserialize, Serialize};
 
 use crate::apps::types::{
-    CorruptedInstalledSageApp, InstalledSageApp, InstalledSageAppPendingUpdate,
-    InstalledSageAppCapabilityFlags, InstalledSageAppSnapshot, InstalledSageAppSource,
-    ListedSageApp, SageAppManifestFile, SageAppPackageManifest, SageGrantedPermissions,
-    SageNetworkPermissionTarget, SageRequestedCapabilities, SageRequestedNetworkPermissions,
+    CorruptedInstalledSageApp, InstalledSageApp, InstalledSageAppCapabilityFlags,
+    InstalledSageAppPendingUpdate, InstalledSageAppSnapshot, InstalledSageAppSource,
+    InstalledSageAppStorage, ListedSageApp, SageAppManifestFile,
+    SageAppPackageManifest, SageGrantedPermissions, SageNetworkPermissionTarget,
+    SageRequestedCapabilities, SageRequestedNetworkPermissions,
     SageRequestedNetworkWhitelist, SageRequestedPermissions,
 };
 
@@ -106,6 +107,8 @@ struct PersistedInstalledSageApp {
 
     #[serde(rename = "capabilityFlags", alias = "capability_flags")]
     capability_flags: InstalledSageAppCapabilityFlags,
+
+    storage: InstalledSageAppStorage,
 
     source: InstalledSageAppSource,
 
@@ -288,7 +291,8 @@ fn to_persisted_installed_app(app: &InstalledSageApp) -> PersistedInstalledSageA
             &app.requested_permissions,
         ),
         granted_permissions: app.granted_permissions.clone(),
-        capability_flags: app.capability_flags.clone(),
+        capability_flags: app.capability_flags,
+        storage: app.storage.clone(),
         source: app.source.clone(),
         active_snapshot: to_persisted_snapshot(&app.active_snapshot),
         pending_update: app
@@ -313,6 +317,7 @@ fn from_persisted_installed_app(
         )?,
         granted_permissions: app.granted_permissions,
         capability_flags: app.capability_flags,
+        storage: app.storage,
         source: app.source,
         active_snapshot: from_persisted_snapshot(app.active_snapshot)?,
         pending_update: app

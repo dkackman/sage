@@ -13,25 +13,31 @@ use std::path::PathBuf;
 
 use crate::apps::sandbox;
 use crate::apps::state::AppsHostState;
+use crate::apps::types::InstalledSageAppStorage;
 
 use super::records::{inline_label_for, runtime_id_for, SageAppRuntimeRecord};
 use super::resolve::{build_entry_src, is_allowed_app_url, resolve_app, should_use_incognito};
 
 #[cfg(target_os = "windows")]
-fn data_directory_for(app_id: &str) -> PathBuf {
-    PathBuf::from("profiles").join(app_id)
+fn data_directory_for(directory_name: &str) -> PathBuf {
+    PathBuf::from("profiles").join(directory_name)
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-fn data_store_id_for(app_id: &str) -> [u8; 16] {
-    let bytes = app_id.as_bytes();
-    let mut out = [0_u8; 16];
+fn parse_data_store_id(identifier_hex: &str) -> Result<[u8; 16], String> {
+    let bytes = hex::decode(identifier_hex)
+        .map_err(|err| format!("invalid data store identifier hex: {err}"))?;
 
-    for (i, byte) in bytes.iter().enumerate() {
-        out[i % 16] = out[i % 16].wrapping_add(*byte).wrapping_add(i as u8);
+    if bytes.len() != 16 {
+        return Err(format!(
+            "invalid data store identifier length {}, expected 16 bytes",
+            bytes.len()
+        ));
     }
 
-    out
+    let mut out = [0_u8; 16];
+    out.copy_from_slice(&bytes);
+    Ok(out)
 }
 
 #[derive(Debug, Deserialize, Type)]
@@ -105,14 +111,19 @@ pub async fn apps_create_inline_runtime(
     if is_incognito {
         builder = builder.incognito(true);
     } else {
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        {
-            builder = builder.data_store_identifier(data_store_id_for(&installed.id));
-        }
+        match &installed.storage {
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            InstalledSageAppStorage::AppleDataStore { identifier_hex } => {
+                let identifier = parse_data_store_id(identifier_hex)?;
+                builder = builder.data_store_identifier(identifier);
+            }
 
-        #[cfg(target_os = "windows")]
-        {
-            builder = builder.data_directory(data_directory_for(&installed.id));
+            #[cfg(target_os = "windows")]
+            InstalledSageAppStorage::WindowsProfile { directory_name } => {
+                builder = builder.data_directory(data_directory_for(directory_name));
+            }
+
+            _ => {}
         }
     }
 
