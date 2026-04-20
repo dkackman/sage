@@ -154,7 +154,7 @@ pub async fn apply_app_update(
 
     let permission_flags = resolve_capability_flags(
         &granted_permissions.capabilities,
-        Some(&app.permission_flags),
+        Some(&app.capability_flags),
     )
         .map_err(|err| {
             io::Error::other(format!("invalid granted permission policy for update: {err}"))
@@ -182,7 +182,7 @@ pub async fn apply_app_update(
         },
     };
 
-    app.permission_flags = permission_flags;
+    app.capability_flags = permission_flags;
     app.active_snapshot = snapshot;
     app.entry_file = manifest_entry_file(&app.active_snapshot.manifest).to_string();
     app.icon_file = manifest_icon_file(&app.active_snapshot.manifest).to_string();
@@ -221,7 +221,7 @@ pub async fn apps_update_permissions(
 
     let mut permission_flags = resolve_capability_flags(
         &granted_permissions.capabilities,
-        Some(&app.permission_flags),
+        Some(&app.capability_flags),
     )
         .map_err(|err| io::Error::other(err.to_string()))?;
 
@@ -236,7 +236,7 @@ pub async fn apps_update_permissions(
         },
     };
 
-    app.permission_flags = resolve_capability_flags(
+    app.capability_flags = resolve_capability_flags(
         &app.granted_permissions.capabilities,
         Some(&permission_flags),
     )
@@ -263,15 +263,15 @@ pub async fn apps_mark_storage_may_contain_secrets(
     let mut app = read_installed_app_by_id(&base_path, &app_id)
         .map_err(|err| io::Error::other(format!("failed to read app {app_id}: {err}")))?;
 
-    if !app.permission_flags.has_secret_access {
+    if !app.capability_flags.has_secret_access {
         return Ok(());
     }
 
-    if app.permission_flags.storage_may_contain_secrets {
+    if app.capability_flags.storage_may_contain_secrets {
         return Ok(());
     }
 
-    app.permission_flags = mark_storage_may_contain_secrets(&app.permission_flags);
+    app.capability_flags = mark_storage_may_contain_secrets(&app.capability_flags);
 
     let install_dir = PathBuf::from(&app.install_dir);
     write_installed_app_metadata(&app, &install_dir)

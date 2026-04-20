@@ -104,8 +104,8 @@ struct PersistedInstalledSageApp {
     #[serde(rename = "grantedPermissions", alias = "granted_permissions")]
     granted_permissions: SageGrantedPermissions,
 
-    #[serde(rename = "permissionFlags", alias = "permission_flags")]
-    permission_flags: InstalledSageAppCapabilityFlags,
+    #[serde(rename = "capabilityFlags", alias = "capability_flags")]
+    capability_flags: InstalledSageAppCapabilityFlags,
 
     source: InstalledSageAppSource,
 
@@ -288,7 +288,7 @@ fn to_persisted_installed_app(app: &InstalledSageApp) -> PersistedInstalledSageA
             &app.requested_permissions,
         ),
         granted_permissions: app.granted_permissions.clone(),
-        permission_flags: app.permission_flags.clone(),
+        capability_flags: app.capability_flags.clone(),
         source: app.source.clone(),
         active_snapshot: to_persisted_snapshot(&app.active_snapshot),
         pending_update: app
@@ -312,7 +312,7 @@ fn from_persisted_installed_app(
             app.requested_permissions,
         )?,
         granted_permissions: app.granted_permissions,
-        permission_flags: app.permission_flags,
+        capability_flags: app.capability_flags,
         source: app.source,
         active_snapshot: from_persisted_snapshot(app.active_snapshot)?,
         pending_update: app

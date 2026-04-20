@@ -134,7 +134,7 @@ fn build_installed_app(
         icon_file: manifest_icon_file(manifest).to_string(),
         requested_permissions: manifest.permissions.clone(),
         granted_permissions,
-        permission_flags,
+        capability_flags: permission_flags,
         source,
         active_snapshot: snapshot,
         pending_update: None,

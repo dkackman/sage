@@ -159,8 +159,8 @@ pub struct InstalledSageApp {
     #[serde(rename = "grantedPermissions", alias = "granted_permissions")]
     pub granted_permissions: SageGrantedPermissions,
 
-    #[serde(rename = "permissionFlags", alias = "permission_flags")]
-    pub permission_flags: InstalledSageAppCapabilityFlags,
+    #[serde(rename = "capabilityFlags", alias = "capability_flags")]
+    pub capability_flags: InstalledSageAppCapabilityFlags,
 
     pub source: InstalledSageAppSource,
 

@@ -117,7 +117,7 @@ fn should_use_incognito(app: &InstalledSageApp) -> bool {
         return true;
     }
 
-    if app.permission_flags.storage_may_contain_secrets {
+    if app.capability_flags.storage_may_contain_secrets {
         return true;
     }
 

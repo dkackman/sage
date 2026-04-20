@@ -202,7 +202,7 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
         icon_file: icon_file_name,
         requested_permissions: manifest.permissions.clone(),
         granted_permissions,
-        permission_flags,
+        capability_flags: permission_flags,
         source: InstalledSageAppSource::Zip,
         active_snapshot: InstalledSageAppSnapshot {
             manifest_hash: format!("builtin:{}", spec.app_id),
