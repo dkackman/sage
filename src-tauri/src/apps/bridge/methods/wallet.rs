@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 
 use super::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::apps::bridge::{failure, success, RustBridgeRequest, RustBridgeResponse};
+use crate::apps::bridge::{
+    failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
+};
 use crate::apps::types::InstalledSageApp;
-
-// If this import fails, adjust only this line.
 use sage_api::SendXch;
 
 #[derive(Debug, Clone, Copy)]
@@ -16,12 +16,34 @@ impl BridgeMethod for WalletSendXch {
         Some("wallet.send_xch")
     }
 
-    fn requires_approval(&self, app: &InstalledSageApp) -> bool {
+    fn requires_approval(
+        &self,
+        app: &InstalledSageApp,
+        _request: &RustBridgeRequest,
+    ) -> bool {
         !app
             .granted_permissions
             .capabilities
             .iter()
             .any(|cap| cap == "wallet.send_xch_auto_submit")
+    }
+
+    fn approval_request(
+        &self,
+        ctx: BridgeContext<'_>,
+        request: &RustBridgeRequest,
+    ) -> Option<RustBridgeApprovalRequest> {
+        if !self.requires_approval(ctx.app, request) {
+            return None;
+        }
+
+        Some(RustBridgeApprovalRequest {
+            kind: "send_xch".into(),
+            app: ctx.app.clone(),
+            source_label: ctx.source_label.to_string(),
+            request_id: request.id.clone(),
+            params_json: request.params_json.clone().unwrap_or_else(|| "null".into()),
+        })
     }
 
     async fn handle(

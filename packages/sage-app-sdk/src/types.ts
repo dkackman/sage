@@ -76,10 +76,25 @@ export type SageBridgeResponse =
   | SageBridgeSuccessResponse
   | SageBridgeErrorResponse;
 
-export type SageBridgeEventPayload = {
-  sourceLabel: string;
-  request: SageBridgeRequest;
+export type SageGrantedCapabilitiesChangeEvent = {
+  channel: 'sage-bridge';
+  type: 'grantedCapabilitiesChange';
+  removedGrantedCapabilities: string[];
+  addedGrantedCapabilities: string[];
+  fullGrantedCapabilities: string[];
 };
+
+export type SageGrantedNetworkWhitelistChangeEvent = {
+  channel: 'sage-bridge';
+  type: 'grantedNetworkWhitelistChange';
+  removedGrantedNetworkWhitelist: SageRequestedNetworkWhitelistEntry[];
+  addedGrantedNetworkWhitelist: SageRequestedNetworkWhitelistEntry[];
+  fullGrantedNetworkWhitelist: SageRequestedNetworkWhitelistEntry[];
+};
+
+export type SageBridgeRuntimeEvent =
+  | SageGrantedCapabilitiesChangeEvent
+  | SageGrantedNetworkWhitelistChangeEvent;
 
 export type SageBridgeSendPayload = {
   kind: string;
@@ -155,6 +170,28 @@ export type SageWalletSendXchRequest = {
   auto_submit?: boolean;
 };
 
+export type SageRequestCapabilityGrantInput = {
+  capability: string;
+};
+
+export type SageRequestCapabilityGrantResult = {
+  granted: boolean;
+  alreadyGranted?: boolean;
+  capability: string;
+  fullGrantedCapabilities: string[];
+};
+
+export type SageRequestNetworkWhitelistGrantInput = {
+  entry: SageRequestedNetworkWhitelistEntry;
+};
+
+export type SageRequestNetworkWhitelistGrantResult = {
+  granted: boolean;
+  alreadyGranted?: boolean;
+  entry: SageRequestedNetworkWhitelistEntry;
+  fullGrantedNetworkWhitelist: SageRequestedNetworkWhitelistEntry[];
+};
+
 export type SageWalletClient = {
   sendXch(input: SageWalletSendXchRequest): Promise<TransactionResponse>;
 };
@@ -164,6 +201,18 @@ export type SageAppClient = {
   bridgeSend(input: SageBridgeSendPayload): Promise<unknown>;
   getInfo(): Promise<SageAppInfo>;
   getCapabilities(): Promise<string[]>;
+  requestCapabilityGrant(
+    input: SageRequestCapabilityGrantInput,
+  ): Promise<SageRequestCapabilityGrantResult>;
+  requestNetworkWhitelistGrant(
+    input: SageRequestNetworkWhitelistGrantInput,
+  ): Promise<SageRequestNetworkWhitelistGrantResult>;
+  onGrantedCapabilitiesChange(
+    handler: (event: SageGrantedCapabilitiesChangeEvent) => void,
+  ): () => void;
+  onGrantedNetworkWhitelistChange(
+    handler: (event: SageGrantedNetworkWhitelistChangeEvent) => void,
+  ): () => void;
 };
 
 export type SageLifecycleClient = {
@@ -178,3 +227,4 @@ export type SageClient = {
   lifecycle: SageLifecycleClient;
   wallet: SageWalletClient;
 };
+

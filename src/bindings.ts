@@ -368,10 +368,10 @@ async appsAssertBridgeOrigin(sourceLabel: string) : Promise<string> {
 async appsClearRuntimeBrowsingData(appId: string) : Promise<null> {
     return await TAURI_INVOKE("apps_clear_runtime_browsing_data", { appId });
 },
-async appsHandleBridgeRequest(sourceLabel: string, request: RustBridgeRequest) : Promise<RustBridgeHandleResult> {
-    return await TAURI_INVOKE("apps_handle_bridge_request", { sourceLabel, request });
+async appsInvokeBridge(request: RustBridgeRequest) : Promise<RustBridgeInvokeResult> {
+    return await TAURI_INVOKE("apps_invoke_bridge", { request });
 },
-async appsResolveBridgeApproval(args: ResolveBridgeApprovalArgs) : Promise<RustBridgeResponse> {
+async appsResolveBridgeApproval(args: ResolveBridgeApprovalArgs) : Promise<null> {
     return await TAURI_INVOKE("apps_resolve_bridge_approval", { args });
 },
 async appsGetSandboxState() : Promise<SandboxStateView> {
@@ -2225,10 +2225,9 @@ export type ResyncCatResponse = Record<string, never>
  * Response from resynchronizing the wallet
  */
 export type ResyncResponse = Record<string, never>
-export type RustBridgeApprovalRequest = { kind: string; app: InstalledSageApp; sourceLabel: string; requestId: string; paramsJson: string }
 export type RustBridgeErrorPayload = { code: string; message: string }
 export type RustBridgeErrorResponse = { channel: string; bridgeVersion: string; id: string; ok: boolean; error: RustBridgeErrorPayload }
-export type RustBridgeHandleResult = { kind: "immediate"; response: RustBridgeResponse } | { kind: "approvalRequired"; approvalId: string; approval: RustBridgeApprovalRequest }
+export type RustBridgeInvokeResult = { kind: "immediate"; response: RustBridgeResponse } | { kind: "pending" }
 export type RustBridgeRequest = { channel: string; bridgeVersion: string | null; id: string; method: string; paramsJson: string | null }
 export type RustBridgeResponse = RustBridgeSuccessResponse | RustBridgeErrorResponse
 export type RustBridgeSuccessResponse = { channel: string; bridgeVersion: string; id: string; ok: boolean; resultJson: string }

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile-capability",
-  "windows": ["main"],
+  "webviews": ["main"],
   "platforms": ["android", "iOS"],
   "permissions": [
     "safe-area-insets:default",

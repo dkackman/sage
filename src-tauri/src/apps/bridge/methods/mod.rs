@@ -4,7 +4,7 @@ pub mod wallet;
 use async_trait::async_trait;
 
 use crate::app_state::AppState;
-use crate::apps::bridge::{RustBridgeRequest, RustBridgeResponse};
+use crate::apps::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::apps::types::InstalledSageApp;
 
 #[derive(Debug)]
@@ -26,8 +26,33 @@ pub trait BridgeMethod: Send + Sync {
         None
     }
 
-    fn requires_approval(&self, _app: &InstalledSageApp) -> bool {
+    fn requires_approval(
+        &self,
+        _app: &InstalledSageApp,
+        _request: &RustBridgeRequest,
+    ) -> bool {
         false
+    }
+
+    fn approval_request(
+        &self,
+        ctx: BridgeContext<'_>,
+        request: &RustBridgeRequest,
+    ) -> Option<RustBridgeApprovalRequest> {
+        if !self.requires_approval(ctx.app, request) {
+            return None;
+        }
+
+        Some(RustBridgeApprovalRequest {
+            kind: "unknown".into(),
+            app: ctx.app.clone(),
+            source_label: ctx.source_label.to_string(),
+            request_id: request.id.clone(),
+            params_json: request
+                .params_json
+                .clone()
+                .unwrap_or_else(|| "null".to_string()),
+        })
     }
 
     async fn handle(

@@ -10,6 +10,38 @@ interface Props {
   onReject: () => void;
 }
 
+function renderApprovalDetails(currentApproval: PendingApprovalItem) {
+  switch (currentApproval.request.kind) {
+    case 'send_xch':
+      return (
+        <div className='rounded-md border p-3 text-xs font-mono whitespace-pre-wrap break-all'>
+          {JSON.stringify(currentApproval.request.params, null, 2)}
+        </div>
+      );
+
+    case 'capability_grant':
+      return (
+        <div className='rounded-md border p-3 text-xs'>
+          Grant capability:{' '}
+          <span className='font-mono'>
+            {currentApproval.request.capability}
+          </span>
+        </div>
+      );
+
+    case 'network_whitelist_grant':
+      return (
+        <div className='rounded-md border p-3 text-xs'>
+          Grant network access:{' '}
+          <span className='font-mono'>
+            {currentApproval.request.entry.scheme}://
+            {currentApproval.request.entry.host}
+          </span>
+        </div>
+      );
+  }
+}
+
 export function AppApprovalBanner({
   currentApproval,
   queuedApprovalCount,
@@ -38,11 +70,7 @@ export function AppApprovalBanner({
             : ''}
         </div>
 
-        {currentApproval.request.kind === 'send_xch' ? (
-          <div className='rounded-md border p-3 text-xs font-mono whitespace-pre-wrap break-all'>
-            {JSON.stringify(currentApproval.request.params, null, 2)}
-          </div>
-        ) : null}
+        {renderApprovalDetails(currentApproval)}
 
         <div className='flex gap-2'>
           <Button variant='outline' onClick={onReject}>

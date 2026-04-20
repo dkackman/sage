@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "enables the default permissions",
-  "windows": ["main"],
+  "webviews": ["main"],
   "permissions": [
     "core:path:default",
     "core:event:default",
@@ -23,6 +23,7 @@
     "clipboard-manager:default",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-text",
-    "opener:default"
+    "opener:default",
+    "main-host"
   ]
 }

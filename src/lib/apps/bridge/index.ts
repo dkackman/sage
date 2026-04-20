@@ -1,23 +1,7 @@
 import type { SageBridgeRequest, SageBridgeVersion } from './types';
 import { isKnownSageBridgeMethod } from './types';
 
-export type {
-  BridgeApprovalRequest,
-  BridgeApprovalResult,
-  SageBridgeContext,
-  SageBridgeErrorResponse,
-  SageBridgeEventPayload,
-  SageBridgeHostTools,
-  SageBridgeMethod,
-  SageBridgeRequest,
-  SageBridgeRequestForMethod,
-  SageBridgeRequestParamsMap,
-  SageBridgeResponse,
-  SageBridgeSendPayload,
-  SageBridgeSuccessResponse,
-  SageBridgeVersion,
-  SageWalletSendXchRequest,
-} from './types';
+export type { BridgeApprovalRequest, BridgeApprovalResult } from './types';
 
 const SUPPORTED_BRIDGE_VERSION: SageBridgeVersion = 'v1';
 

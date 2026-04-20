@@ -1,11 +1,18 @@
+import { invoke } from '@tauri-apps/api/core';
 import type {
   SageAppInfo,
-  SageBridgeEventPayload,
   SageBridgeRequest,
   SageBridgeResponse,
+  SageBridgeRuntimeEvent,
   SageBridgeSendPayload,
   SageBridgeVersion,
   SageClient,
+  SageGrantedCapabilitiesChangeEvent,
+  SageGrantedNetworkWhitelistChangeEvent,
+  SageRequestCapabilityGrantInput,
+  SageRequestCapabilityGrantResult,
+  SageRequestNetworkWhitelistGrantInput,
+  SageRequestNetworkWhitelistGrantResult,
   SageWalletSendXchRequest,
   TransactionResponse,
 } from './types';
@@ -20,7 +27,6 @@ type SageUnlisten = () => void;
 
 type SageWebviewHandle = {
   label: string;
-  emitTo(target: string, event: string, payload: unknown): Promise<void>;
   listen<T = unknown>(
     event: string,
     handler: (event: SageListenEvent<T>) => void,
@@ -47,6 +53,34 @@ type PendingBridgeRequest = {
   timeoutId: number;
   method: string;
 };
+
+type RustBridgeResponse =
+  | {
+      channel: string;
+      bridgeVersion: string;
+      id: string;
+      ok: true;
+      resultJson: string;
+    }
+  | {
+      channel: string;
+      bridgeVersion: string;
+      id: string;
+      ok: false;
+      error: {
+        code: string;
+        message: string;
+      };
+    };
+
+type RustBridgeInvokeResult =
+  | {
+      kind: 'immediate';
+      response: RustBridgeResponse;
+    }
+  | {
+      kind: 'pending';
+    };
 
 function getSageWindow(): SageWindow {
   return window as SageWindow;
@@ -83,6 +117,58 @@ function tryGetCurrentWebview(): SageWebviewHandle | null {
   return tauri.webview.getCurrentWebview();
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object';
+}
+
+function parseJsonOrNull(value: string | null | undefined): unknown {
+  if (value == null) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (err) {
+    console.error('Failed to parse JSON payload from Rust bridge:', err, value);
+    return null;
+  }
+}
+
+function toSdkBridgeResponse(response: RustBridgeResponse): SageBridgeResponse {
+  if ('resultJson' in response) {
+    return {
+      channel: 'sage-bridge',
+      bridgeVersion: 'v1',
+      id: response.id,
+      ok: true,
+      result: parseJsonOrNull(response.resultJson),
+    };
+  }
+
+  return {
+    channel: 'sage-bridge',
+    bridgeVersion: 'v1',
+    id: response.id,
+    ok: false,
+    error: response.error,
+  };
+}
+
+function isBridgeRuntimeEvent(value: unknown): value is SageBridgeRuntimeEvent {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  if (value.channel !== 'sage-bridge') {
+    return false;
+  }
+
+  return (
+    value.type === 'grantedCapabilitiesChange' ||
+    value.type === 'grantedNetworkWhitelistChange'
+  );
+}
+
 export function initSageRuntimeBridge(): boolean {
   const w = getSageWindow();
 
@@ -102,23 +188,37 @@ export function initSageRuntimeBridge(): boolean {
   const webview: SageWebviewHandle = maybeWebview;
   w.__SAGE_RUNTIME_BRIDGE_INITIALIZED__ = true;
 
-  const sourceLabel = webview.label;
-  const bridgeListeners = new Set<(event: unknown) => void>();
   const pendingRequests = new Map<string, PendingBridgeRequest>();
 
   webview
-    .listen('sage-bridge:event', (event: SageListenEvent) => {
+    .listen('sage-bridge:event', (event: SageListenEvent<unknown>) => {
       const data = event.payload;
-      if (!data || (data as { channel?: string }).channel !== 'sage-bridge') {
+
+      if (!isBridgeRuntimeEvent(data)) {
         return;
       }
 
-      for (const listener of bridgeListeners) {
-        try {
-          listener(data);
-        } catch (error: unknown) {
-          console.error('Sage bridge event listener failed:', error);
+      try {
+        if (data.type === 'grantedCapabilitiesChange') {
+          window.dispatchEvent(
+            new CustomEvent<SageGrantedCapabilitiesChangeEvent>(
+              'sage:granted-capabilities-change',
+              { detail: data },
+            ),
+          );
+          return;
         }
+
+        if (data.type === 'grantedNetworkWhitelistChange') {
+          window.dispatchEvent(
+            new CustomEvent<SageGrantedNetworkWhitelistChangeEvent>(
+              'sage:granted-network-whitelist-change',
+              { detail: data },
+            ),
+          );
+        }
+      } catch (error: unknown) {
+        console.error('Failed to dispatch Sage bridge runtime event:', error);
       }
     })
     .catch((error: unknown) => {
@@ -203,7 +303,7 @@ export function initSageRuntimeBridge(): boolean {
 
         pendingRequests.delete(id);
         reject(new Error(`Sage bridge timeout for ${method}`));
-      }, 15000);
+      }, 30000);
 
       pendingRequests.set(id, {
         resolve: (value) => resolve(value as T),
@@ -222,12 +322,33 @@ export function initSageRuntimeBridge(): boolean {
             params,
           };
 
-          const payload: SageBridgeEventPayload = {
-            sourceLabel,
-            request,
-          };
+          const result = await invoke<RustBridgeInvokeResult>(
+            'apps_invoke_bridge',
+            {
+              request: {
+                channel: request.channel,
+                bridgeVersion: request.bridgeVersion ?? null,
+                id: request.id,
+                method: request.method,
+                paramsJson:
+                  request.params === undefined
+                    ? null
+                    : JSON.stringify(request.params),
+              },
+            },
+          );
 
-          await webview.emitTo('main', 'sage-bridge:request', payload);
+          if (result.kind === 'immediate') {
+            const response = toSdkBridgeResponse(result.response);
+            pendingRequests.delete(id);
+            window.clearTimeout(timeoutId);
+
+            if (response.ok) {
+              resolve(response.result as T);
+            } else {
+              reject(new Error(response.error.message));
+            }
+          }
         } catch (error: unknown) {
           const pending = pendingRequests.get(id);
           if (!pending) {
@@ -259,6 +380,62 @@ export function initSageRuntimeBridge(): boolean {
 
       async getCapabilities() {
         return await callHost<string[]>('sage.getCapabilities');
+      },
+
+      async requestCapabilityGrant(input: SageRequestCapabilityGrantInput) {
+        return await callHost<SageRequestCapabilityGrantResult>(
+          'sage.requestCapabilityGrant',
+          input,
+        );
+      },
+
+      async requestNetworkWhitelistGrant(
+        input: SageRequestNetworkWhitelistGrantInput,
+      ) {
+        return await callHost<SageRequestNetworkWhitelistGrantResult>(
+          'sage.requestNetworkWhitelistGrant',
+          input,
+        );
+      },
+
+      onGrantedCapabilitiesChange(handler) {
+        const listener = (event: Event) => {
+          const custom =
+            event as CustomEvent<SageGrantedCapabilitiesChangeEvent>;
+          handler(custom.detail);
+        };
+
+        window.addEventListener(
+          'sage:granted-capabilities-change',
+          listener as EventListener,
+        );
+
+        return () => {
+          window.removeEventListener(
+            'sage:granted-capabilities-change',
+            listener as EventListener,
+          );
+        };
+      },
+
+      onGrantedNetworkWhitelistChange(handler) {
+        const listener = (event: Event) => {
+          const custom =
+            event as CustomEvent<SageGrantedNetworkWhitelistChangeEvent>;
+          handler(custom.detail);
+        };
+
+        window.addEventListener(
+          'sage:granted-network-whitelist-change',
+          listener as EventListener,
+        );
+
+        return () => {
+          window.removeEventListener(
+            'sage:granted-network-whitelist-change',
+            listener as EventListener,
+          );
+        };
       },
     },
 
@@ -298,3 +475,4 @@ export function initSageRuntimeBridge(): boolean {
 
   return true;
 }
+

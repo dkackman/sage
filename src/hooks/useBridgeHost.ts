@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWebview } from '@tauri-apps/api/webview';
-import {
-  isBridgeRequest,
-  type BridgeApprovalRequest,
-  type SageBridgeEventPayload,
-  type SageBridgeResponse,
-} from '@/lib/apps/bridge';
-import { RustBridgeHandleResult, RustBridgeResponse } from '@/bindings.ts';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import type { BridgeApprovalRequest } from '@/lib/apps/bridge';
 
 interface Args {
   requestApproval: (
     request: BridgeApprovalRequest,
   ) => Promise<{ approved: boolean; reason?: string }>;
+}
+
+interface RustBridgeApprovalRequestPayload {
+  kind: string;
+  app: BridgeApprovalRequest['app'];
+  sourceLabel: string;
+  requestId: string;
+  paramsJson: string;
+}
+
+interface RustBridgeApprovalEvent {
+  approvalId: string;
+  approval: RustBridgeApprovalRequestPayload;
 }
 
 function parseJsonOrNull(value: string | null | undefined): unknown {
@@ -23,42 +30,70 @@ function parseJsonOrNull(value: string | null | undefined): unknown {
   try {
     return JSON.parse(value);
   } catch (err) {
-    console.error('Failed to parse JSON payload from Rust bridge:', err, value);
+    console.error('Failed to parse Rust bridge approval payload:', err, value);
     return null;
   }
 }
 
-function toSdkBridgeResponse(response: RustBridgeResponse): SageBridgeResponse {
-  if ('resultJson' in response) {
+function toBridgeApprovalRequest(
+  payload: RustBridgeApprovalRequestPayload,
+): BridgeApprovalRequest | null {
+  if (payload.kind === 'send_xch') {
     return {
-      channel: 'sage-bridge',
-      bridgeVersion: 'v1',
-      id: response.id,
-      ok: true,
-      result: parseJsonOrNull(response.resultJson),
+      kind: 'send_xch',
+      app: payload.app,
+      sourceLabel: payload.sourceLabel,
+      requestId: payload.requestId,
+      params: parseJsonOrNull(
+        payload.paramsJson,
+      ) as BridgeApprovalRequest extends {
+        kind: 'send_xch';
+        params: infer P;
+      }
+        ? P
+        : never,
     };
   }
 
-  if ('error' in response) {
+  if (payload.kind === 'capability_grant') {
+    const parsed = parseJsonOrNull(payload.paramsJson) as {
+      capability?: string;
+    } | null;
+    if (!parsed?.capability) {
+      return null;
+    }
+
     return {
-      channel: 'sage-bridge',
-      bridgeVersion: 'v1',
-      id: response.id,
-      ok: false,
-      error: response.error,
+      kind: 'capability_grant',
+      app: payload.app,
+      sourceLabel: payload.sourceLabel,
+      requestId: payload.requestId,
+      capability: parsed.capability,
     };
   }
 
-  return {
-    channel: 'sage-bridge',
-    bridgeVersion: 'v1',
-    id: 'unknown',
-    ok: false,
-    error: {
-      code: 'internal_error',
-      message: 'Unknown Rust bridge response shape',
-    },
-  };
+  if (payload.kind === 'network_whitelist_grant') {
+    const parsed = parseJsonOrNull(payload.paramsJson) as {
+      entry?: { scheme?: string; host?: string };
+    } | null;
+
+    if (!parsed?.entry?.scheme || !parsed?.entry?.host) {
+      return null;
+    }
+
+    return {
+      kind: 'network_whitelist_grant',
+      app: payload.app,
+      sourceLabel: payload.sourceLabel,
+      requestId: payload.requestId,
+      entry: {
+        scheme: parsed.entry.scheme,
+        host: parsed.entry.host,
+      },
+    };
+  }
+
+  return null;
 }
 
 export function useBridgeHost({ requestApproval }: Args) {
@@ -74,75 +109,37 @@ export function useBridgeHost({ requestApproval }: Args) {
     let shouldUnlistenWhenReady = false;
     let unlistenRequest: (() => void) | null = null;
 
-    const hostWebview = getCurrentWebview();
+    const currentWindow = getCurrentWindow();
 
     const mount = async () => {
-      const unlisten = await hostWebview.listen<SageBridgeEventPayload>(
-        'sage-bridge:request',
+      const unlisten = await currentWindow.listen<RustBridgeApprovalEvent>(
+        'apps:bridge-approval-requested',
         ({ payload }) => {
-          if (!payload || !isBridgeRequest(payload.request)) {
+          if (!payload?.approvalId || !payload.approval) {
             return;
           }
 
-          const sourceLabel = payload.sourceLabel;
+          const approvalRequest = toBridgeApprovalRequest(payload.approval);
+          if (!approvalRequest) {
+            console.error('Failed to decode bridge approval request:', payload);
+            return;
+          }
 
           const run = async () => {
-            const result = await invoke<RustBridgeHandleResult>(
-              'apps_handle_bridge_request',
-              {
-                sourceLabel,
-                request: {
-                  channel: payload.request.channel,
-                  bridgeVersion: payload.request.bridgeVersion ?? null,
-                  id: payload.request.id,
-                  method: payload.request.method,
-                  paramsJson:
-                    payload.request.params === undefined
-                      ? null
-                      : JSON.stringify(payload.request.params),
-                },
+            const approvalResult =
+              await requestApprovalRef.current(approvalRequest);
+
+            await invoke('apps_resolve_bridge_approval', {
+              args: {
+                approvalId: payload.approvalId,
+                approved: approvalResult.approved,
+                reason: approvalResult.reason ?? null,
               },
-            );
-
-            if (result.kind === 'immediate') {
-              await hostWebview.emitTo(
-                sourceLabel,
-                'sage-bridge:response',
-                toSdkBridgeResponse(result.response),
-              );
-              return;
-            }
-
-            const approvalResult = await requestApprovalRef.current({
-              kind: 'send_xch',
-              app: result.approval.app,
-              sourceLabel: result.approval.sourceLabel,
-              requestId: result.approval.requestId,
-              params: parseJsonOrNull(
-                result.approval.paramsJson,
-              ) as BridgeApprovalRequest['params'],
             });
-
-            const rawResponse = await invoke<RustBridgeResponse>(
-              'apps_resolve_bridge_approval',
-              {
-                args: {
-                  approvalId: result.approvalId,
-                  approved: approvalResult.approved,
-                  reason: approvalResult.reason ?? null,
-                },
-              },
-            );
-
-            await hostWebview.emitTo(
-              sourceLabel,
-              'sage-bridge:response',
-              toSdkBridgeResponse(rawResponse),
-            );
           };
 
           void run().catch((err) => {
-            console.error('Failed to handle bridge request:', err);
+            console.error('Failed to resolve bridge approval:', err);
           });
         },
       );
@@ -164,7 +161,7 @@ export function useBridgeHost({ requestApproval }: Args) {
     };
 
     void mount().catch((err) => {
-      console.error('Failed to mount bridge host listener:', err);
+      console.error('Failed to mount bridge approval listener:', err);
     });
 
     return () => {

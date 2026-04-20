@@ -6,14 +6,25 @@ export type {
   SageBridgeResponse,
   SageBridgeSuccessResponse,
   SageBridgeErrorResponse,
-  SageBridgeEventPayload,
   SageBridgeSendPayload,
   SageWalletSendXchRequest,
+  SageRequestedNetworkWhitelistEntry,
+  SageGrantedCapabilitiesChangeEvent,
+  SageGrantedNetworkWhitelistChangeEvent,
+  SageRequestCapabilityGrantInput,
+  SageRequestCapabilityGrantResult,
+  SageRequestNetworkWhitelistGrantInput,
+  SageRequestNetworkWhitelistGrantResult,
 } from '@sage-app/sdk';
 
 import type {
   SageBridgeRequest,
   SageBridgeSendPayload,
+  SageRequestedNetworkWhitelistEntry,
+  SageRequestCapabilityGrantInput,
+  SageRequestCapabilityGrantResult,
+  SageRequestNetworkWhitelistGrantInput,
+  SageRequestNetworkWhitelistGrantResult,
   SageWalletSendXchRequest,
 } from '@sage-app/sdk';
 
@@ -22,6 +33,9 @@ export type SageBridgeMethod =
   | 'bridge.send'
   | 'app.getInfo'
   | 'sage.getCapabilities'
+  | 'sage.requestCapabilityGrant'
+  | 'sage.requestNetworkWhitelistGrant'
+  | 'sage.requestNetwortWhitelistGrant'
   | 'wallet.sendXch';
 
 export interface SageBridgeRequestParamsMap {
@@ -29,6 +43,9 @@ export interface SageBridgeRequestParamsMap {
   'bridge.send': SageBridgeSendPayload;
   'app.getInfo': undefined;
   'sage.getCapabilities': undefined;
+  'sage.requestCapabilityGrant': SageRequestCapabilityGrantInput;
+  'sage.requestNetworkWhitelistGrant': SageRequestNetworkWhitelistGrantInput;
+  'sage.requestNetwortWhitelistGrant': SageRequestNetworkWhitelistGrantInput;
   'wallet.sendXch': SageWalletSendXchRequest;
 }
 
@@ -55,57 +72,32 @@ export interface SageBridgeContext {
   sourceLabel: string;
 }
 
-export type BridgePermissionPolicy =
-  | { kind: 'none' }
+export type BridgeApprovalRequest =
   | {
-      kind: 'custom';
-      check: (args: {
-        ctx: SageBridgeContext;
-        request: KnownSageBridgeRequest;
-      }) => void | Promise<void>;
+      kind: 'send_xch';
+      app: InstalledSageApp;
+      sourceLabel: string;
+      requestId: string;
+      params: SageWalletSendXchRequest;
+    }
+  | {
+      kind: 'capability_grant';
+      app: InstalledSageApp;
+      sourceLabel: string;
+      requestId: string;
+      capability: string;
+    }
+  | {
+      kind: 'network_whitelist_grant';
+      app: InstalledSageApp;
+      sourceLabel: string;
+      requestId: string;
+      entry: SageRequestedNetworkWhitelistEntry;
     };
-
-export interface BridgeApprovalRequest {
-  kind: 'send_xch';
-  app: InstalledSageApp;
-  sourceLabel: string;
-  requestId: string;
-  params: SageWalletSendXchRequest;
-}
 
 export type BridgeApprovalResult =
   | { approved: true }
   | { approved: false; reason?: string };
-
-export interface SageBridgeHostTools {
-  requestApproval: (
-    request: BridgeApprovalRequest,
-  ) => Promise<BridgeApprovalResult>;
-}
-
-export type BridgeMethodRequest<M extends SageBridgeMethod> =
-  SageBridgeRequestForMethod<M>;
-
-export interface BridgeMethodHandlerArgs<M extends SageBridgeMethod> {
-  ctx: SageBridgeContext;
-  request: BridgeMethodRequest<M>;
-  tools: SageBridgeHostTools;
-}
-
-export type BridgeApprovalPolicy<M extends SageBridgeMethod> = (args: {
-  ctx: SageBridgeContext;
-  request: SageBridgeRequestForMethod<M>;
-}) => BridgeApprovalRequest | null | Promise<BridgeApprovalRequest | null>;
-
-export interface BridgeMethodDefinition<M extends SageBridgeMethod> {
-  permission?: BridgePermissionPolicy;
-  approval?: BridgeApprovalPolicy<M>;
-  handle: (args: BridgeMethodHandlerArgs<M>) => Promise<unknown>;
-}
-
-export type BridgeMethodRegistry = Partial<{
-  [M in SageBridgeMethod]: BridgeMethodDefinition<M>;
-}>;
 
 export function isKnownSageBridgeMethod(
   method: string,
@@ -115,6 +107,9 @@ export function isKnownSageBridgeMethod(
     method === 'bridge.send' ||
     method === 'app.getInfo' ||
     method === 'sage.getCapabilities' ||
+    method === 'sage.requestCapabilityGrant' ||
+    method === 'sage.requestNetworkWhitelistGrant' ||
+    method === 'sage.requestNetwortWhitelistGrant' ||
     method === 'wallet.sendXch'
   );
 }

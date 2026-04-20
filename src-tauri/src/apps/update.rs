@@ -1,4 +1,4 @@
-use std::{io, path::PathBuf};
+use std::{io, path::{Path, PathBuf}};
 
 use tauri::{command, State};
 
@@ -194,36 +194,28 @@ pub async fn apply_app_update(
     Ok(app)
 }
 
-#[command]
-#[specta::specta]
-pub async fn apps_update_permissions(
-    state: State<'_, AppState>,
-    app_id: String,
+pub fn update_app_permissions_internal(
+    base_path: &Path,
+    app_id: &str,
     granted_permissions: SageGrantedPermissions,
     clear_storage_taint: bool,
-) -> Result<()> {
-    let base_path = {
-        let state = state.lock().await;
-        state.path.clone()
-    };
-
-    let mut app = read_installed_app_by_id(&base_path, &app_id)
-        .map_err(|err| io::Error::other(format!("failed to read app {app_id}: {err}")))?;
+) -> anyhow::Result<InstalledSageApp> {
+    let mut app = read_installed_app_by_id(base_path, app_id)
+        .map_err(|err| anyhow::anyhow!("failed to read app {app_id}: {err}"))?;
 
     validate_granted_capabilities(&app.requested_permissions, &granted_permissions.capabilities)
-        .map_err(|err| io::Error::other(format!("invalid granted permissions: {err}")))?;
+        .map_err(|err| anyhow::anyhow!("invalid granted permissions: {err}"))?;
 
     let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
         &app.active_snapshot.manifest.permissions.network,
         &granted_permissions.network.whitelist,
     )
-        .map_err(|err| io::Error::other(format!("invalid granted network whitelist: {err}")))?;
+        .map_err(|err| anyhow::anyhow!("invalid granted network whitelist: {err}"))?;
 
     let mut permission_flags = resolve_capability_flags(
         &granted_permissions.capabilities,
         Some(&app.capability_flags),
-    )
-        .map_err(|err| io::Error::other(err.to_string()))?;
+    )?;
 
     if clear_storage_taint {
         permission_flags = clear_storage_may_contain_secrets(&permission_flags);
@@ -239,14 +231,36 @@ pub async fn apps_update_permissions(
     app.capability_flags = resolve_capability_flags(
         &app.granted_permissions.capabilities,
         Some(&permission_flags),
-    )
-        .map_err(|err| io::Error::other(err.to_string()))?;
+    )?;
 
     let install_dir = PathBuf::from(&app.install_dir);
     write_installed_app_metadata(&app, &install_dir)
-        .map_err(|err| io::Error::other(format!("failed to write metadata: {err}")))?;
+        .map_err(|err| anyhow::anyhow!("failed to write metadata: {err}"))?;
 
-    Ok(())
+    Ok(app)
+}
+
+#[command]
+#[specta::specta]
+pub async fn apps_update_permissions(
+    state: State<'_, AppState>,
+    app_id: String,
+    granted_permissions: SageGrantedPermissions,
+    clear_storage_taint: bool,
+) -> Result<()> {
+    let base_path = {
+        let state = state.lock().await;
+        state.path.clone()
+    };
+
+    update_app_permissions_internal(
+        &base_path,
+        &app_id,
+        granted_permissions,
+        clear_storage_taint,
+    )
+        .map(|_| ())
+        .map_err(|err| io::Error::other(err.to_string()).into())
 }
 
 #[command]

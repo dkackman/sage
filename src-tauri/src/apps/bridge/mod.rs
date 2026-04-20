@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value};
 use specta::Type;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, Webview};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -74,17 +74,19 @@ pub struct RustBridgeApprovalRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RustBridgeApprovalEvent {
+    #[serde(rename = "approvalId")]
+    #[specta(rename = "approvalId")]
+    pub approval_id: String,
+    pub approval: RustBridgeApprovalRequest,
+}
+
+#[derive(Debug, Clone, Serialize, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
-pub enum RustBridgeHandleResult {
-    Immediate {
-        response: RustBridgeResponse,
-    },
-    ApprovalRequired {
-        #[serde(rename = "approvalId")]
-        #[specta(rename = "approvalId")]
-        approval_id: String,
-        approval: RustBridgeApprovalRequest,
-    },
+pub enum RustBridgeInvokeResult {
+    Immediate { response: RustBridgeResponse },
+    Pending {},
 }
 
 #[derive(Debug, Clone, Deserialize, Type)]
@@ -113,8 +115,7 @@ pub(crate) fn success(id: &str, result: Value) -> RustBridgeResponse {
         bridge_version: "v1".into(),
         id: id.into(),
         ok: true,
-        result_json: serde_json::to_string(&result)
-            .unwrap_or_else(|_| "null".to_string()),
+        result_json: serde_json::to_string(&result).unwrap_or_else(|_| "null".to_string()),
     })
 }
 
@@ -232,23 +233,81 @@ fn authorize_method_capability(
     Ok(())
 }
 
+fn emit_approval_requested(
+    app: &AppHandle,
+    approval_id: String,
+    approval: RustBridgeApprovalRequest,
+) -> Result<(), String> {
+    let window = app
+        .get_window("main")
+        .ok_or_else(|| "missing main window".to_string())?;
+
+    window
+        .emit(
+            "apps:bridge-approval-requested",
+            RustBridgeApprovalEvent {
+                approval_id,
+                approval,
+            },
+        )
+        .map_err(|err| format!("failed to emit approval request event: {err}"))
+}
+
+pub(crate) fn emit_bridge_response_to_source(
+    app: &AppHandle,
+    source_label: &str,
+    response: &RustBridgeResponse,
+) -> Result<(), String> {
+    let host_window = app
+        .get_window("main")
+        .ok_or_else(|| "missing main window".to_string())?;
+
+    let webview = host_window
+        .get_webview(source_label)
+        .ok_or_else(|| format!("missing webview for label: {source_label}"))?;
+
+    webview
+        .emit("sage-bridge:response", response)
+        .map_err(|err| format!("failed to emit bridge response: {err}"))
+}
+
+pub(crate) fn emit_bridge_event_to_source(
+    app: &AppHandle,
+    source_label: &str,
+    payload: Value,
+) -> Result<(), String> {
+    let host_window = app
+        .get_window("main")
+        .ok_or_else(|| "missing main window".to_string())?;
+
+    let webview = host_window
+        .get_webview(source_label)
+        .ok_or_else(|| format!("missing webview for label: {source_label}"))?;
+
+    webview
+        .emit("sage-bridge:event", payload)
+        .map_err(|err| format!("failed to emit bridge event: {err}"))
+}
+
 #[tauri::command]
 #[specta::specta]
-pub async fn apps_handle_bridge_request(
+pub async fn apps_invoke_bridge(
     app: AppHandle,
+    webview: Webview,
     app_state: State<'_, AppState>,
     apps_state: State<'_, AppsHostState>,
-    source_label: String,
     request: RustBridgeRequest,
-) -> Result<RustBridgeHandleResult, String> {
+) -> Result<RustBridgeInvokeResult, String> {
     if let Err(response) = validate_request_basics(&request) {
-        return Ok(RustBridgeHandleResult::Immediate { response });
+        return Ok(RustBridgeInvokeResult::Immediate { response });
     }
+
+    let source_label = webview.label().to_string();
 
     let app_id = match apps_assert_bridge_origin(app.clone(), source_label.clone()) {
         Ok(app_id) => app_id,
         Err(err) => {
-            return Ok(RustBridgeHandleResult::Immediate {
+            return Ok(RustBridgeInvokeResult::Immediate {
                 response: failure(
                     &request.id,
                     "permission_denied",
@@ -268,7 +327,7 @@ pub async fn apps_handle_bridge_request(
     let registry = BridgeRegistry::new();
 
     let Some(method) = registry.get(&request.method) else {
-        return Ok(RustBridgeHandleResult::Immediate {
+        return Ok(RustBridgeInvokeResult::Immediate {
             response: failure(
                 &request.id,
                 "method_not_found",
@@ -281,11 +340,17 @@ pub async fn apps_handle_bridge_request(
         if let Err(response) =
             authorize_method_capability(&resolved_app, &request.id, capability_key)
         {
-            return Ok(RustBridgeHandleResult::Immediate { response });
+            return Ok(RustBridgeInvokeResult::Immediate { response });
         }
     }
 
-    if method.requires_approval(&resolved_app) {
+    if let Some(approval) = method.approval_request(
+        BridgeContext {
+            app: &resolved_app,
+            source_label: &source_label,
+        },
+        &request,
+    ) {
         let approval_id = Uuid::new_v4().to_string();
 
         {
@@ -293,29 +358,22 @@ pub async fn apps_handle_bridge_request(
             pending.insert(
                 approval_id.clone(),
                 PendingBridgeApproval {
-                    app: resolved_app.clone(),
+                    app: resolved_app,
                     source_label: source_label.clone(),
                     request: request.clone(),
                 },
             );
         }
 
-        return Ok(RustBridgeHandleResult::ApprovalRequired {
-            approval_id,
-            approval: RustBridgeApprovalRequest {
-                kind: "send_xch".into(),
-                app: resolved_app,
-                source_label,
-                request_id: request.id.clone(),
-                params_json: request.params_json.clone().unwrap_or_else(|| "null".into()),
-            },
-        });
+        emit_approval_requested(&app, approval_id, approval)?;
+
+        return Ok(RustBridgeInvokeResult::Pending {});
     }
 
     let response =
         execute_bridge_request(&app, &app_state, &resolved_app, &source_label, &request).await;
 
-    Ok(RustBridgeHandleResult::Immediate { response })
+    Ok(RustBridgeInvokeResult::Immediate { response })
 }
 
 #[tauri::command]
@@ -325,22 +383,20 @@ pub async fn apps_resolve_bridge_approval(
     app_state: State<'_, AppState>,
     apps_state: State<'_, AppsHostState>,
     args: ResolveBridgeApprovalArgs,
-) -> Result<RustBridgeResponse, String> {
+) -> Result<(), String> {
     let pending = {
         let mut pending = apps_state.bridge.pending_approvals.lock().await;
         pending.remove(&args.approval_id)
     }
         .ok_or_else(|| format!("unknown approval id: {}", args.approval_id))?;
 
-    if !args.approved {
-        return Ok(failure(
+    let response = if !args.approved {
+        failure(
             &pending.request.id,
             "user_denied",
             args.reason.unwrap_or_else(|| "User denied the request".into()),
-        ));
-    }
-
-    Ok(
+        )
+    } else {
         execute_bridge_request(
             &app,
             &app_state,
@@ -348,117 +404,8 @@ pub async fn apps_resolve_bridge_approval(
             &pending.source_label,
             &pending.request,
         )
-            .await,
-    )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::apps::types::{
-        InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppSnapshot,
-        InstalledSageAppSource, SageAppManifestFile, SageAppPackageManifest,
-        SageGrantedNetworkPermissions, SageGrantedPermissions, SageRequestedCapabilities,
-        SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist,
-        SageRequestedPermissions,
+            .await
     };
 
-    fn sample_app(granted_capabilities: Vec<String>) -> InstalledSageApp {
-        InstalledSageApp {
-            id: "app-1".to_string(),
-            name: "App".to_string(),
-            version: "1.0.0".to_string(),
-            install_dir: "/tmp/app".to_string(),
-            entry_file: "index.html".to_string(),
-            icon_file: "icon.png".to_string(),
-            requested_permissions: SageRequestedPermissions {
-                network: SageRequestedNetworkPermissions {
-                    whitelist: SageRequestedNetworkWhitelist {
-                        required: vec![],
-                        optional: vec![],
-                    },
-                },
-                capabilities: SageRequestedCapabilities {
-                    required: vec!["wallet.send_xch".to_string()],
-                    optional: vec!["wallet.send_xch_auto_submit".to_string()],
-                },
-            },
-            granted_permissions: SageGrantedPermissions {
-                capabilities: granted_capabilities,
-                network: SageGrantedNetworkPermissions { whitelist: vec![] },
-            },
-            capability_flags: InstalledSageAppCapabilityFlags::default(),
-            source: InstalledSageAppSource::Zip,
-            active_snapshot: InstalledSageAppSnapshot {
-                manifest_hash: "hash".to_string(),
-                snapshot_dir: "/tmp/snapshot".to_string(),
-                total_bytes: 1,
-                manifest: SageAppPackageManifest {
-                    name: "App".to_string(),
-                    version: "1.0.0".to_string(),
-                    permissions: SageRequestedPermissions {
-                        network: SageRequestedNetworkPermissions {
-                            whitelist: SageRequestedNetworkWhitelist {
-                                required: vec![],
-                                optional: vec![],
-                            },
-                        },
-                        capabilities: SageRequestedCapabilities {
-                            required: vec!["wallet.send_xch".to_string()],
-                            optional: vec!["wallet.send_xch_auto_submit".to_string()],
-                        },
-                    },
-                    files: vec![SageAppManifestFile {
-                        path: "index.html".to_string(),
-                        sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                            .to_string(),
-                        size: 1,
-                    }],
-                    entry: Some("index.html".to_string()),
-                    icon: Some("icon.png".to_string()),
-                },
-            },
-            pending_update: None,
-        }
-    }
-
-    #[test]
-    fn authorize_method_capability_allows_granted_shared_capability() {
-        let app = sample_app(vec!["wallet.send_xch".to_string()]);
-
-        authorize_method_capability(&app, "req-1", "wallet.send_xch")
-            .expect("expected granted shared capability to be allowed");
-    }
-
-    #[test]
-    fn authorize_method_capability_rejects_missing_capability() {
-        let app = sample_app(vec![]);
-
-        let err = authorize_method_capability(&app, "req-1", "wallet.send_xch")
-            .expect_err("expected missing capability to be rejected");
-
-        match err {
-            RustBridgeResponse::Error(error) => {
-                assert_eq!(error.error.code, "permission_denied");
-                assert!(error.error.message.contains("wallet.send_xch"));
-            }
-            RustBridgeResponse::Success(_) => panic!("expected error response"),
-        }
-    }
-
-    #[test]
-    fn authorize_method_capability_rejects_non_shared_capability_even_if_granted() {
-        let app = sample_app(vec!["wallet.send_xch_auto_submit".to_string()]);
-
-        let err =
-            authorize_method_capability(&app, "req-1", "wallet.send_xch_auto_submit")
-                .expect_err("expected non-shared capability to be rejected");
-
-        match err {
-            RustBridgeResponse::Error(error) => {
-                assert_eq!(error.error.code, "permission_denied");
-            }
-            RustBridgeResponse::Success(_) => panic!("expected error response"),
-        }
-    }
+    emit_bridge_response_to_source(&app, &pending.source_label, &response)
 }

@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use super::methods::system::{AppGetInfo, BridgePing, BridgeSend, SageGetCapabilities};
+use super::methods::system::{
+    AppGetInfo, BridgePing, BridgeSend, SageGetCapabilities, SageRequestCapabilityGrant,
+    SageRequestNetworkWhitelistGrant,
+};
 use super::methods::wallet::WalletSendXch;
 use super::methods::BridgeMethod;
 
@@ -16,6 +19,18 @@ impl BridgeRegistry {
         methods.insert("bridge.send", Box::new(BridgeSend));
         methods.insert("app.getInfo", Box::new(AppGetInfo));
         methods.insert("sage.getCapabilities", Box::new(SageGetCapabilities));
+        methods.insert(
+            "sage.requestCapabilityGrant",
+            Box::new(SageRequestCapabilityGrant),
+        );
+        methods.insert(
+            "sage.requestNetworkWhitelistGrant",
+            Box::new(SageRequestNetworkWhitelistGrant),
+        );
+        methods.insert(
+            "sage.requestNetwortWhitelistGrant",
+            Box::new(SageRequestNetworkWhitelistGrant),
+        );
         methods.insert("wallet.sendXch", Box::new(WalletSendXch));
 
         Self { methods }
