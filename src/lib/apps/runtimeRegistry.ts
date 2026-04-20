@@ -115,11 +115,11 @@ export function shouldUseIncognito(app: InstalledSageApp): boolean {
     return true;
   }
 
-  if (app.permissionFlags.storageMayContainSecrets) {
+  if (app.capabilityFlags.storageMayContainSecrets) {
     return true;
   }
 
-  return forceIncognitoForSecretApps && app.permissionFlags.hasSecretAccess;
+  return forceIncognitoForSecretApps && app.capabilityFlags.hasSecretAccess;
 }
 
 export async function waitForWebviewClosed(
@@ -166,7 +166,7 @@ async function createInlineRuntime(
 
   const isIncognito = shouldUseIncognito(app);
 
-  if (!isIncognito && app.permissionFlags.hasSecretAccess) {
+  if (!isIncognito && app.capabilityFlags.hasSecretAccess) {
     await invoke('apps_mark_storage_may_contain_secrets', {
       appId: app.id,
     });
