@@ -265,3 +265,133 @@ pub fn clear_storage_may_contain_secrets(
         isolated: flags.has_secret_access,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::apps::capability_registry::registry;
+    use crate::apps::types::{
+        SageRequestedCapabilities, SageRequestedNetworkPermissions,
+        SageRequestedNetworkWhitelist, SageRequestedPermissions,
+    };
+
+    fn empty_requested_permissions() -> SageRequestedPermissions {
+        SageRequestedPermissions {
+            network: SageRequestedNetworkPermissions {
+                whitelist: SageRequestedNetworkWhitelist {
+                    required: vec![],
+                    optional: vec![],
+                },
+            },
+            capabilities: SageRequestedCapabilities {
+                required: vec![],
+                optional: vec![],
+            },
+        }
+    }
+
+    fn first_non_requestable_capability() -> String {
+        registry()
+            .values()
+            .find(|definition| !definition.requestable_by_app)
+            .unwrap_or_else(|| {
+                panic!(
+                    "test requires at least one capability with requestable_by_app = false"
+                )
+            })
+            .key
+            .to_string()
+    }
+
+    fn first_shared_capability() -> String {
+        registry()
+            .values()
+            .find(|definition| definition.shared_with_app)
+            .unwrap_or_else(|| {
+                panic!("test requires at least one capability with shared_with_app = true")
+            })
+            .key
+            .to_string()
+    }
+
+    fn first_non_shared_capability() -> String {
+        registry()
+            .values()
+            .find(|definition| !definition.shared_with_app)
+            .unwrap_or_else(|| {
+                panic!("test requires at least one capability with shared_with_app = false")
+            })
+            .key
+            .to_string()
+    }
+
+    #[test]
+    fn rejects_non_requestable_required_capability() {
+        let non_requestable = first_non_requestable_capability();
+
+        let mut requested = empty_requested_permissions();
+        requested.capabilities.required = vec![non_requestable.clone()];
+
+        let err = normalize_and_validate_requested_permissions(&requested)
+            .expect_err("expected non-requestable required capability to be rejected");
+
+        let message = err.to_string();
+        assert!(
+            message.contains(&non_requestable),
+            "error should mention rejected capability, got: {message}"
+        );
+    }
+
+    #[test]
+    fn rejects_non_requestable_optional_capability() {
+        let non_requestable = first_non_requestable_capability();
+
+        let mut requested = empty_requested_permissions();
+        requested.capabilities.optional = vec![non_requestable.clone()];
+
+        let err = normalize_and_validate_requested_permissions(&requested)
+            .expect_err("expected non-requestable optional capability to be rejected");
+
+        let message = err.to_string();
+        assert!(
+            message.contains(&non_requestable),
+            "error should mention rejected capability, got: {message}"
+        );
+    }
+
+    #[test]
+    fn resolve_shared_capabilities_filters_out_non_shared_capabilities() {
+        let shared = first_shared_capability();
+        let non_shared = first_non_shared_capability();
+
+        let resolved = resolve_shared_capabilities(&vec![
+            shared.clone(),
+            non_shared.clone(),
+        ])
+            .expect("expected shared capability resolution to succeed");
+
+        assert!(
+            resolved.contains(&shared),
+            "shared capability should remain visible to app"
+        );
+        assert!(
+            !resolved.contains(&non_shared),
+            "non-shared capability should not be visible to app"
+        );
+    }
+
+    #[test]
+    fn resolve_shared_capabilities_preserves_ordered_unique_shared_subset() {
+        let shared = first_shared_capability();
+        let non_shared = first_non_shared_capability();
+
+        let resolved = resolve_shared_capabilities(&vec![
+            non_shared.clone(),
+            shared.clone(),
+            shared.clone(),
+        ])
+            .expect("expected shared capability resolution to succeed");
+
+        assert_eq!(resolved, vec![shared]);
+    }
+}

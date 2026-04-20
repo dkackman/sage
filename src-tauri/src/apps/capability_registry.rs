@@ -77,7 +77,7 @@ pub fn registry() -> BTreeMap<&'static str, CapabilityDefinition> {
                 accesses_sensitive_secret: false,
                 persistent_storage: false,
             },
-            requestable_by_app: true,
+            requestable_by_app: false,
             shared_with_app: false,
         },
     );
