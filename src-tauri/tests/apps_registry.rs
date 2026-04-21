@@ -7,17 +7,13 @@ use sage_lib::apps::lifecycle::registry::{
     read_installed_app_by_id,
     write_installed_app_metadata,
 };
-use sage_lib::apps::types::{
-    InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppSnapshot,
-    InstalledSageAppSource, ListedSageApp, SageAppManifestFile, SageAppPackageManifest,
-    SageGrantedNetworkPermissions, SageGrantedPermissions, SageRequestedCapabilities,
-    SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist, SageRequestedPermissions,
-};
+use sage_lib::apps::types::{InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppSnapshot, InstalledSageAppSource, InstalledSageAppStorage, ListedSageApp, SageAppManifestFile, SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions, SageRequestedCapabilities, SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist, SageRequestedPermissions};
 use tempfile::tempdir;
 
 fn sample_app(app_id: &str, name: &str) -> InstalledSageApp {
     InstalledSageApp {
         id: app_id.to_string(),
+        origin_id: app_id.to_string(),
         name: name.to_string(),
         version: "1.0.0".to_string(),
         install_dir: String::new(),
@@ -45,6 +41,7 @@ fn sample_app(app_id: &str, name: &str) -> InstalledSageApp {
             storage_may_contain_secrets: false,
             isolated: false,
         },
+        storage: InstalledSageAppStorage::Unmanaged,
         source: InstalledSageAppSource::Zip,
         active_snapshot: InstalledSageAppSnapshot {
             manifest_hash: "hash".to_string(),

@@ -73,7 +73,7 @@ pub async fn clear_app_storage_by_target(
             }
         }
 
-        PendingStorageCleanupTarget::Unsupported => {}
+        PendingStorageCleanupTarget::Unmanaged => {}
 
         #[allow(unreachable_patterns)]
         _ => {}
@@ -94,7 +94,7 @@ fn pending_target_from_storage(storage: &InstalledSageAppStorage) -> PendingStor
                 directory_name: directory_name.clone(),
             }
         }
-        InstalledSageAppStorage::Unsupported => PendingStorageCleanupTarget::Unsupported,
+        InstalledSageAppStorage::Unmanaged => PendingStorageCleanupTarget::Unmanaged,
     }
 }
 

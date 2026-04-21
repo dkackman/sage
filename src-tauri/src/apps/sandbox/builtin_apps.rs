@@ -112,7 +112,7 @@ fn builtin_storage(app_id: &str) -> InstalledSageAppStorage {
 
 #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "windows")))]
 fn builtin_storage(_app_id: &str) -> InstalledSageAppStorage {
-    InstalledSageAppStorage::Unsupported
+    InstalledSageAppStorage::Unmanaged
 }
 
 fn read_builtin_manifest(app_dir: &PathBuf) -> AnyResult<SageAppPackageManifest> {

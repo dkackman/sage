@@ -111,3 +111,119 @@ pub fn apps_assert_bridge_origin(
 pub fn webview_label_for_app(app_id: &str) -> String {
     inline_label_for(app_id)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    use crate::apps::types::{
+        InstalledSageApp,
+        InstalledSageAppCapabilityFlags,
+        InstalledSageAppSnapshot,
+        InstalledSageAppSource,
+        InstalledSageAppStorage,
+        SageAppManifestFile,
+        SageAppPackageManifest,
+        SageGrantedNetworkPermissions,
+        SageGrantedPermissions,
+        SageRequestedPermissions,
+    };
+
+    fn sample_app(origin_id: &str, capabilities: Vec<&str>, storage_may_contain_secrets: bool) -> InstalledSageApp {
+        InstalledSageApp {
+            id: "url-abc123".into(),
+            origin_id: origin_id.into(),
+            name: "Test App".into(),
+            version: "1.0.0".into(),
+            install_dir: "/tmp/app".into(),
+            entry_file: "index.html".into(),
+            icon_file: "icon.png".into(),
+            requested_permissions: SageRequestedPermissions::default(),
+            granted_permissions: SageGrantedPermissions {
+                capabilities: capabilities.into_iter().map(|s| s.to_string()).collect(),
+                network: SageGrantedNetworkPermissions { whitelist: vec![] },
+            },
+            capability_flags: InstalledSageAppCapabilityFlags {
+                has_secret_access: false,
+                has_external_access: false,
+                storage_may_contain_secrets,
+                isolated: false,
+            },
+            storage: InstalledSageAppStorage::Unmanaged,
+            source: InstalledSageAppSource::Url {
+                app_url: "https://example.com/app/".into(),
+                manifest_url: "https://example.com/app/sage-manifest.json".into(),
+            },
+            active_snapshot: InstalledSageAppSnapshot {
+                manifest_hash: "hash".into(),
+                snapshot_dir: "/tmp/app".into(),
+                total_bytes: 1,
+                manifest: SageAppPackageManifest {
+                    name: "Test App".into(),
+                    version: "1.0.0".into(),
+                    permissions: SageRequestedPermissions::default(),
+                    files: vec![SageAppManifestFile {
+                        path: "index.html".into(),
+                        sha256: "a".repeat(64),
+                        size: 1,
+                    }],
+                    entry: Some("index.html".into()),
+                    icon: Some("icon.png".into()),
+                },
+            },
+            pending_update: None,
+        }
+    }
+
+    #[test]
+    fn allowed_app_url_matches_origin_id() {
+        let url = Url::parse("sage-app://origin-1/index.html").unwrap();
+        assert!(is_allowed_app_url(&url, "origin-1"));
+        assert!(!is_allowed_app_url(&url, "origin-2"));
+    }
+
+    #[test]
+    fn build_entry_src_uses_origin_id_not_app_id() {
+        let app = sample_app("origin-1", vec![], false);
+        let url = build_entry_src(&app, None, BTreeMap::new());
+        assert_eq!(url, "sage-app://origin-1/index.html");
+    }
+
+    #[test]
+    fn build_entry_src_supports_custom_path_and_query() {
+        let app = sample_app("origin-1", vec![], false);
+        let mut query = BTreeMap::new();
+        query.insert("a".into(), "1".into());
+        query.insert("b".into(), "hello".into());
+
+        let url = build_entry_src(&app, Some("/nested/page.html".into()), query);
+
+        assert!(url.starts_with("sage-app://origin-1/nested/page.html?"));
+        assert!(url.contains("a=1"));
+        assert!(url.contains("b=hello"));
+    }
+
+    #[test]
+    fn should_use_incognito_without_persistent_storage() {
+        let app = sample_app("origin-1", vec![], false);
+        assert!(should_use_incognito(&app));
+    }
+
+    #[test]
+    fn should_use_incognito_when_storage_is_tainted() {
+        let app = sample_app("origin-1", vec!["persistent_storage"], true);
+        assert!(should_use_incognito(&app));
+    }
+
+    #[test]
+    fn should_not_use_incognito_when_persistent_storage_is_granted_and_clean() {
+        let app = sample_app("origin-1", vec!["persistent_storage"], false);
+        assert!(!should_use_incognito(&app));
+    }
+
+    #[test]
+    fn webview_label_for_app_has_expected_shape() {
+        assert_eq!(webview_label_for_app("abc"), "app-inline-abc");
+    }
+}

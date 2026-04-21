@@ -527,3 +527,146 @@ pub fn read_installed_app_by_origin_id(
         origin_id
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    use crate::apps::types::{
+        InstalledSageApp,
+        InstalledSageAppCapabilityFlags,
+        InstalledSageAppSnapshot,
+        InstalledSageAppSource,
+        InstalledSageAppStorage,
+        PendingStorageCleanupEntry,
+        PendingStorageCleanupTarget,
+        RetiredAppOriginEntry,
+        SageAppManifestFile,
+        SageAppPackageManifest,
+        SageGrantedNetworkPermissions,
+        SageGrantedPermissions,
+        SageRequestedPermissions,
+    };
+
+    fn sample_app(base: &Path, app_id: &str, origin_id: &str) -> InstalledSageApp {
+        let install_dir = app_install_dir(base, app_id);
+        fs::create_dir_all(&install_dir).unwrap();
+
+        InstalledSageApp {
+            id: app_id.into(),
+            origin_id: origin_id.into(),
+            name: "Test App".into(),
+            version: "1.0.0".into(),
+            install_dir: install_dir.to_string_lossy().to_string(),
+            entry_file: "index.html".into(),
+            icon_file: "icon.png".into(),
+            requested_permissions: SageRequestedPermissions::default(),
+            granted_permissions: SageGrantedPermissions {
+                capabilities: vec![],
+                network: SageGrantedNetworkPermissions { whitelist: vec![] },
+            },
+            capability_flags: InstalledSageAppCapabilityFlags::default(),
+            storage: InstalledSageAppStorage::Unmanaged,
+            source: InstalledSageAppSource::Url {
+                app_url: "https://example.com/app/".into(),
+                manifest_url: "https://example.com/app/sage-manifest.json".into(),
+            },
+            active_snapshot: InstalledSageAppSnapshot {
+                manifest_hash: "hash".into(),
+                snapshot_dir: install_dir.to_string_lossy().to_string(),
+                total_bytes: 1,
+                manifest: SageAppPackageManifest {
+                    name: "Test App".into(),
+                    version: "1.0.0".into(),
+                    permissions: SageRequestedPermissions::default(),
+                    files: vec![SageAppManifestFile {
+                        path: "index.html".into(),
+                        sha256: "a".repeat(64),
+                        size: 1,
+                    }],
+                    entry: Some("index.html".into()),
+                    icon: Some("icon.png".into()),
+                },
+            },
+            pending_update: None,
+        }
+    }
+
+    #[test]
+    fn installed_app_metadata_round_trips_origin_id_and_storage() {
+        let dir = tempdir().unwrap();
+        let mut app = sample_app(dir.path(), "url-abc123", "origin-1");
+        app.storage = InstalledSageAppStorage::Unmanaged;
+
+        let install_dir = app_install_dir(dir.path(), &app.id);
+        write_installed_app_metadata(&app, &install_dir).unwrap();
+
+        let read_back = read_installed_app_by_id(dir.path(), &app.id).unwrap();
+        assert_eq!(read_back.id, app.id);
+        assert_eq!(read_back.origin_id, app.origin_id);
+        assert_eq!(read_back.storage, app.storage);
+    }
+
+    #[test]
+    fn pending_storage_cleanup_entries_round_trip() {
+        let dir = tempdir().unwrap();
+
+        let entries = vec![PendingStorageCleanupEntry {
+            id: "cleanup-1".into(),
+            app_id: "app-1".into(),
+            app_name: "App".into(),
+            target: PendingStorageCleanupTarget::Unmanaged,
+            created_at_ms: 1,
+            last_attempt_at_ms: Some(2),
+            attempt_count: 3,
+            last_error: Some("boom".into()),
+        }];
+
+        write_pending_storage_cleanup_entries(dir.path(), &entries).unwrap();
+        let read_back = read_pending_storage_cleanup_entries(dir.path()).unwrap();
+
+        assert_eq!(read_back, entries);
+    }
+
+    #[test]
+    fn retired_app_origins_round_trip() {
+        let dir = tempdir().unwrap();
+
+        let entries = vec![RetiredAppOriginEntry {
+            id: "retired-1".into(),
+            app_id: "app-1".into(),
+            app_name: "App".into(),
+            origin_id: "origin-1".into(),
+            created_at_ms: 1,
+            storage_may_contain_secrets: true,
+            cleanup_pending: true,
+        }];
+
+        write_retired_app_origins(dir.path(), &entries).unwrap();
+        let read_back = read_retired_app_origins(dir.path()).unwrap();
+
+        assert_eq!(read_back, entries);
+    }
+
+    #[test]
+    fn read_installed_app_by_origin_id_finds_matching_app() {
+        let dir = tempdir().unwrap();
+
+        let app_a = sample_app(dir.path(), "app-a", "origin-a");
+        let app_b = sample_app(dir.path(), "app-b", "origin-b");
+
+        write_installed_app_metadata(&app_a, Path::new(&app_a.install_dir)).unwrap();
+        write_installed_app_metadata(&app_b, Path::new(&app_b.install_dir)).unwrap();
+
+        let found = read_installed_app_by_origin_id(dir.path(), "origin-b").unwrap();
+        assert_eq!(found.id, "app-b");
+    }
+
+    #[test]
+    fn read_installed_app_by_origin_id_errors_when_missing() {
+        let dir = tempdir().unwrap();
+        let err = read_installed_app_by_origin_id(dir.path(), "missing").unwrap_err();
+        assert!(err.to_string().contains("no installed app found for origin id"));
+    }
+}

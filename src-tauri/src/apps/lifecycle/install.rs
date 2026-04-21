@@ -339,7 +339,7 @@ async fn allocate_new_storage(
     _app: &AppHandle,
     _base_path: &Path,
 ) -> AnyResult<InstalledSageAppStorage> {
-    Ok(InstalledSageAppStorage::Unsupported)
+    Ok(InstalledSageAppStorage::Unmanaged)
 }
 
 async fn resolve_storage_for_install(
@@ -632,4 +632,276 @@ pub async fn retry_pending_storage_cleanup_on_startup(
     base_path: &Path,
 ) -> AnyResult<()> {
     retry_pending_storage_cleanup(app, base_path).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    use crate::apps::lifecycle::{
+        write_retired_app_origins,
+    };
+    use crate::apps::types::{
+        InstalledSageApp,
+        InstalledSageAppCapabilityFlags,
+        InstalledSageAppSnapshot,
+        InstalledSageAppSource,
+        InstalledSageAppStorage,
+        RetiredAppOriginEntry,
+        SageAppManifestFile,
+        SageAppPackageManifest,
+        SageGrantedNetworkPermissions,
+        SageGrantedPermissions,
+        SageNetworkPermissionTarget,
+        SageRequestedCapabilities,
+        SageRequestedNetworkPermissions,
+        SageRequestedNetworkWhitelist,
+        SageRequestedPermissions,
+    };
+
+    fn sample_manifest() -> SageAppPackageManifest {
+        SageAppPackageManifest {
+            name: "Test App".into(),
+            version: "1.0.0".into(),
+            permissions: SageRequestedPermissions {
+                network: SageRequestedNetworkPermissions {
+                    whitelist: SageRequestedNetworkWhitelist {
+                        required: vec![SageNetworkPermissionTarget {
+                            scheme: "https".into(),
+                            host: "api.example.com".into(),
+                        }],
+                        optional: vec![SageNetworkPermissionTarget {
+                            scheme: "wss".into(),
+                            host: "ws.example.com".into(),
+                        }],
+                    },
+                },
+                capabilities: SageRequestedCapabilities {
+                    required: vec!["persistent_storage".into()],
+                    optional: vec!["wallet.send_xch".into()],
+                },
+            },
+            files: vec![SageAppManifestFile {
+                path: "index.html".into(),
+                sha256: "a".repeat(64),
+                size: 123,
+            }],
+            entry: Some("index.html".into()),
+            icon: Some("icon.png".into()),
+        }
+    }
+
+    fn sample_app(app_id: &str, origin_id: &str) -> InstalledSageApp {
+        let dir = tempdir().unwrap();
+        let install_dir = dir.path().join(app_id);
+        fs::create_dir_all(&install_dir).unwrap();
+
+        InstalledSageApp {
+            id: app_id.into(),
+            origin_id: origin_id.into(),
+            name: "Test App".into(),
+            version: "1.0.0".into(),
+            install_dir: install_dir.to_string_lossy().to_string(),
+            entry_file: "index.html".into(),
+            icon_file: "icon.png".into(),
+            requested_permissions: sample_manifest().permissions.clone(),
+            granted_permissions: SageGrantedPermissions {
+                capabilities: vec!["persistent_storage".into()],
+                network: SageGrantedNetworkPermissions {
+                    whitelist: vec![SageNetworkPermissionTarget {
+                        scheme: "https".into(),
+                        host: "api.example.com".into(),
+                    }],
+                },
+            },
+            capability_flags: InstalledSageAppCapabilityFlags::default(),
+            storage: InstalledSageAppStorage::Unmanaged,
+            source: InstalledSageAppSource::Url {
+                app_url: "https://example.com/app/".into(),
+                manifest_url: "https://example.com/app/sage-manifest.json".into(),
+            },
+            active_snapshot: InstalledSageAppSnapshot {
+                manifest_hash: "hash".into(),
+                snapshot_dir: install_dir.to_string_lossy().to_string(),
+                total_bytes: 123,
+                manifest: sample_manifest(),
+            },
+            pending_update: None,
+        }
+    }
+
+    #[test]
+    fn normalize_app_url_keeps_https_and_adds_trailing_slash() {
+        let out = normalize_app_url("https://example.com/app").unwrap();
+        assert_eq!(out, "https://example.com/app/");
+    }
+
+    #[test]
+    fn normalize_app_url_strips_query_and_fragment() {
+        let out = normalize_app_url("https://example.com/app?x=1#frag").unwrap();
+        assert_eq!(out, "https://example.com/app/");
+    }
+
+    #[test]
+    fn normalize_app_url_allows_localhost_http() {
+        let out = normalize_app_url("http://localhost:4173").unwrap();
+        assert_eq!(out, "http://localhost:4173/");
+    }
+
+    #[test]
+    fn normalize_app_url_rejects_non_local_http() {
+        let err = normalize_app_url("http://example.com/app").unwrap_err().to_string();
+        assert!(err.contains("requires HTTPS"));
+    }
+
+    #[test]
+    fn generate_url_app_id_is_stable_for_same_manifest_url() {
+        let a = generate_url_app_id("https://example.com/app/sage-manifest.json");
+        let b = generate_url_app_id("https://example.com/app/sage-manifest.json");
+        assert_eq!(a, b);
+        assert!(a.starts_with("url-"));
+    }
+
+    #[test]
+    fn default_url_origin_id_is_same_as_app_id() {
+        assert_eq!(default_url_origin_id("url-abc123"), "url-abc123");
+    }
+
+    #[test]
+    fn rotated_url_origin_id_differs_from_app_id() {
+        let origin = generate_rotated_url_origin_id("url-abc123");
+        assert_ne!(origin, "url-abc123");
+        assert!(origin.ends_with("url-abc123"));
+        assert!(origin.starts_with('r'));
+    }
+
+    #[test]
+    fn granted_network_whitelist_always_includes_required_and_selected_optional() {
+        let requested = SageRequestedNetworkPermissions {
+            whitelist: SageRequestedNetworkWhitelist {
+                required: vec![SageNetworkPermissionTarget {
+                    scheme: "https".into(),
+                    host: "api.example.com".into(),
+                }],
+                optional: vec![SageNetworkPermissionTarget {
+                    scheme: "wss".into(),
+                    host: "ws.example.com".into(),
+                }],
+            },
+        };
+
+        let granted = vec![SageNetworkPermissionTarget {
+            scheme: "wss".into(),
+            host: "ws.example.com".into(),
+        }];
+
+        let result =
+            normalize_and_validate_granted_network_whitelist(&requested, &granted).unwrap();
+
+        assert_eq!(
+            result,
+            vec![
+                SageNetworkPermissionTarget {
+                    scheme: "https".into(),
+                    host: "api.example.com".into(),
+                },
+                SageNetworkPermissionTarget {
+                    scheme: "wss".into(),
+                    host: "ws.example.com".into(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn granted_network_whitelist_rejects_unrequested_entry() {
+        let requested = SageRequestedNetworkPermissions {
+            whitelist: SageRequestedNetworkWhitelist {
+                required: vec![],
+                optional: vec![],
+            },
+        };
+
+        let granted = vec![SageNetworkPermissionTarget {
+            scheme: "https".into(),
+            host: "evil.example.com".into(),
+        }];
+
+        let err =
+            normalize_and_validate_granted_network_whitelist(&requested, &granted).unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains("granted network whitelist entry not requested"));
+    }
+
+    #[test]
+    fn should_rotate_url_origin_on_install_is_false_without_retired_entry() {
+        let dir = tempdir().unwrap();
+        assert!(!should_rotate_url_origin_on_install(dir.path(), "url-abc123").unwrap());
+    }
+
+    #[test]
+    fn should_rotate_url_origin_on_install_is_true_with_retired_entry() {
+        let dir = tempdir().unwrap();
+
+        write_retired_app_origins(
+            dir.path(),
+            &[RetiredAppOriginEntry {
+                id: "retired-1".into(),
+                app_id: "url-abc123".into(),
+                app_name: "Test App".into(),
+                origin_id: "url-abc123".into(),
+                created_at_ms: 1,
+                storage_may_contain_secrets: true,
+                cleanup_pending: true,
+            }],
+        )
+            .unwrap();
+
+        assert!(should_rotate_url_origin_on_install(dir.path(), "url-abc123").unwrap());
+    }
+
+    #[test]
+    fn build_installed_app_sets_id_and_origin_id_independently() {
+        let dir = tempdir().unwrap();
+        let install_dir = dir.path().join("url-abc123");
+        fs::create_dir_all(&install_dir).unwrap();
+
+        let manifest = sample_manifest();
+        let app = build_installed_app(
+            "url-abc123".into(),
+            "r123-url-abc123".into(),
+            &install_dir,
+            &manifest,
+            SageGrantedPermissions {
+                capabilities: vec!["persistent_storage".into()],
+                network: SageGrantedNetworkPermissions { whitelist: vec![] },
+            },
+            InstalledSageAppCapabilityFlags::default(),
+            InstalledSageAppStorage::Unmanaged,
+            InstalledSageAppSource::Url {
+                app_url: "https://example.com/app/".into(),
+                manifest_url: "https://example.com/app/sage-manifest.json".into(),
+            },
+            InstalledSageAppSnapshot {
+                manifest_hash: "hash".into(),
+                snapshot_dir: install_dir.to_string_lossy().to_string(),
+                total_bytes: 1,
+                manifest: manifest.clone(),
+            },
+        );
+
+        assert_eq!(app.id, "url-abc123");
+        assert_eq!(app.origin_id, "r123-url-abc123");
+    }
+
+    #[test]
+    fn sample_app_helper_is_valid_shape() {
+        let app = sample_app("url-abc123", "origin-1");
+        assert_eq!(app.id, "url-abc123");
+        assert_eq!(app.origin_id, "origin-1");
+    }
 }

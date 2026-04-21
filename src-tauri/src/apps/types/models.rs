@@ -62,7 +62,7 @@ pub enum InstalledSageAppStorage {
         #[serde(rename = "directoryName", alias = "directory_name")]
         directory_name: String,
     },
-    Unsupported,
+    Unmanaged,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -76,7 +76,7 @@ pub enum PendingStorageCleanupTarget {
         #[serde(rename = "directoryName", alias = "directory_name")]
         directory_name: String,
     },
-    Unsupported,
+    Unmanaged,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
