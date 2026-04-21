@@ -867,6 +867,7 @@ export type DerivationRecord = { index: number; public_key: string; address: str
 export type DidRecord = { launcher_id: string; name: string | null; visible: boolean; coin_id: string; address: string; amount: Amount; recovery_hash: string | null; created_height: number | null }
 export type EmptyResponse = Record<string, never>
 export type Error = { kind: ErrorKind; reason: string }
+export type Error = { kind: ErrorKind; reason: string }
 export type ErrorKind = "wallet" | "api" | "not_found" | "unauthorized" | "internal" | "database_migration" | "nfc"
 /**
  * Exercise options
@@ -1757,12 +1758,12 @@ index: number }
  */
 export type IncreaseDerivationIndexResponse = Record<string, never>
 export type InheritedNetwork = "mainnet" | "testnet11"
-export type InstalledSageApp = { id: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; capabilityFlags: InstalledSageAppCapabilityFlags; storage: InstalledSageAppStorage; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot; pendingUpdate: InstalledSageAppPendingUpdate | null }
+export type InstalledSageApp = { id: string; originId: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; capabilityFlags: InstalledSageAppCapabilityFlags; storage: InstalledSageAppStorage; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot; pendingUpdate: InstalledSageAppPendingUpdate | null }
 export type InstalledSageAppCapabilityFlags = { hasSecretAccess: boolean; hasExternalAccess: boolean; storageMayContainSecrets: boolean; isolated: boolean }
 export type InstalledSageAppPendingUpdate = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type InstalledSageAppSnapshot = { manifestHash: string; snapshotDir: string; totalBytes: number; manifest: SageAppPackageManifest }
 export type InstalledSageAppSource = { kind: "zip" } | { kind: "url"; appUrl: string; manifestUrl: string }
-export type InstalledSageAppStorage = { kind: "appleDataStore"; identifierHex: string } | { kind: "windowsProfile"; directoryName: string } | { kind: "unsupported" }
+export type InstalledSageAppStorage = { kind: "appleDataStore"; identifierHex: string } | { kind: "windowsProfile"; directoryName: string } | { kind: "unmanaged" }
 /**
  * Check if an asset is owned
  */

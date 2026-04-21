@@ -55,6 +55,7 @@ sage-database = { path = "./crates/sage-database" }
 sage-keychain = { path = "./crates/sage-keychain" }
 sage-wallet = { path = "./crates/sage-wallet" }
 sage-assets = { path = "./crates/sage-assets" }
+sage-apps = { path = "./crates/sage-apps" }
 sage-rpc = { path = "./crates/sage-rpc" }
 
 # Serialization

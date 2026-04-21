@@ -21,6 +21,7 @@ sage-api-macro = { workspace = true }
 sage-config = { workspace = true }
 sage-wallet = { workspace = true }
 sage-rpc = { workspace = true }
+sage-apps = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tauri = { workspace = true, features = [] }
 tauri-specta = { workspace = true, features = ["derive", "typescript"] }
@@ -66,6 +67,7 @@ tauri-plugin-sage = { workspace = true }
 
 [build-dependencies]
 tauri-build = { workspace = true, features = [] }
+sage-apps = { workspace = true }
 glob = { workspace = true }
 
 [package.metadata.cargo-machete]

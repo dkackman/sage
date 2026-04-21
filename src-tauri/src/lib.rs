@@ -1,13 +1,14 @@
 use std::path::PathBuf;
+
 use app_state::{AppState, Initialized, RpcTask};
 use rustls::crypto::aws_lc_rs::default_provider;
 use sage::Sage;
 use sage_api::SyncEvent;
+use sage_apps as apps;
 use tauri::Manager;
 use tauri_specta::{Builder, ErrorHandlingMode, collect_commands, collect_events};
 use tokio::sync::Mutex;
 
-pub mod apps;
 mod app_state;
 mod commands;
 mod error;

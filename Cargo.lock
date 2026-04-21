@@ -6376,6 +6376,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "sage-apps"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "hex",
+ "mime_guess",
+ "reqwest 0.12.24",
+ "sage",
+ "sage-api",
+ "serde",
+ "serde_json",
+ "sha2",
+ "specta",
+ "tauri",
+ "tempfile",
+ "tokio",
+ "url",
+ "uuid",
+ "zip",
+]
+
+[[package]]
 name = "sage-assets"
 version = "0.12.10"
 dependencies = [
@@ -6514,6 +6537,7 @@ dependencies = [
  "sage",
  "sage-api",
  "sage-api-macro",
+ "sage-apps",
  "sage-config",
  "sage-rpc",
  "sage-wallet",

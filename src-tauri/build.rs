@@ -1,5 +1,3 @@
-mod build_support;
-
 use glob::glob;
 use std::env;
 
@@ -34,7 +32,7 @@ fn setup_x86_64_android_workaround() {
 fn main() {
     setup_x86_64_android_workaround();
 
-    if let Err(err) = build_support::builtin_apps::build_builtin_apps() {
+    if let Err(err) = sage_apps::build::builtin_apps::build_builtin_apps() {
         panic!("failed to build builtin apps: {err}");
     }
 

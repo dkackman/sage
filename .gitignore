@@ -28,4 +28,4 @@ target
 .env
 /test.sqlite*
 
-src-tauri/builtin-apps/dist
+crates/sage-apps/builtin-apps/dist
