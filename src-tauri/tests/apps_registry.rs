@@ -8,8 +8,8 @@ use sage_lib::apps::lifecycle::registry::{
     write_retired_app_origins,
 };
 use sage_lib::apps::types::{
-    InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppSnapshot,
-    InstalledSageAppSource, InstalledSageAppStorage, ListedSageApp,
+    InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppPendingUpdate,
+    InstalledSageAppSnapshot, InstalledSageAppSource, InstalledSageAppStorage, ListedSageApp,
     PendingStorageCleanupEntry, PendingStorageCleanupTarget, RetiredAppOriginEntry,
     SageAppManifestFile, SageAppPackageManifest, SageGrantedNetworkPermissions,
     SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedCapabilities,
@@ -17,6 +17,33 @@ use sage_lib::apps::types::{
     SageRequestedPermissions,
 };
 use tempfile::tempdir;
+
+fn sample_manifest(name: &str) -> SageAppPackageManifest {
+    SageAppPackageManifest {
+        name: name.to_string(),
+        version: "1.0.0".to_string(),
+        permissions: SageRequestedPermissions {
+            network: SageRequestedNetworkPermissions {
+                whitelist: SageRequestedNetworkWhitelist {
+                    required: vec![],
+                    optional: vec![],
+                },
+            },
+            capabilities: SageRequestedCapabilities {
+                required: vec!["wallet.send_xch".to_string()],
+                optional: vec!["persistent_storage".to_string()],
+            },
+        },
+        files: vec![SageAppManifestFile {
+            path: "index.html".to_string(),
+            sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            size: 123,
+        }],
+        entry: Some("index.html".to_string()),
+        icon: Some("icon.png".to_string()),
+    }
+}
 
 fn sample_app(app_id: &str, name: &str) -> InstalledSageApp {
     InstalledSageApp {
@@ -55,31 +82,7 @@ fn sample_app(app_id: &str, name: &str) -> InstalledSageApp {
             manifest_hash: "hash".to_string(),
             snapshot_dir: "/tmp/snapshot".to_string(),
             total_bytes: 123,
-            manifest: SageAppPackageManifest {
-                name: name.to_string(),
-                version: "1.0.0".to_string(),
-                permissions: SageRequestedPermissions {
-                    network: SageRequestedNetworkPermissions {
-                        whitelist: SageRequestedNetworkWhitelist {
-                            required: vec![],
-                            optional: vec![],
-                        },
-                    },
-                    capabilities: SageRequestedCapabilities {
-                        required: vec!["wallet.send_xch".to_string()],
-                        optional: vec!["persistent_storage".to_string()],
-                    },
-                },
-                files: vec![SageAppManifestFile {
-                    path: "index.html".to_string(),
-                    sha256:
-                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                        .to_string(),
-                    size: 123,
-                }],
-                entry: Some("index.html".to_string()),
-                icon: Some("icon.png".to_string()),
-            },
+            manifest: sample_manifest(name),
         },
         pending_update: None,
     }
@@ -105,6 +108,30 @@ fn installed_app_metadata_roundtrips() {
 }
 
 #[test]
+fn installed_app_metadata_roundtrips_pending_update() {
+    let base = tempdir().unwrap();
+    let app_id = "app-1";
+    let dir = app_install_dir(base.path(), app_id);
+    fs::create_dir_all(&dir).unwrap();
+
+    let mut app = sample_app(app_id, "Alpha");
+    app.install_dir = dir.to_string_lossy().to_string();
+    app.pending_update = Some(InstalledSageAppPendingUpdate {
+        app_url: "https://example.com/app/".to_string(),
+        manifest_url: "https://example.com/app/sage-manifest.json".to_string(),
+        manifest_hash: "pending-hash".to_string(),
+        manifest: sample_manifest("Alpha Updated"),
+    });
+
+    write_installed_app_metadata(&app, &dir).unwrap();
+    let loaded = read_installed_app_by_id(base.path(), app_id).unwrap();
+
+    let pending = loaded.pending_update.expect("pending update should survive roundtrip");
+    assert_eq!(pending.manifest_hash, "pending-hash");
+    assert_eq!(pending.manifest.name, "Alpha Updated");
+}
+
+#[test]
 fn corrupted_metadata_is_reported_as_corrupted_listing() {
     let base = tempdir().unwrap();
     let dir = app_install_dir(base.path(), "broken-app");
@@ -119,6 +146,102 @@ fn corrupted_metadata_is_reported_as_corrupted_listing() {
         ListedSageApp::Corrupted(app) => {
             assert_eq!(app.id, "broken-app");
             assert!(!app.error.is_empty());
+        }
+        ListedSageApp::Installed(_) => panic!("expected corrupted app listing"),
+    }
+}
+
+#[test]
+fn corrupted_persisted_network_entry_is_reported_as_corrupted_listing() {
+    let base = tempdir().unwrap();
+    let dir = app_install_dir(base.path(), "broken-app");
+    fs::create_dir_all(&dir).unwrap();
+
+    fs::write(
+        dir.join(".sage-installed.json"),
+        r#"{
+  "id": "broken-app",
+  "originId": "broken-app",
+  "name": "Broken App",
+  "version": "1.0.0",
+  "installDir": "/tmp/broken-app",
+  "entryFile": "index.html",
+  "iconFile": "icon.png",
+  "requestedPermissions": {
+    "network": {
+      "whitelist": {
+        "required": ["https://ok.example.com/path"],
+        "optional": []
+      }
+    },
+    "capabilities": {
+      "required": [],
+      "optional": []
+    }
+  },
+  "grantedPermissions": {
+    "capabilities": [],
+    "network": {
+      "whitelist": []
+    }
+  },
+  "capabilityFlags": {
+    "has_secret_access": false,
+    "has_external_access": false,
+    "storage_may_contain_secrets": false,
+    "isolated": false
+  },
+  "storage": {
+    "kind": "unmanaged"
+  },
+  "source": {
+    "kind": "zip"
+  },
+  "activeSnapshot": {
+    "manifestHash": "hash",
+    "snapshotDir": "/tmp/snapshot",
+    "totalBytes": 1,
+    "manifest": {
+      "name": "Broken App",
+      "version": "1.0.0",
+      "permissions": {
+        "network": {
+          "whitelist": {
+            "required": [],
+            "optional": []
+          }
+        },
+        "capabilities": {
+          "required": [],
+          "optional": []
+        }
+      },
+      "files": [
+        {
+          "path": "index.html",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size": 1
+        }
+      ],
+      "entry": "index.html",
+      "icon": "icon.png"
+    }
+  },
+  "pendingUpdate": null
+}"#,
+    )
+        .unwrap();
+
+    let listed = list_installed_apps_internal(&apps_root(base.path())).unwrap();
+    assert_eq!(listed.len(), 1);
+
+    match &listed[0] {
+        ListedSageApp::Corrupted(app) => {
+            assert_eq!(app.id, "broken-app");
+            assert!(
+                app.error.contains("failed to parse persisted required network entry")
+                    || app.error.contains("invalid host in network entry")
+            );
         }
         ListedSageApp::Installed(_) => panic!("expected corrupted app listing"),
     }
