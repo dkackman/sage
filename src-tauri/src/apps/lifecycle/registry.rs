@@ -539,9 +539,6 @@ mod tests {
         InstalledSageAppSnapshot,
         InstalledSageAppSource,
         InstalledSageAppStorage,
-        PendingStorageCleanupEntry,
-        PendingStorageCleanupTarget,
-        RetiredAppOriginEntry,
         SageAppManifestFile,
         SageAppPackageManifest,
         SageGrantedNetworkPermissions,
@@ -606,47 +603,6 @@ mod tests {
         assert_eq!(read_back.id, app.id);
         assert_eq!(read_back.origin_id, app.origin_id);
         assert_eq!(read_back.storage, app.storage);
-    }
-
-    #[test]
-    fn pending_storage_cleanup_entries_round_trip() {
-        let dir = tempdir().unwrap();
-
-        let entries = vec![PendingStorageCleanupEntry {
-            id: "cleanup-1".into(),
-            app_id: "app-1".into(),
-            app_name: "App".into(),
-            target: PendingStorageCleanupTarget::Unmanaged,
-            created_at_ms: 1,
-            last_attempt_at_ms: Some(2),
-            attempt_count: 3,
-            last_error: Some("boom".into()),
-        }];
-
-        write_pending_storage_cleanup_entries(dir.path(), &entries).unwrap();
-        let read_back = read_pending_storage_cleanup_entries(dir.path()).unwrap();
-
-        assert_eq!(read_back, entries);
-    }
-
-    #[test]
-    fn retired_app_origins_round_trip() {
-        let dir = tempdir().unwrap();
-
-        let entries = vec![RetiredAppOriginEntry {
-            id: "retired-1".into(),
-            app_id: "app-1".into(),
-            app_name: "App".into(),
-            origin_id: "origin-1".into(),
-            created_at_ms: 1,
-            storage_may_contain_secrets: true,
-            cleanup_pending: true,
-        }];
-
-        write_retired_app_origins(dir.path(), &entries).unwrap();
-        let read_back = read_retired_app_origins(dir.path()).unwrap();
-
-        assert_eq!(read_back, entries);
     }
 
     #[test]

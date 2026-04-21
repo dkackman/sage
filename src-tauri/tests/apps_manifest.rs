@@ -1,3 +1,6 @@
+mod common;
+
+use common::{empty_permissions, sample_manifest_file};
 use sage_lib::apps::lifecycle::limits::{
     MAX_APP_FILE_COUNT, MAX_APP_TOTAL_SIZE_BYTES,
 };
@@ -5,34 +8,7 @@ use sage_lib::apps::lifecycle::manifest::{
     validate_manifest_file_path, validate_manifest_files, validate_package_manifest,
     validate_sha256_hex,
 };
-use sage_lib::apps::types::{
-    SageAppManifestFile, SageAppPackageManifest, SageRequestedCapabilities,
-    SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist,
-    SageRequestedPermissions,
-};
-
-fn sample_manifest_file(path: &str, size: u64) -> SageAppManifestFile {
-    SageAppManifestFile {
-        path: path.to_string(),
-        sha256: "a".repeat(64),
-        size,
-    }
-}
-
-fn empty_permissions() -> SageRequestedPermissions {
-    SageRequestedPermissions {
-        network: SageRequestedNetworkPermissions {
-            whitelist: SageRequestedNetworkWhitelist {
-                required: vec![],
-                optional: vec![],
-            },
-        },
-        capabilities: SageRequestedCapabilities {
-            required: vec![],
-            optional: vec![],
-        },
-    }
-}
+use sage_lib::apps::types::SageAppPackageManifest;
 
 fn sample_manifest() -> SageAppPackageManifest {
     SageAppPackageManifest {

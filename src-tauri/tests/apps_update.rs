@@ -1,103 +1,65 @@
-use std::fs;
+mod common;
+
 use std::path::Path;
 
-use sage_lib::apps::lifecycle::registry::{app_install_dir, read_installed_app_by_id, write_installed_app_metadata};
+use common::{sample_manifest_file, sample_installed_app};
+use sage_lib::apps::lifecycle::registry::{
+    app_install_dir, read_installed_app_by_id, write_installed_app_metadata,
+};
 use sage_lib::apps::lifecycle::update::{
     grant_requested_capability_internal, grant_requested_network_whitelist_entry_internal,
     update_app_permissions_internal, GrantCapabilityOutcome, GrantNetworkWhitelistOutcome,
 };
 use sage_lib::apps::types::{
     InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppSnapshot,
-    InstalledSageAppSource, InstalledSageAppStorage, SageAppManifestFile,
-    SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions,
-    SageNetworkPermissionTarget, SageRequestedCapabilities,
+    InstalledSageAppStorage, SageAppPackageManifest, SageGrantedNetworkPermissions,
+    SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedCapabilities,
     SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist,
     SageRequestedPermissions,
 };
 use tempfile::tempdir;
 
 fn sample_app(base: &Path, app_id: &str) -> InstalledSageApp {
-    let install_dir = app_install_dir(base, app_id);
-    fs::create_dir_all(&install_dir).unwrap();
+    let mut app = sample_installed_app(base, app_id, "Test App");
 
-    InstalledSageApp {
-        id: app_id.to_string(),
-        origin_id: format!("origin-{app_id}"),
-        name: "Test App".to_string(),
-        version: "1.0.0".to_string(),
-        install_dir: install_dir.to_string_lossy().to_string(),
-        entry_file: "index.html".to_string(),
-        icon_file: "icon.png".to_string(),
-        requested_permissions: SageRequestedPermissions {
-            network: SageRequestedNetworkPermissions {
-                whitelist: SageRequestedNetworkWhitelist {
-                    required: vec![SageNetworkPermissionTarget {
-                        scheme: "https".to_string(),
-                        host: "required.example.com".to_string(),
-                    }],
-                    optional: vec![SageNetworkPermissionTarget {
-                        scheme: "wss".to_string(),
-                        host: "optional.example.com".to_string(),
-                    }],
-                },
-            },
-            capabilities: SageRequestedCapabilities {
-                required: vec![],
-                optional: vec![
-                    "wallet.send_xch".to_string(),
-                    "persistent_storage".to_string(),
-                ],
-            },
-        },
-        granted_permissions: SageGrantedPermissions {
-            capabilities: vec![],
-            network: SageGrantedNetworkPermissions { whitelist: vec![] },
-        },
-        capability_flags: InstalledSageAppCapabilityFlags::default(),
-        storage: InstalledSageAppStorage::Unmanaged,
-        source: InstalledSageAppSource::Url {
-            app_url: "https://example.com/app/".to_string(),
-            manifest_url: "https://example.com/app/sage-manifest.json".to_string(),
-        },
-        active_snapshot: InstalledSageAppSnapshot {
-            manifest_hash: "hash".to_string(),
-            snapshot_dir: install_dir.to_string_lossy().to_string(),
-            total_bytes: 1,
-            manifest: SageAppPackageManifest {
-                name: "Test App".to_string(),
-                version: "1.0.0".to_string(),
-                permissions: SageRequestedPermissions {
-                    network: SageRequestedNetworkPermissions {
-                        whitelist: SageRequestedNetworkWhitelist {
-                            required: vec![SageNetworkPermissionTarget {
-                                scheme: "https".to_string(),
-                                host: "required.example.com".to_string(),
-                            }],
-                            optional: vec![SageNetworkPermissionTarget {
-                                scheme: "wss".to_string(),
-                                host: "optional.example.com".to_string(),
-                            }],
-                        },
-                    },
-                    capabilities: SageRequestedCapabilities {
-                        required: vec![],
-                        optional: vec![
-                            "wallet.send_xch".to_string(),
-                            "persistent_storage".to_string(),
-                        ],
-                    },
-                },
-                files: vec![SageAppManifestFile {
-                    path: "index.html".to_string(),
-                    sha256: "a".repeat(64),
-                    size: 1,
+    app.requested_permissions = SageRequestedPermissions {
+        network: SageRequestedNetworkPermissions {
+            whitelist: SageRequestedNetworkWhitelist {
+                required: vec![SageNetworkPermissionTarget {
+                    scheme: "https".to_string(),
+                    host: "required.example.com".to_string(),
                 }],
-                entry: Some("index.html".to_string()),
-                icon: Some("icon.png".to_string()),
+                optional: vec![SageNetworkPermissionTarget {
+                    scheme: "wss".to_string(),
+                    host: "optional.example.com".to_string(),
+                }],
             },
         },
-        pending_update: None,
-    }
+        capabilities: SageRequestedCapabilities {
+            required: vec![],
+            optional: vec![
+                "wallet.send_xch".to_string(),
+                "persistent_storage".to_string(),
+            ],
+        },
+    };
+
+    app.active_snapshot = InstalledSageAppSnapshot {
+        manifest_hash: "hash".to_string(),
+        snapshot_dir: app.install_dir.clone(),
+        total_bytes: 1,
+        manifest: SageAppPackageManifest {
+            name: "Test App".to_string(),
+            version: "1.0.0".to_string(),
+            permissions: app.requested_permissions.clone(),
+            files: vec![sample_manifest_file("index.html", 1)],
+            entry: Some("index.html".to_string()),
+            icon: Some("icon.png".to_string()),
+        },
+    };
+
+    app.storage = InstalledSageAppStorage::Unmanaged;
+    app
 }
 
 #[test]

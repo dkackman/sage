@@ -1,5 +1,8 @@
+mod common;
+
 use std::fs;
 
+use common::{sample_installed_app, sample_manifest};
 use sage_lib::apps::lifecycle::registry::{
     app_install_dir, apps_root, list_installed_apps_internal, parse_network_permission_target,
     read_installed_app_by_id, read_installed_app_by_origin_id,
@@ -8,94 +11,19 @@ use sage_lib::apps::lifecycle::registry::{
     write_retired_app_origins,
 };
 use sage_lib::apps::types::{
-    InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppPendingUpdate,
-    InstalledSageAppSnapshot, InstalledSageAppSource, InstalledSageAppStorage, ListedSageApp,
+    InstalledSageAppPendingUpdate, ListedSageApp,
     PendingStorageCleanupEntry, PendingStorageCleanupTarget, RetiredAppOriginEntry,
-    SageAppManifestFile, SageAppPackageManifest, SageGrantedNetworkPermissions,
-    SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedCapabilities,
-    SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist,
-    SageRequestedPermissions,
+    SageNetworkPermissionTarget,
 };
 use tempfile::tempdir;
-
-fn sample_manifest(name: &str) -> SageAppPackageManifest {
-    SageAppPackageManifest {
-        name: name.to_string(),
-        version: "1.0.0".to_string(),
-        permissions: SageRequestedPermissions {
-            network: SageRequestedNetworkPermissions {
-                whitelist: SageRequestedNetworkWhitelist {
-                    required: vec![],
-                    optional: vec![],
-                },
-            },
-            capabilities: SageRequestedCapabilities {
-                required: vec!["wallet.send_xch".to_string()],
-                optional: vec!["persistent_storage".to_string()],
-            },
-        },
-        files: vec![SageAppManifestFile {
-            path: "index.html".to_string(),
-            sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                .to_string(),
-            size: 123,
-        }],
-        entry: Some("index.html".to_string()),
-        icon: Some("icon.png".to_string()),
-    }
-}
-
-fn sample_app(app_id: &str, name: &str) -> InstalledSageApp {
-    InstalledSageApp {
-        id: app_id.to_string(),
-        origin_id: app_id.to_string(),
-        name: name.to_string(),
-        version: "1.0.0".to_string(),
-        install_dir: String::new(),
-        entry_file: "index.html".to_string(),
-        icon_file: "icon.png".to_string(),
-        requested_permissions: SageRequestedPermissions {
-            network: SageRequestedNetworkPermissions {
-                whitelist: SageRequestedNetworkWhitelist {
-                    required: vec![],
-                    optional: vec![],
-                },
-            },
-            capabilities: SageRequestedCapabilities {
-                required: vec!["wallet.send_xch".to_string()],
-                optional: vec!["persistent_storage".to_string()],
-            },
-        },
-        granted_permissions: SageGrantedPermissions {
-            capabilities: vec!["wallet.send_xch".to_string()],
-            network: SageGrantedNetworkPermissions { whitelist: vec![] },
-        },
-        capability_flags: InstalledSageAppCapabilityFlags {
-            has_secret_access: false,
-            has_external_access: true,
-            storage_may_contain_secrets: false,
-            isolated: false,
-        },
-        storage: InstalledSageAppStorage::Unmanaged,
-        source: InstalledSageAppSource::Zip,
-        active_snapshot: InstalledSageAppSnapshot {
-            manifest_hash: "hash".to_string(),
-            snapshot_dir: "/tmp/snapshot".to_string(),
-            total_bytes: 123,
-            manifest: sample_manifest(name),
-        },
-        pending_update: None,
-    }
-}
 
 #[test]
 fn installed_app_metadata_roundtrips() {
     let base = tempdir().unwrap();
     let app_id = "app-1";
     let dir = app_install_dir(base.path(), app_id);
-    fs::create_dir_all(&dir).unwrap();
 
-    let mut app = sample_app(app_id, "Alpha");
+    let mut app = sample_installed_app(base.path(), app_id, "Alpha");
     app.install_dir = dir.to_string_lossy().to_string();
 
     write_installed_app_metadata(&app, &dir).unwrap();
@@ -104,7 +32,7 @@ fn installed_app_metadata_roundtrips() {
     assert_eq!(loaded.id, app.id);
     assert_eq!(loaded.name, app.name);
     assert_eq!(loaded.granted_permissions, app.granted_permissions);
-    assert!(loaded.capability_flags.has_external_access);
+    assert_eq!(loaded.capability_flags.has_external_access, false);
 }
 
 #[test]
@@ -112,9 +40,8 @@ fn installed_app_metadata_roundtrips_pending_update() {
     let base = tempdir().unwrap();
     let app_id = "app-1";
     let dir = app_install_dir(base.path(), app_id);
-    fs::create_dir_all(&dir).unwrap();
 
-    let mut app = sample_app(app_id, "Alpha");
+    let mut app = sample_installed_app(base.path(), app_id, "Alpha");
     app.install_dir = dir.to_string_lossy().to_string();
     app.pending_update = Some(InstalledSageAppPendingUpdate {
         app_url: "https://example.com/app/".to_string(),
@@ -252,14 +179,12 @@ fn installed_apps_are_sorted_by_name() {
     let base = tempdir().unwrap();
 
     let alpha_dir = app_install_dir(base.path(), "a");
-    fs::create_dir_all(&alpha_dir).unwrap();
-    let mut alpha = sample_app("a", "Alpha");
+    let mut alpha = sample_installed_app(base.path(), "a", "Alpha");
     alpha.install_dir = alpha_dir.to_string_lossy().to_string();
     write_installed_app_metadata(&alpha, &alpha_dir).unwrap();
 
     let zeta_dir = app_install_dir(base.path(), "z");
-    fs::create_dir_all(&zeta_dir).unwrap();
-    let mut zeta = sample_app("z", "Zeta");
+    let mut zeta = sample_installed_app(base.path(), "z", "Zeta");
     zeta.install_dir = zeta_dir.to_string_lossy().to_string();
     write_installed_app_metadata(&zeta, &zeta_dir).unwrap();
 
@@ -332,15 +257,13 @@ fn read_installed_app_by_origin_id_finds_matching_app() {
     let base = tempdir().unwrap();
 
     let alpha_dir = app_install_dir(base.path(), "a");
-    fs::create_dir_all(&alpha_dir).unwrap();
-    let mut alpha = sample_app("a", "Alpha");
+    let mut alpha = sample_installed_app(base.path(), "a", "Alpha");
     alpha.origin_id = "origin-a".to_string();
     alpha.install_dir = alpha_dir.to_string_lossy().to_string();
     write_installed_app_metadata(&alpha, &alpha_dir).unwrap();
 
     let beta_dir = app_install_dir(base.path(), "b");
-    fs::create_dir_all(&beta_dir).unwrap();
-    let mut beta = sample_app("b", "Beta");
+    let mut beta = sample_installed_app(base.path(), "b", "Beta");
     beta.origin_id = "origin-b".to_string();
     beta.install_dir = beta_dir.to_string_lossy().to_string();
     write_installed_app_metadata(&beta, &beta_dir).unwrap();

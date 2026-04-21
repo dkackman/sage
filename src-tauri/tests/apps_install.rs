@@ -1,10 +1,13 @@
+mod common;
+
+use common::sample_manifest_file;
 use sage_lib::apps::lifecycle::install::{
     manifest_entry_file, manifest_icon_file, normalize_app_url,
 };
 use sage_lib::apps::types::{
-    SageAppManifestFile, SageAppPackageManifest, SageNetworkPermissionTarget,
-    SageRequestedCapabilities, SageRequestedNetworkPermissions,
-    SageRequestedNetworkWhitelist, SageRequestedPermissions,
+    SageAppPackageManifest, SageNetworkPermissionTarget, SageRequestedCapabilities,
+    SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist,
+    SageRequestedPermissions,
 };
 
 fn requested_permissions() -> SageRequestedPermissions {
@@ -33,11 +36,7 @@ fn sample_manifest() -> SageAppPackageManifest {
         name: "Test App".to_string(),
         version: "1.0.0".to_string(),
         permissions: requested_permissions(),
-        files: vec![SageAppManifestFile {
-            path: "index.html".to_string(),
-            sha256: "a".repeat(64),
-            size: 1,
-        }],
+        files: vec![sample_manifest_file("index.html", 1)],
         entry: Some("entry.html".to_string()),
         icon: Some("icon.svg".to_string()),
     }

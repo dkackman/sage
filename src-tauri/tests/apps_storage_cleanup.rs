@@ -1,3 +1,6 @@
+mod common;
+
+use common::{empty_permissions, sample_manifest_file};
 use sage_lib::apps::lifecycle::storage_cleanup::{
     enqueue_pending_storage_cleanup, enqueue_retired_app_origin,
 };
@@ -7,10 +10,7 @@ use sage_lib::apps::lifecycle::{
 use sage_lib::apps::types::{
     InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppSnapshot,
     InstalledSageAppSource, InstalledSageAppStorage, PendingStorageCleanupTarget,
-    SageAppManifestFile, SageAppPackageManifest, SageGrantedNetworkPermissions,
-    SageGrantedPermissions, SageRequestedCapabilities,
-    SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist,
-    SageRequestedPermissions,
+    SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions,
 };
 use tempfile::tempdir;
 
@@ -23,12 +23,7 @@ fn sample_app(storage: InstalledSageAppStorage) -> InstalledSageApp {
         install_dir: "/tmp/test-app".into(),
         entry_file: "index.html".into(),
         icon_file: "icon.png".into(),
-        requested_permissions: SageRequestedPermissions {
-            network: SageRequestedNetworkPermissions {
-                whitelist: SageRequestedNetworkWhitelist::default(),
-            },
-            capabilities: SageRequestedCapabilities::default(),
-        },
+        requested_permissions: empty_permissions(),
         granted_permissions: SageGrantedPermissions {
             capabilities: vec![],
             network: SageGrantedNetworkPermissions { whitelist: vec![] },
@@ -51,12 +46,8 @@ fn sample_app(storage: InstalledSageAppStorage) -> InstalledSageApp {
             manifest: SageAppPackageManifest {
                 name: "Test App".into(),
                 version: "1.0.0".into(),
-                permissions: SageRequestedPermissions::default(),
-                files: vec![SageAppManifestFile {
-                    path: "index.html".into(),
-                    sha256: "a".repeat(64),
-                    size: 1,
-                }],
+                permissions: empty_permissions(),
+                files: vec![sample_manifest_file("index.html", 1)],
                 entry: Some("index.html".into()),
                 icon: Some("icon.png".into()),
             },

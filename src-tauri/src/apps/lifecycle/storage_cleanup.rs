@@ -126,145 +126,38 @@ pub fn enqueue_retired_app_origin(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
-    use crate::apps::lifecycle::{
-        read_pending_storage_cleanup_entries,
-        read_retired_app_origins,
-    };
-    use crate::apps::types::{
-        InstalledSageApp,
-        InstalledSageAppCapabilityFlags,
-        InstalledSageAppSnapshot,
-        InstalledSageAppSource,
-        InstalledSageAppStorage,
-        SageAppManifestFile,
-        SageAppPackageManifest,
-        SageGrantedNetworkPermissions,
-        SageGrantedPermissions,
-        SageRequestedCapabilities,
-        SageRequestedNetworkPermissions,
-        SageRequestedNetworkWhitelist,
-        SageRequestedPermissions,
-    };
+    #[test]
+    fn target_from_storage_maps_apple_data_store() {
+        let target = target_from_storage(&InstalledSageAppStorage::AppleDataStore {
+            identifier_hex: "abc123".into(),
+        });
 
-    fn sample_app(storage: InstalledSageAppStorage) -> InstalledSageApp {
-        InstalledSageApp {
-            id: "url-abc123".into(),
-            origin_id: "origin-1".into(),
-            name: "Test App".into(),
-            version: "1.0.0".into(),
-            install_dir: "/tmp/test-app".into(),
-            entry_file: "index.html".into(),
-            icon_file: "icon.png".into(),
-            requested_permissions: SageRequestedPermissions {
-                network: SageRequestedNetworkPermissions {
-                    whitelist: SageRequestedNetworkWhitelist::default(),
-                },
-                capabilities: SageRequestedCapabilities::default(),
-            },
-            granted_permissions: SageGrantedPermissions {
-                capabilities: vec![],
-                network: SageGrantedNetworkPermissions { whitelist: vec![] },
-            },
-            capability_flags: InstalledSageAppCapabilityFlags {
-                has_secret_access: false,
-                has_external_access: false,
-                storage_may_contain_secrets: true,
-                isolated: false,
-            },
-            storage,
-            source: InstalledSageAppSource::Url {
-                app_url: "https://example.com/app/".into(),
-                manifest_url: "https://example.com/app/sage-manifest.json".into(),
-            },
-            active_snapshot: InstalledSageAppSnapshot {
-                manifest_hash: "hash".into(),
-                snapshot_dir: "/tmp/test-app".into(),
-                total_bytes: 1,
-                manifest: SageAppPackageManifest {
-                    name: "Test App".into(),
-                    version: "1.0.0".into(),
-                    permissions: SageRequestedPermissions::default(),
-                    files: vec![SageAppManifestFile {
-                        path: "index.html".into(),
-                        sha256: "a".repeat(64),
-                        size: 1,
-                    }],
-                    entry: Some("index.html".into()),
-                    icon: Some("icon.png".into()),
-                },
-            },
-            pending_update: None,
-        }
+        assert_eq!(
+            target,
+            PendingStorageCleanupTarget::AppleDataStore {
+                identifier_hex: "abc123".into(),
+            }
+        );
     }
 
     #[test]
-    fn enqueue_pending_storage_cleanup_creates_new_entry() {
-        let dir = tempdir().unwrap();
-        let app = sample_app(InstalledSageAppStorage::Unmanaged);
+    fn target_from_storage_maps_windows_profile() {
+        let target = target_from_storage(&InstalledSageAppStorage::WindowsProfile {
+            directory_name: "profile-1".into(),
+        });
 
-        enqueue_pending_storage_cleanup(dir.path(), &app, "boom").unwrap();
-
-        let entries = read_pending_storage_cleanup_entries(dir.path()).unwrap();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].app_id, app.id);
-        assert_eq!(entries[0].app_name, app.name);
-        assert_eq!(entries[0].last_error.as_deref(), Some("boom"));
-        assert_eq!(entries[0].attempt_count, 1);
+        assert_eq!(
+            target,
+            PendingStorageCleanupTarget::WindowsProfile {
+                directory_name: "profile-1".into(),
+            }
+        );
     }
 
     #[test]
-    fn enqueue_pending_storage_cleanup_updates_existing_target_entry() {
-        let dir = tempdir().unwrap();
-        let app = sample_app(InstalledSageAppStorage::Unmanaged);
-
-        enqueue_pending_storage_cleanup(dir.path(), &app, "first").unwrap();
-        enqueue_pending_storage_cleanup(dir.path(), &app, "second").unwrap();
-
-        let entries = read_pending_storage_cleanup_entries(dir.path()).unwrap();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].attempt_count, 2);
-        assert_eq!(entries[0].last_error.as_deref(), Some("second"));
-    }
-
-    #[test]
-    fn enqueue_retired_app_origin_ignores_zip_apps() {
-        let dir = tempdir().unwrap();
-        let mut app = sample_app(InstalledSageAppStorage::Unmanaged);
-        app.source = InstalledSageAppSource::Zip;
-
-        enqueue_retired_app_origin(dir.path(), &app, true).unwrap();
-
-        let entries = read_retired_app_origins(dir.path()).unwrap();
-        assert!(entries.is_empty());
-    }
-
-    #[test]
-    fn enqueue_retired_app_origin_creates_new_entry_for_url_app() {
-        let dir = tempdir().unwrap();
-        let app = sample_app(InstalledSageAppStorage::Unmanaged);
-
-        enqueue_retired_app_origin(dir.path(), &app, true).unwrap();
-
-        let entries = read_retired_app_origins(dir.path()).unwrap();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].app_id, app.id);
-        assert_eq!(entries[0].origin_id, app.origin_id);
-        assert!(entries[0].cleanup_pending);
-        assert!(entries[0].storage_may_contain_secrets);
-    }
-
-    #[test]
-    fn enqueue_retired_app_origin_updates_existing_origin_entry() {
-        let dir = tempdir().unwrap();
-        let app = sample_app(InstalledSageAppStorage::Unmanaged);
-
-        enqueue_retired_app_origin(dir.path(), &app, true).unwrap();
-        enqueue_retired_app_origin(dir.path(), &app, false).unwrap();
-
-        let entries = read_retired_app_origins(dir.path()).unwrap();
-        assert_eq!(entries.len(), 1);
-        assert!(!entries[0].cleanup_pending);
+    fn target_from_storage_maps_unmanaged() {
+        let target = target_from_storage(&InstalledSageAppStorage::Unmanaged);
+        assert_eq!(target, PendingStorageCleanupTarget::Unmanaged);
     }
 }
