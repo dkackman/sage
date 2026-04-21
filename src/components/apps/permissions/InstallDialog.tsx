@@ -42,6 +42,7 @@ function buildPreviewApp(
 ): InstalledSageApp {
   return {
     id: '__install_preview__',
+    originId: '__install_preview__',
     name: manifest.name,
     version: manifest.version,
     installDir: '',
@@ -66,6 +67,7 @@ function buildPreviewApp(
       storageMayContainSecrets: false,
       isolated: false,
     },
+    storage: { kind: 'unmanaged' },
     source: { kind: 'zip' },
     activeSnapshot: {
       manifestHash: '__install_preview__',

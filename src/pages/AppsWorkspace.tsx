@@ -9,7 +9,6 @@ import {
   type AppTaskBarTab,
 } from '@/components/apps/AppTaskBar.tsx';
 import { useApps } from '@/contexts/AppsContext.tsx';
-import { useAppPendingApprovals } from '@/hooks/useAppPendingApprovals.ts';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes';
 import { focusRuntime, killRuntime } from '@/lib/apps/runtimeRegistry';
 import { formatAppError } from '@/lib/apps/formatAppError';
@@ -28,17 +27,17 @@ export function AppsWorkspace() {
   const navigate = useNavigate();
   const runtimes = useAppRuntimes();
 
-  const { getApp, updateAvailability, busyAppIds, performAppUpdate } =
-    useApps();
-
   const {
+    getApp,
+    updateAvailability,
+    busyAppIds,
+    performAppUpdate,
     currentApproval,
     queuedApprovalCount,
     currentApprovalSecondsLeft,
-    requestApproval,
     approveCurrentApproval,
     rejectCurrentApproval,
-  } = useAppPendingApprovals();
+  } = useApps();
 
   const [approvalExpanded, setApprovalExpanded] = useState(false);
   const [applyingUpdate, setApplyingUpdate] = useState(false);
@@ -112,6 +111,29 @@ export function AppsWorkspace() {
           fee: String(currentApproval.request.params.fee),
           memos: currentApproval.request.params.memos ?? [],
           autoSubmit: false,
+        },
+      };
+    }
+
+    if (currentApproval.request.kind === 'capability_grant') {
+      return {
+        kind: 'capability_grant',
+        appId: currentApproval.request.app.id,
+        appName: currentApproval.request.app.name,
+        requestId: currentApproval.request.requestId,
+        capability: currentApproval.request.capability,
+      };
+    }
+
+    if (currentApproval.request.kind === 'network_whitelist_grant') {
+      return {
+        kind: 'network_whitelist_grant',
+        appId: currentApproval.request.app.id,
+        appName: currentApproval.request.app.name,
+        requestId: currentApproval.request.requestId,
+        entry: {
+          scheme: currentApproval.request.entry.scheme,
+          host: currentApproval.request.entry.host,
         },
       };
     }
@@ -222,7 +244,7 @@ export function AppsWorkspace() {
       ) : null}
 
       <div className='flex-1 min-h-0 overflow-hidden'>
-        <Outlet context={{ requestApproval }} />
+        <Outlet />
       </div>
 
       <AppUpdateDialog

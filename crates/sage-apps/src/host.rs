@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::Arc;
 
 use sage::Sage;
@@ -9,12 +10,12 @@ use tokio::sync::Mutex;
 pub type AppState = Arc<Mutex<Sage>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct Error {
+pub struct SageAppsError {
     pub kind: ErrorKind,
     pub reason: String,
 }
 
-impl From<sage::Error> for Error {
+impl From<sage::Error> for SageAppsError {
     fn from(error: sage::Error) -> Self {
         Self {
             kind: error.kind(),
@@ -23,7 +24,7 @@ impl From<sage::Error> for Error {
     }
 }
 
-impl From<reqwest::Error> for Error {
+impl From<reqwest::Error> for SageAppsError {
     fn from(error: reqwest::Error) -> Self {
         Self {
             kind: ErrorKind::Internal,
@@ -32,7 +33,7 @@ impl From<reqwest::Error> for Error {
     }
 }
 
-impl From<std::io::Error> for Error {
+impl From<std::io::Error> for SageAppsError {
     fn from(error: std::io::Error) -> Self {
         Self {
             kind: ErrorKind::Internal,
@@ -41,12 +42,12 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for SageAppsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.reason)
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for SageAppsError {}
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, SageAppsError>;
