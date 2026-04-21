@@ -229,14 +229,21 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 if let Err(err) =
                     apps::lifecycle::retry_pending_storage_cleanup_on_startup(
-                        &app_handle,
-                        &cleanup_base_path,
+                            &app_handle,
+                            &cleanup_base_path,
                     )
-                    .await
+                        .await
                 {
-                    eprintln!("failed to retry pending storage cleanup on startup: {err}");
+                        eprintln!("failed to retry pending storage cleanup on startup: {err}");
                 }
-                });
+            });
+
+            let sandbox_app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(err) = apps::sandbox::runner::ensure_initial_sandbox_run(sandbox_app_handle).await {
+                        eprintln!("failed to start initial sandbox run: {err}");
+                }
+            });
 
             Ok(())
         })

@@ -8,8 +8,8 @@ use super::probes::{
 use super::runtime::now_ms;
 use super::state_view::{build_effective_state, build_state_view};
 use super::types::{
-    SandboxCapability, SandboxCapabilityStatus, SandboxRunState, SandboxState,
-    build_running_sandbox_state, mark_cap,
+    build_running_sandbox_state, mark_cap, SandboxCapability, SandboxCapabilityStatus,
+    SandboxRunState, SandboxState,
 };
 
 async fn emit_state_view(app: &AppHandle, apps_state: &State<'_, AppsHostState>) {
@@ -20,6 +20,43 @@ async fn emit_state_view(app: &AppHandle, apps_state: &State<'_, AppsHostState>)
     if let Some(window) = app.get_window("main") {
         let _ = window.emit("apps:sandbox-state-updated", view);
     }
+}
+
+fn sandbox_state_is_all_pending(state: &SandboxState) -> bool {
+    state.storage_isolation_from_sage.status == SandboxCapabilityStatus::Pending
+        && state.storage_persistence_normal.status == SandboxCapabilityStatus::Pending
+        && state.storage_non_persistence_incognito.status == SandboxCapabilityStatus::Pending
+        && state.storage_clear_cycle.status == SandboxCapabilityStatus::Pending
+        && state.network_allowlist_enforced.status == SandboxCapabilityStatus::Pending
+}
+
+pub async fn ensure_initial_sandbox_run(app: AppHandle) -> Result<(), String> {
+    let apps_state = app.state::<AppsHostState>();
+
+    let already_running = *apps_state.sandbox.running.lock().await;
+    if already_running {
+        return Ok(());
+    }
+
+    let baseline = apps_state.sandbox.baseline.lock().await.clone();
+    let current_run = apps_state.sandbox.current_run.lock().await.clone();
+
+    if current_run.is_some() {
+        return Ok(());
+    }
+
+    if !sandbox_state_is_all_pending(&baseline) {
+        return Ok(());
+    }
+
+    begin_sandbox_run(&app, &apps_state).await?;
+
+    let runner_app = app.clone();
+    tokio::spawn(async move {
+        sandbox_runner(runner_app).await;
+    });
+
+    Ok(())
 }
 
 pub async fn begin_sandbox_run(
