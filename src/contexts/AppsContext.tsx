@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   commands,
   type InstalledSageApp,
@@ -93,7 +94,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyAppIds, setBusyAppIds] = useState<Record<string, boolean>>({});
-  const [updateAvailability, setUpdateAvailabilityState] = useState<
+  const [updateAvailability, setUpdateAvailability] = useState<
     Record<string, SageAppUrlPreview | null>
   >({});
   const [sandboxState, setSandboxState] = useState<SandboxStateView | null>(
@@ -136,16 +137,81 @@ export function AppsProvider({ children }: { children: ReactNode }) {
     void refreshInstalledApps();
   }, [refreshInstalledApps]);
 
+  useEffect(() => {
+    let isCancelled = false;
+    let unsubscribe: UnlistenFn | null = null;
+
+    const setup = async () => {
+      try {
+        unsubscribe = await listen<SandboxStateView>(
+          'apps:sandbox-state-updated',
+          (event) => {
+            if (isCancelled) {
+              return;
+            }
+
+            setSandboxState(event.payload);
+          },
+        );
+      } catch (err) {
+        if (!isCancelled) {
+          console.error('Failed to subscribe to sandbox state updates:', err);
+        }
+      }
+    };
+
+    void setup();
+
+    return () => {
+      isCancelled = true;
+      if (unsubscribe) {
+        void unsubscribe();
+      }
+    };
+  }, []);
+
+  const currentSandboxRunId = sandboxState?.currentRun?.runId ?? null;
+
+  useEffect(() => {
+    if (!currentSandboxRunId) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const refreshSandboxState = async () => {
+      try {
+        const next = await commands.appsGetSandboxState();
+        if (!isCancelled) {
+          setSandboxState(next);
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          console.error('Failed to refresh sandbox state:', err);
+        }
+      }
+    };
+
+    void refreshSandboxState();
+
+    const intervalId = window.setInterval(() => {
+      void refreshSandboxState();
+    }, 1000);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [currentSandboxRunId]);
+
   const refresh = refreshInstalledApps;
 
   const getApp = useCallback(
     (appId: string) => {
-      const found = apps.find(
+      return apps.find(
         (item): item is Extract<ListedSageApp, { kind: 'installed' }> =>
           item.kind === 'installed' && item.id === appId,
       );
-
-      return found;
     },
     [apps],
   );
@@ -157,7 +223,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  const setUpdateAvailability = useCallback(
+  const setUpdateAvailabilityState = useCallback(
     (
       updater:
         | Record<string, SageAppUrlPreview | null>
@@ -165,7 +231,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
             prev: Record<string, SageAppUrlPreview | null>,
           ) => Record<string, SageAppUrlPreview | null>),
     ) => {
-      setUpdateAvailabilityState((prev) =>
+      setUpdateAvailability((prev) =>
         typeof updater === 'function' ? updater(prev) : updater,
       );
     },
@@ -202,10 +268,11 @@ export function AppsProvider({ children }: { children: ReactNode }) {
       try {
         await commands.uninstallApp(appId);
 
-        setUpdateAvailabilityState((prev) => {
+        setUpdateAvailability((prev) => {
           const next = { ...prev };
-          delete next[appId];
-          return next;
+          return Object.fromEntries(
+            Object.entries(next).filter(([key]) => key !== appId),
+          );
         });
 
         await refreshInstalledApps();
@@ -219,7 +286,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
   const checkForUpdate = useCallback(async (appId: string) => {
     const preview = await commands.checkAppUpdate(appId);
 
-    setUpdateAvailabilityState((prev) => ({
+    setUpdateAvailability((prev) => ({
       ...prev,
       [appId]: preview,
     }));
@@ -253,7 +320,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        setUpdateAvailabilityState((prev) => ({
+        setUpdateAvailability((prev) => ({
           ...prev,
           [appId]: null,
         }));
@@ -301,7 +368,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
       refresh,
       refreshInstalledApps,
       setBusy,
-      setUpdateAvailability,
+      setUpdateAvailability: setUpdateAvailabilityState,
 
       installApp,
       installUrlApp,
@@ -328,7 +395,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
       refresh,
       refreshInstalledApps,
       setBusy,
-      setUpdateAvailability,
+      setUpdateAvailabilityState,
       installApp,
       installUrlApp,
       uninstallApp,
