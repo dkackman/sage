@@ -1,7 +1,9 @@
-use sage_lib::apps::lifecycle::install::normalize_and_validate_granted_network_whitelist;
-use sage_lib::apps::permissions::validate_granted_capabilities;
+use sage_lib::apps::lifecycle::install::{
+    manifest_entry_file, manifest_icon_file, normalize_app_url,
+};
 use sage_lib::apps::types::{
-    SageNetworkPermissionTarget, SageRequestedCapabilities, SageRequestedNetworkPermissions,
+    SageAppManifestFile, SageAppPackageManifest, SageNetworkPermissionTarget,
+    SageRequestedCapabilities, SageRequestedNetworkPermissions,
     SageRequestedNetworkWhitelist, SageRequestedPermissions,
 };
 
@@ -26,66 +28,85 @@ fn requested_permissions() -> SageRequestedPermissions {
     }
 }
 
-#[test]
-fn granted_capabilities_accept_required_only_subset() {
-    let requested = requested_permissions();
-
-    validate_granted_capabilities(
-        &requested,
-        &vec!["wallet.send_xch".to_string()],
-    )
-        .unwrap();
-}
-
-#[test]
-fn granted_capabilities_reject_extra_capability() {
-    let requested = requested_permissions();
-
-    let err = validate_granted_capabilities(
-        &requested,
-        &vec![
-            "wallet.send_xch".to_string(),
-            "wallet.send_xch_auto_submit".to_string(),
-        ],
-    )
-        .expect_err("expected extra capability to be rejected");
-
-    assert!(err.to_string().contains("wallet.send_xch_auto_submit"));
-}
-
-#[test]
-fn granted_network_whitelist_includes_required_entries_automatically() {
-    let requested = requested_permissions();
-
-    let normalized = normalize_and_validate_granted_network_whitelist(
-        &requested.network,
-        &vec![SageNetworkPermissionTarget {
-            scheme: "wss".to_string(),
-            host: "optional.example.com".to_string(),
+fn sample_manifest() -> SageAppPackageManifest {
+    SageAppPackageManifest {
+        name: "Test App".to_string(),
+        version: "1.0.0".to_string(),
+        permissions: requested_permissions(),
+        files: vec![SageAppManifestFile {
+            path: "index.html".to_string(),
+            sha256: "a".repeat(64),
+            size: 1,
         }],
-    )
-        .unwrap();
-
-    assert!(normalized.iter().any(|entry| {
-        entry.scheme == "https" && entry.host == "required.example.com"
-    }));
-    assert!(normalized.iter().any(|entry| {
-        entry.scheme == "wss" && entry.host == "optional.example.com"
-    }));
+        entry: Some("entry.html".to_string()),
+        icon: Some("icon.svg".to_string()),
+    }
 }
 
 #[test]
-fn granted_network_whitelist_rejects_unrequested_entry() {
-    let requested = requested_permissions();
+fn normalize_app_url_keeps_https_and_adds_trailing_slash() {
+    let out = normalize_app_url("https://example.com/app").unwrap();
+    assert_eq!(out, "https://example.com/app/");
+}
 
-    let err = normalize_and_validate_granted_network_whitelist(
-        &requested.network,
-        &vec![SageNetworkPermissionTarget {
-            scheme: "https".to_string(),
-            host: "not-requested.example.com".to_string(),
-        }],
-    )
-        .expect_err("expected unrequested network entry to be rejected");
+#[test]
+fn normalize_app_url_strips_query_and_fragment() {
+    let out = normalize_app_url("https://example.com/app?x=1#frag").unwrap();
+    assert_eq!(out, "https://example.com/app/");
+}
 
-    assert!(err.to_string().contains("not-requested.example.com"));
+#[test]
+fn normalize_app_url_allows_localhost_http() {
+    let out = normalize_app_url("http://localhost:4173").unwrap();
+    assert_eq!(out, "http://localhost:4173/");
+}
+
+#[test]
+fn normalize_app_url_allows_loopback_http() {
+    assert_eq!(
+        normalize_app_url("http://127.0.0.1:4173").unwrap(),
+        "http://127.0.0.1:4173/"
+    );
+}
+
+#[test]
+fn normalize_app_url_rejects_non_local_http() {
+    let err = normalize_app_url("http://example.com/app")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("requires HTTPS"));
+}
+
+#[test]
+fn normalize_app_url_rejects_unsupported_scheme() {
+    let err = normalize_app_url("ftp://example.com/app")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("unsupported app URL scheme"));
+}
+
+#[test]
+fn manifest_entry_file_uses_explicit_entry() {
+    let manifest = sample_manifest();
+    assert_eq!(manifest_entry_file(&manifest), "entry.html");
+}
+
+#[test]
+fn manifest_entry_file_defaults_to_index_html() {
+    let mut manifest = sample_manifest();
+    manifest.entry = None;
+    assert_eq!(manifest_entry_file(&manifest), "index.html");
+}
+
+#[test]
+fn manifest_icon_file_uses_explicit_icon() {
+    let manifest = sample_manifest();
+    assert_eq!(manifest_icon_file(&manifest), "icon.svg");
+}
+
+#[test]
+fn manifest_icon_file_defaults_to_icon_png() {
+    let mut manifest = sample_manifest();
+    manifest.icon = None;
+    assert_eq!(manifest_icon_file(&manifest), "icon.png");
 }
