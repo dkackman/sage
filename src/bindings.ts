@@ -395,10 +395,10 @@ async previewAppZip(zipPath: string) : Promise<SageAppPackageManifest> {
 async previewAppUrl(appUrl: string) : Promise<SageAppUrlPreview> {
     return await TAURI_INVOKE("preview_app_url", { appUrl });
 },
-async installAppZip(zipPath: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
+async installAppZip(zipPath: string, grantedPermissions: SageGrantedPermissions) : Promise<UserSageApp> {
     return await TAURI_INVOKE("install_app_zip", { zipPath, grantedPermissions });
 },
-async installAppUrl(appUrl: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
+async installAppUrl(appUrl: string, grantedPermissions: SageGrantedPermissions) : Promise<UserSageApp> {
     return await TAURI_INVOKE("install_app_url", { appUrl, grantedPermissions });
 },
 async uninstallApp(appId: string) : Promise<null> {
@@ -407,10 +407,10 @@ async uninstallApp(appId: string) : Promise<null> {
 async checkAppUpdate(appId: string) : Promise<SageAppUrlPreview | null> {
     return await TAURI_INVOKE("check_app_update", { appId });
 },
-async downloadAppUpdate(appId: string) : Promise<InstalledSageApp> {
+async downloadAppUpdate(appId: string) : Promise<UserSageApp> {
     return await TAURI_INVOKE("download_app_update", { appId });
 },
-async applyAppUpdate(appId: string, grantedPermissions: SageGrantedPermissions) : Promise<InstalledSageApp> {
+async applyAppUpdate(appId: string, grantedPermissions: SageGrantedPermissions) : Promise<UserSageApp> {
     return await TAURI_INVOKE("apply_app_update", { appId, grantedPermissions });
 },
 async appsUpdatePermissions(appId: string, grantedPermissions: SageGrantedPermissions, clearStorageTaint: boolean) : Promise<null> {
@@ -419,7 +419,7 @@ async appsUpdatePermissions(appId: string, grantedPermissions: SageGrantedPermis
 async appsMarkStorageMayContainSecrets(appId: string) : Promise<null> {
     return await TAURI_INVOKE("apps_mark_storage_may_contain_secrets", { appId });
 },
-async getBuiltinTestApp(appId: string) : Promise<InstalledSageApp | null> {
+async getBuiltinTestApp(appId: string) : Promise<SageApp | null> {
     return await TAURI_INVOKE("get_builtin_test_app", { appId });
 },
 async appsGetCapabilityRegistry() : Promise<SageAppCapabilityDefinitionView[]> {
@@ -789,7 +789,7 @@ export type CombineOffersResponse = {
  * Combined offer string
  */
 offer: string }
-export type CorruptedInstalledSageApp = { id: string; installDir: string; error: string }
+export type CorruptedInstalledSageApp = { id: string; appDir: string; error: string }
 /**
  * Create a new DID
  */
@@ -1765,12 +1765,7 @@ index: number }
  */
 export type IncreaseDerivationIndexResponse = Record<string, never>
 export type InheritedNetwork = "mainnet" | "testnet11"
-export type InstalledSageApp = { id: string; originId: string; name: string; version: string; installDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; capabilityFlags: InstalledSageAppCapabilityFlags; storage: InstalledSageAppStorage; source: InstalledSageAppSource; activeSnapshot: InstalledSageAppSnapshot; pendingUpdate: InstalledSageAppPendingUpdate | null }
-export type InstalledSageAppCapabilityFlags = { hasSecretAccess: boolean; hasExternalAccess: boolean; storageMayContainSecrets: boolean; isolated: boolean }
-export type InstalledSageAppPendingUpdate = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
-export type InstalledSageAppSnapshot = { manifestHash: string; snapshotDir: string; totalBytes: number; manifest: SageAppPackageManifest }
-export type InstalledSageAppSource = { kind: "zip" } | { kind: "url"; appUrl: string; manifestUrl: string }
-export type InstalledSageAppStorage = { kind: "appleDataStore"; identifierHex: string } | { kind: "windowsProfile"; directoryName: string } | { kind: "unmanaged" }
+export type InstalledSageAppStorage = { kind: "appleDataStore"; identifier_hex: string } | { kind: "windowsProfile"; directory_name: string } | { kind: "unmanaged" }
 /**
  * Check if an asset is owned
  */
@@ -1829,7 +1824,7 @@ innerPuzzleHash: string | null;
  * Amount
  */
 amount: number | null }
-export type ListedSageApp = ({ kind: "installed" } & InstalledSageApp) | ({ kind: "corrupted" } & CorruptedInstalledSageApp)
+export type ListedSageApp = ({ kind: "installed" } & SageApp) | ({ kind: "corrupted" } & CorruptedInstalledSageApp)
 export type LogFile = { name: string; text: string }
 /**
  * Login to a wallet using a fingerprint
@@ -2240,13 +2235,16 @@ export type RustBridgeInvokeResult = { kind: "immediate"; response: RustBridgeRe
 export type RustBridgeRequest = { channel: string; bridgeVersion: string | null; id: string; method: string; paramsJson: string | null }
 export type RustBridgeResponse = RustBridgeSuccessResponse | RustBridgeErrorResponse
 export type RustBridgeSuccessResponse = { channel: string; bridgeVersion: string; id: string; ok: boolean; resultJson: string }
+export type SageApp = ({ kind: "system" } & SystemSageApp) | ({ kind: "user" } & UserSageApp)
 export type SageAppAuthor = { name: string; avatar: string | null }
 export type SageAppCapabilityDefinitionView = { key: string; label: string; description: string; flags: SageAppCapabilityFlagsView; requestableByApp: boolean; sharedWithApp: boolean }
+export type SageAppCapabilityFlags = { hasSecretAccess: boolean; hasExternalAccess: boolean; storageMayContainSecrets: boolean; isolated: boolean }
 export type SageAppCapabilityFlagsView = { externallyObservable: boolean; accessesSensitiveSecret: boolean; persistentStorage: boolean }
 export type SageAppDonation = { address: string }
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
 export type SageAppPackageManifest = { name: string; version: string; permissions: SageRequestedPermissions; files: SageAppManifestFile[]; entry: string | null; icon: string | null; author: SageAppAuthor | null; donation: SageAppDonation | null }
 export type SageAppRuntimeRecord = { runtimeId: string; appId: string; appName: string; entrySrc: string; webviewLabel: string; hostWindowLabel: string; mode: string; state: string; startedAt: number; lastActiveAt: number; visible: boolean; internal: boolean; activeBatchCount: number; activeSocketCount: number; inFlightRequestCount: number }
+export type SageAppSnapshot = { manifestHash: string; snapshotDir: string; totalBytes: number; manifest: SageAppPackageManifest }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageAppsError = { kind: ErrorKind; reason: string }
 export type SageGrantedNetworkPermissions = { whitelist: SageNetworkPermissionTarget[] }
@@ -2603,6 +2601,8 @@ spend_bundle: SpendBundleJson }
  */
 export type SubmitTransactionResponse = Record<string, never>
 export type SyncEvent = { type: "start"; ip: string } | { type: "stop" } | { type: "subscribed" } | { type: "derivation" } | { type: "coin_state" } | { type: "transaction_failed"; transaction_id: string; error: string | null } | { type: "puzzle_batch_synced" } | { type: "cat_info" } | { type: "did_info" } | { type: "nft_data" }
+export type SystemAppPresentation = "Taskbar" | "Modal"
+export type SystemSageApp = ({ id: string; originId: string; name: string; version: string; appDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; capabilityFlags: SageAppCapabilityFlags; storage: InstalledSageAppStorage; activeSnapshot: SageAppSnapshot }) & { presentation: SystemAppPresentation }
 /**
  * Accept an offer
  */
@@ -2819,6 +2819,9 @@ visible: boolean }
  * Response after updating an option
  */
 export type UpdateOptionResponse = Record<string, never>
+export type UserSageApp = ({ id: string; originId: string; name: string; version: string; appDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; capabilityFlags: SageAppCapabilityFlags; storage: InstalledSageAppStorage; activeSnapshot: SageAppSnapshot }) & { source: UserSageAppSource; pendingUpdate: UserSageAppPendingUpdate | null }
+export type UserSageAppPendingUpdate = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
+export type UserSageAppSource = { kind: "zip" } | { kind: "url"; app_url: string; manifest_url: string }
 /**
  * View coin spends without signing
  */

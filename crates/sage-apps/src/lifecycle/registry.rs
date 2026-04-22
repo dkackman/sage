@@ -595,7 +595,6 @@ mod tests {
 
     #[test]
     fn installed_app_metadata_round_trips_origin_id_and_storage() {
-        let dir = tempdir().unwrap();
         let tmp = tempdir().unwrap();
         let mut app = sample_app(tmp.path(), "url-abc123", "origin-1");
         app.common.storage = InstalledSageAppStorage::Unmanaged;

@@ -201,7 +201,7 @@ pub struct SageAppCommon {
     pub active_snapshot: SageAppSnapshot,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
 pub enum SystemAppPresentation {
     Taskbar,
     Modal,

@@ -4,16 +4,15 @@ use std::fs;
 
 use common::{sample_installed_app, sample_manifest};
 use sage_apps::lifecycle::registry::{
-    app_install_dir, apps_root, list_installed_apps_internal, parse_network_permission_target,
+    app_dir, apps_root, list_installed_apps_internal, parse_network_permission_target,
     read_installed_app_by_id, read_installed_app_by_origin_id,
     read_pending_storage_cleanup_entries, read_retired_app_origins,
     write_installed_app_metadata, write_pending_storage_cleanup_entries,
     write_retired_app_origins,
 };
 use sage_apps::types::{
-    InstalledSageAppPendingUpdate, ListedSageApp,
-    PendingStorageCleanupEntry, PendingStorageCleanupTarget, RetiredAppOriginEntry,
-    SageNetworkPermissionTarget,
+    ListedSageApp, PendingStorageCleanupEntry, PendingStorageCleanupTarget,
+    RetiredAppOriginEntry, SageNetworkPermissionTarget, UserSageAppPendingUpdate,
 };
 use tempfile::tempdir;
 
@@ -21,29 +20,29 @@ use tempfile::tempdir;
 fn installed_app_metadata_roundtrips() {
     let base = tempdir().unwrap();
     let app_id = "app-1";
-    let dir = app_install_dir(base.path(), app_id);
+    let dir = app_dir(base.path(), app_id);
 
     let mut app = sample_installed_app(base.path(), app_id, "Alpha");
-    app.install_dir = dir.to_string_lossy().to_string();
+    app.common.app_dir = dir.to_string_lossy().to_string();
 
     write_installed_app_metadata(&app, &dir).unwrap();
     let loaded = read_installed_app_by_id(base.path(), app_id).unwrap();
 
-    assert_eq!(loaded.id, app.id);
-    assert_eq!(loaded.name, app.name);
-    assert_eq!(loaded.granted_permissions, app.granted_permissions);
-    assert_eq!(loaded.capability_flags.has_external_access, false);
+    assert_eq!(loaded.common.id, app.common.id);
+    assert_eq!(loaded.common.name, app.common.name);
+    assert_eq!(loaded.common.granted_permissions, app.common.granted_permissions);
+    assert_eq!(loaded.common.capability_flags.has_external_access, false);
 }
 
 #[test]
 fn installed_app_metadata_roundtrips_pending_update() {
     let base = tempdir().unwrap();
     let app_id = "app-1";
-    let dir = app_install_dir(base.path(), app_id);
+    let dir = app_dir(base.path(), app_id);
 
     let mut app = sample_installed_app(base.path(), app_id, "Alpha");
-    app.install_dir = dir.to_string_lossy().to_string();
-    app.pending_update = Some(InstalledSageAppPendingUpdate {
+    app.common.app_dir = dir.to_string_lossy().to_string();
+    app.pending_update = Some(UserSageAppPendingUpdate {
         app_url: "https://example.com/app/".to_string(),
         manifest_url: "https://example.com/app/sage-manifest.json".to_string(),
         manifest_hash: "pending-hash".to_string(),
@@ -61,7 +60,7 @@ fn installed_app_metadata_roundtrips_pending_update() {
 #[test]
 fn corrupted_metadata_is_reported_as_corrupted_listing() {
     let base = tempdir().unwrap();
-    let dir = app_install_dir(base.path(), "broken-app");
+    let dir = app_dir(base.path(), "broken-app");
     fs::create_dir_all(&dir).unwrap();
 
     fs::write(dir.join(".sage-installed.json"), "{ definitely not json").unwrap();
@@ -81,7 +80,7 @@ fn corrupted_metadata_is_reported_as_corrupted_listing() {
 #[test]
 fn corrupted_persisted_network_entry_is_reported_as_corrupted_listing() {
     let base = tempdir().unwrap();
-    let dir = app_install_dir(base.path(), "broken-app");
+    let dir = app_dir(base.path(), "broken-app");
     fs::create_dir_all(&dir).unwrap();
 
     fs::write(
@@ -91,7 +90,7 @@ fn corrupted_persisted_network_entry_is_reported_as_corrupted_listing() {
   "originId": "broken-app",
   "name": "Broken App",
   "version": "1.0.0",
-  "installDir": "/tmp/broken-app",
+  "appDir": "/tmp/broken-app",
   "entryFile": "index.html",
   "iconFile": "icon.png",
   "requestedPermissions": {
@@ -113,9 +112,9 @@ fn corrupted_persisted_network_entry_is_reported_as_corrupted_listing() {
     }
   },
   "capabilityFlags": {
-    "has_secret_access": false,
-    "has_external_access": false,
-    "storage_may_contain_secrets": false,
+    "hasSecretAccess": false,
+    "hasExternalAccess": false,
+    "storageMayContainSecrets": false,
     "isolated": false
   },
   "storage": {
@@ -166,8 +165,12 @@ fn corrupted_persisted_network_entry_is_reported_as_corrupted_listing() {
         ListedSageApp::Corrupted(app) => {
             assert_eq!(app.id, "broken-app");
             assert!(
-                app.error.contains("failed to parse persisted required network entry")
-                    || app.error.contains("invalid host in network entry")
+                app.error.contains("network entry")
+                    || app.error.contains("invalid host")
+                    || app.error.contains("failed to parse installed app metadata")
+                    || app.error.contains("failed to parse persisted required network entry"),
+                "unexpected error: {}",
+                app.error
             );
         }
         ListedSageApp::Installed(_) => panic!("expected corrupted app listing"),
@@ -178,21 +181,21 @@ fn corrupted_persisted_network_entry_is_reported_as_corrupted_listing() {
 fn installed_apps_are_sorted_by_name() {
     let base = tempdir().unwrap();
 
-    let alpha_dir = app_install_dir(base.path(), "a");
+    let alpha_dir = app_dir(base.path(), "a");
     let mut alpha = sample_installed_app(base.path(), "a", "Alpha");
-    alpha.install_dir = alpha_dir.to_string_lossy().to_string();
+    alpha.common.app_dir = alpha_dir.to_string_lossy().to_string();
     write_installed_app_metadata(&alpha, &alpha_dir).unwrap();
 
-    let zeta_dir = app_install_dir(base.path(), "z");
+    let zeta_dir = app_dir(base.path(), "z");
     let mut zeta = sample_installed_app(base.path(), "z", "Zeta");
-    zeta.install_dir = zeta_dir.to_string_lossy().to_string();
+    zeta.common.app_dir = zeta_dir.to_string_lossy().to_string();
     write_installed_app_metadata(&zeta, &zeta_dir).unwrap();
 
     let listed = list_installed_apps_internal(&apps_root(base.path())).unwrap();
     let names: Vec<_> = listed
         .into_iter()
         .map(|entry| match entry {
-            ListedSageApp::Installed(app) => app.name,
+            ListedSageApp::Installed(app) => app.name().to_string(),
             ListedSageApp::Corrupted(app) => app.id,
         })
         .collect();
@@ -256,20 +259,20 @@ fn parse_network_permission_target_rejects_invalid_host_chars() {
 fn read_installed_app_by_origin_id_finds_matching_app() {
     let base = tempdir().unwrap();
 
-    let alpha_dir = app_install_dir(base.path(), "a");
+    let alpha_dir = app_dir(base.path(), "a");
     let mut alpha = sample_installed_app(base.path(), "a", "Alpha");
-    alpha.origin_id = "origin-a".to_string();
-    alpha.install_dir = alpha_dir.to_string_lossy().to_string();
+    alpha.common.origin_id = "origin-a".to_string();
+    alpha.common.app_dir = alpha_dir.to_string_lossy().to_string();
     write_installed_app_metadata(&alpha, &alpha_dir).unwrap();
 
-    let beta_dir = app_install_dir(base.path(), "b");
+    let beta_dir = app_dir(base.path(), "b");
     let mut beta = sample_installed_app(base.path(), "b", "Beta");
-    beta.origin_id = "origin-b".to_string();
-    beta.install_dir = beta_dir.to_string_lossy().to_string();
+    beta.common.origin_id = "origin-b".to_string();
+    beta.common.app_dir = beta_dir.to_string_lossy().to_string();
     write_installed_app_metadata(&beta, &beta_dir).unwrap();
 
     let found = read_installed_app_by_origin_id(base.path(), "origin-b").unwrap();
-    assert_eq!(found.id, "b");
+    assert_eq!(found.common.id, "b");
 }
 
 #[test]

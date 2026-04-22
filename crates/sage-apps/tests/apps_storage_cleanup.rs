@@ -8,51 +8,54 @@ use sage_apps::lifecycle::{
     read_pending_storage_cleanup_entries, read_retired_app_origins,
 };
 use sage_apps::types::{
-    InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppSnapshot,
-    InstalledSageAppSource, InstalledSageAppStorage, PendingStorageCleanupTarget,
-    SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions,
+    InstalledSageAppStorage, PendingStorageCleanupTarget, SageAppCapabilityFlags,
+    SageAppCommon, SageAppPackageManifest, SageAppSnapshot,
+    SageGrantedNetworkPermissions, SageGrantedPermissions, UserSageApp,
+    UserSageAppSource,
 };
 use tempfile::tempdir;
 
-fn sample_app(storage: InstalledSageAppStorage) -> InstalledSageApp {
-    InstalledSageApp {
-        id: "url-abc123".into(),
-        origin_id: "origin-1".into(),
-        name: "Test App".into(),
-        version: "1.0.0".into(),
-        install_dir: "/tmp/test-app".into(),
-        entry_file: "index.html".into(),
-        icon_file: "icon.png".into(),
-        requested_permissions: empty_permissions(),
-        granted_permissions: SageGrantedPermissions {
-            capabilities: vec![],
-            network: SageGrantedNetworkPermissions { whitelist: vec![] },
+fn sample_app(storage: InstalledSageAppStorage) -> UserSageApp {
+    UserSageApp {
+        common: SageAppCommon {
+            id: "url-abc123".into(),
+            origin_id: "origin-1".into(),
+            name: "Test App".into(),
+            version: "1.0.0".into(),
+            app_dir: "/tmp/test-app".into(),
+            entry_file: "index.html".into(),
+            icon_file: "icon.png".into(),
+            requested_permissions: empty_permissions(),
+            granted_permissions: SageGrantedPermissions {
+                capabilities: vec![],
+                network: SageGrantedNetworkPermissions { whitelist: vec![] },
+            },
+            capability_flags: SageAppCapabilityFlags {
+                has_secret_access: false,
+                has_external_access: false,
+                storage_may_contain_secrets: true,
+                isolated: false,
+            },
+            storage,
+            active_snapshot: SageAppSnapshot {
+                manifest_hash: "hash".into(),
+                snapshot_dir: "/tmp/test-app".into(),
+                total_bytes: 1,
+                manifest: SageAppPackageManifest {
+                    name: "Test App".into(),
+                    version: "1.0.0".into(),
+                    permissions: empty_permissions(),
+                    files: vec![sample_manifest_file("index.html", 1)],
+                    entry: Some("index.html".into()),
+                    icon: Some("icon.png".into()),
+                    author: None,
+                    donation: None,
+                },
+            },
         },
-        capability_flags: InstalledSageAppCapabilityFlags {
-            has_secret_access: false,
-            has_external_access: false,
-            storage_may_contain_secrets: true,
-            isolated: false,
-        },
-        storage,
-        source: InstalledSageAppSource::Url {
+        source: UserSageAppSource::Url {
             app_url: "https://example.com/app/".into(),
             manifest_url: "https://example.com/app/sage-manifest.json".into(),
-        },
-        active_snapshot: InstalledSageAppSnapshot {
-            manifest_hash: "hash".into(),
-            snapshot_dir: "/tmp/test-app".into(),
-            total_bytes: 1,
-            manifest: SageAppPackageManifest {
-                name: "Test App".into(),
-                version: "1.0.0".into(),
-                permissions: empty_permissions(),
-                files: vec![sample_manifest_file("index.html", 1)],
-                entry: Some("index.html".into()),
-                icon: Some("icon.png".into()),
-                author: None,
-                donation: None,
-            },
         },
         pending_update: None,
     }
@@ -118,8 +121,8 @@ fn enqueue_pending_storage_cleanup_updates_existing_entry_by_target_not_app_id()
     enqueue_pending_storage_cleanup(dir.path(), &app_a, "first").unwrap();
 
     let mut app_b = sample_app(InstalledSageAppStorage::Unmanaged);
-    app_b.id = "url-other".into();
-    app_b.name = "Other App".into();
+    app_b.common.id = "url-other".into();
+    app_b.common.name = "Other App".into();
 
     enqueue_pending_storage_cleanup(dir.path(), &app_b, "second").unwrap();
 
@@ -135,7 +138,7 @@ fn enqueue_pending_storage_cleanup_updates_existing_entry_by_target_not_app_id()
 fn enqueue_retired_app_origin_ignores_zip_apps() {
     let dir = tempdir().unwrap();
     let mut app = sample_app(InstalledSageAppStorage::Unmanaged);
-    app.source = InstalledSageAppSource::Zip;
+    app.source = UserSageAppSource::Zip;
 
     enqueue_retired_app_origin(dir.path(), &app, true).unwrap();
 
@@ -152,8 +155,8 @@ fn enqueue_retired_app_origin_creates_new_entry_for_url_app() {
 
     let entries = read_retired_app_origins(dir.path()).unwrap();
     assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0].app_id, app.id);
-    assert_eq!(entries[0].origin_id, app.origin_id);
+    assert_eq!(entries[0].app_id, app.common.id);
+    assert_eq!(entries[0].origin_id, app.common.origin_id);
     assert!(entries[0].cleanup_pending);
     assert!(entries[0].storage_may_contain_secrets);
 }
@@ -175,11 +178,11 @@ fn enqueue_retired_app_origin_updates_existing_origin_entry() {
 fn enqueue_retired_app_origin_updates_secret_taint_flag() {
     let dir = tempdir().unwrap();
     let mut app = sample_app(InstalledSageAppStorage::Unmanaged);
-    app.capability_flags.storage_may_contain_secrets = false;
+    app.common.capability_flags.storage_may_contain_secrets = false;
 
     enqueue_retired_app_origin(dir.path(), &app, false).unwrap();
 
-    app.capability_flags.storage_may_contain_secrets = true;
+    app.common.capability_flags.storage_may_contain_secrets = true;
     enqueue_retired_app_origin(dir.path(), &app, true).unwrap();
 
     let entries = read_retired_app_origins(dir.path()).unwrap();
