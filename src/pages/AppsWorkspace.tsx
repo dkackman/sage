@@ -207,7 +207,9 @@ export function AppsWorkspace() {
         onReorderTabs={setTabOrder}
       />
 
-      {activeApp ? (
+      {activeApp &&
+      currentApproval &&
+      currentApproval.request.app.id === activeApp.id ? (
         <AppApprovalStrip
           approval={approvalStripData}
           expanded={approvalExpanded}
