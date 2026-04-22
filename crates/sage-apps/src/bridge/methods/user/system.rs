@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_json::json;
 use tauri::Manager;
 
-use super::{BridgeContext, BridgeMethod, BridgeTools};
+use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{
     emit_bridge_event_to_source, failure, success, RustBridgeApprovalRequest, RustBridgeRequest,
     RustBridgeResponse,

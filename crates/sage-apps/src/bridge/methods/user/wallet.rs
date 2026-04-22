@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 
-use super::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{
     failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
 };
 use crate::types::SageApp;
 use sage_api::SendXch;
+use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 
 #[derive(Debug, Clone, Copy)]
 pub struct WalletSendXch;
