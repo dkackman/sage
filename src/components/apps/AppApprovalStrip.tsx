@@ -1,4 +1,8 @@
+import { useEffect, useMemo, useState } from 'react';
+import { commands, type SageAppCapabilityDefinitionView } from '@/bindings';
 import { Button } from '@/components/ui/button.tsx';
+import { BadgeCheck } from 'lucide-react';
+import { AppApprovalBody } from '@/components/apps/approval/AppApprovalBody.tsx';
 
 export type PendingApproval =
   | {
@@ -43,26 +47,20 @@ interface Props {
   onReject: () => void;
 }
 
-function renderSummary(approval: Exclude<PendingApproval, null>) {
-  switch (approval.kind) {
-    case 'send_xch':
-      return `send ${approval.summary.amount} to ${approval.summary.address}`;
-    case 'capability_grant':
-      return `grant capability ${approval.capability}`;
-    case 'network_whitelist_grant':
-      return `grant network access to ${approval.entry.scheme}://${approval.entry.host}`;
+function formatCountdown(secondsLeft: number) {
+  if (secondsLeft <= 0) {
+    return 'Expires now';
   }
+
+  return `Expires in ${secondsLeft}s`;
 }
 
-function renderDetails(approval: Exclude<PendingApproval, null>) {
-  switch (approval.kind) {
-    case 'send_xch':
-      return approval.summary;
-    case 'capability_grant':
-      return { capability: approval.capability };
-    case 'network_whitelist_grant':
-      return { entry: approval.entry };
-  }
+function MetaPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className='rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground'>
+      {children}
+    </span>
+  );
 }
 
 export function AppApprovalStrip({
@@ -74,46 +72,82 @@ export function AppApprovalStrip({
   onApprove,
   onReject,
 }: Props) {
+  const [capabilityRegistry, setCapabilityRegistry] = useState<
+    Record<string, SageAppCapabilityDefinitionView>
+  >({});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void commands.appsGetCapabilityRegistry().then((entries) => {
+      if (cancelled) {
+        return;
+      }
+
+      setCapabilityRegistry(
+        Object.fromEntries(entries.map((entry) => [entry.key, entry])),
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const queueText = useMemo(() => {
+    if (queuedApprovalCount <= 0) {
+      return null;
+    }
+
+    return `${queuedApprovalCount} more approval${
+      queuedApprovalCount === 1 ? '' : 's'
+    } pending`;
+  }, [queuedApprovalCount]);
+
   if (!approval) {
     return null;
   }
 
   return (
-    <div className='shrink-0 border-b bg-muted/40'>
-      <div className='flex items-center justify-between gap-4 px-4 py-3'>
-        <div className='min-w-0'>
-          <div className='text-sm font-medium'>Approval required</div>
-          <div className='truncate text-xs text-muted-foreground'>
-            {approval.appName}: {renderSummary(approval)}
-          </div>
-          <div className='text-xs text-muted-foreground'>
-            Expires in {secondsLeft}s
-            {queuedApprovalCount > 0
-              ? ` · ${queuedApprovalCount} more approval${queuedApprovalCount === 1 ? '' : 's'} pending`
-              : ''}
-          </div>
-        </div>
+    <div className='shrink-0 border-b bg-muted/30'>
+      <div className='px-4 py-3'>
+        <div className='rounded-2xl border bg-background/80 p-4 shadow-sm'>
+          <div className='mb-4 flex items-start justify-between gap-4'>
+            <div className='min-w-0'>
+              <div className='flex flex-wrap items-center gap-2'>
+                <div className='text-sm font-semibold'>Approval required</div>
+                <MetaPill>{formatCountdown(secondsLeft)}</MetaPill>
+                {queueText ? <MetaPill>{queueText}</MetaPill> : null}
+              </div>
 
-        <div className='flex items-center gap-2'>
-          <Button variant='outline' size='sm' onClick={onToggleExpanded}>
-            {expanded ? 'Hide details' : 'Inspect'}
-          </Button>
-          <Button variant='outline' size='sm' onClick={onReject}>
-            Reject
-          </Button>
-          <Button size='sm' onClick={onApprove}>
-            Approve
-          </Button>
+              <div className='mt-1 flex items-center gap-2 text-xs text-muted-foreground'>
+                <BadgeCheck className='h-3.5 w-3.5' />
+                <span>{approval.appName}</span>
+                <span>·</span>
+                <span>{approval.requestId}</span>
+              </div>
+            </div>
+
+            <div className='flex shrink-0 items-center gap-2'>
+              <Button variant='ghost' size='sm' onClick={onToggleExpanded}>
+                {expanded ? 'Less' : 'More'}
+              </Button>
+              <Button variant='outline' size='sm' onClick={onReject}>
+                Reject
+              </Button>
+              <Button size='sm' onClick={onApprove}>
+                Approve
+              </Button>
+            </div>
+          </div>
+
+          <AppApprovalBody
+            approval={approval}
+            expanded={expanded}
+            capabilityRegistry={capabilityRegistry}
+          />
         </div>
       </div>
-
-      {expanded ? (
-        <div className='border-t px-4 py-3'>
-          <pre className='overflow-auto rounded-md bg-background p-3 text-xs'>
-            {JSON.stringify(renderDetails(approval), null, 2)}
-          </pre>
-        </div>
-      ) : null}
     </div>
   );
 }
