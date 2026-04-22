@@ -302,6 +302,8 @@ export function AppsProvider({ children }: { children: ReactNode }) {
     ) => {
       setBusy(appId, true);
       try {
+        await commands.downloadAppUpdate(appId);
+
         const installed = await commands.applyAppUpdate(
           appId,
           grantedPermissions,
