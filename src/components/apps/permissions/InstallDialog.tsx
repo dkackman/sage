@@ -106,7 +106,6 @@ function resolveInstallIconUrl(
   source: InstallSource,
   manifest: SageAppPackageManifest,
 ): string | null {
-  // 1. candidate paths (ordered)
   const candidates: string[] = [];
 
   if (manifest.icon) {
@@ -116,18 +115,24 @@ function resolveInstallIconUrl(
   candidates.push('icon.png');
 
   const existing = candidates.find((candidate) =>
-    manifest.files.some((f) => f.path === candidate),
+    manifest.files.some((file) => file.path === candidate),
   );
 
   if (!existing) {
     return null;
   }
 
-  if (source.kind === 'url') {
+  if (source.kind !== 'url') {
+    return null;
+  }
+
+  const bases = [source.preview.appUrl, source.preview.manifestUrl];
+
+  for (const base of bases) {
     try {
-      return new URL(existing, source.preview.manifestUrl).toString();
+      return new URL(existing, base).toString();
     } catch {
-      return null;
+      // try next base
     }
   }
 
