@@ -453,7 +453,7 @@ async fn apps_invoke_bridge_internal(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn apps_invoke_user_bridge(
+pub async fn apps_invoke_bridge(
     app: AppHandle,
     webview: Webview,
     app_state: State<'_, AppState>,

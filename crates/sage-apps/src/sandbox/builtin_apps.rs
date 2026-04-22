@@ -10,11 +10,7 @@ use crate::permissions::{
     normalize_and_validate_requested_permissions, resolve_capability_flags,
     validate_granted_capabilities,
 };
-use crate::types::{
-    InstalledSageAppStorage, SageApp, SageAppCommon, SageAppSnapshot,
-    SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions,
-    SystemAppPresentation, SystemSageApp,
-};
+use crate::types::{InstalledSageAppStorage, SageApp, SageAppCommon, SageAppSnapshot, SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions, UserSageAppSource, UserSageApp};
 
 pub const BUILTIN_STORAGE_ISOLATION_PERSISTENT_ID: &str =
     "__sage_test_storage_isolation_persistent";
@@ -224,7 +220,7 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<SageApp>> {
 
     let total_bytes = compute_total_bytes(&app_dir)?;
 
-    let app = SystemSageApp {
+    let app = UserSageApp {
         common: SageAppCommon {
             id: spec.app_id.to_string(),
             origin_id: spec.app_id.to_string(),
@@ -244,10 +240,11 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<SageApp>> {
                 manifest,
             },
         },
-        presentation: SystemAppPresentation::Taskbar,
+        source: UserSageAppSource::Zip,
+        pending_update: None,
     };
 
-    Ok(Some(SageApp::System(app)))
+    Ok(Some(SageApp::User(app)))
 }
 
 #[command]

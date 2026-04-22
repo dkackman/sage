@@ -13,7 +13,7 @@ use crate::sandbox;
 use crate::state::AppsHostState;
 use crate::types::InstalledSageAppStorage;
 
-use super::records::{inline_label_for, runtime_id_for, SageAppRuntimeKind, SageAppRuntimeRecord};
+use super::records::{inline_label_for, runtime_id_for, SageAppRuntimeRecord};
 use super::resolve::{
     build_entry_src, is_allowed_app_url, resolve_app, runtime_kind_for_app, should_use_incognito,
 };

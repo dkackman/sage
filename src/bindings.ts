@@ -368,8 +368,8 @@ async appsCreateInlineRuntime(args: CreateInlineRuntimeArgs) : Promise<SageAppRu
 async appsClearRuntimeBrowsingData(appId: string) : Promise<null> {
     return await TAURI_INVOKE("apps_clear_runtime_browsing_data", { appId });
 },
-async appsInvokeUserBridge(request: RustBridgeRequest) : Promise<RustBridgeInvokeResult> {
-    return await TAURI_INVOKE("apps_invoke_user_bridge", { request });
+async appsInvokeBridge(request: RustBridgeRequest) : Promise<RustBridgeInvokeResult> {
+    return await TAURI_INVOKE("apps_invoke_bridge", { request });
 },
 async appsInvokeSystemBridge(request: RustBridgeRequest) : Promise<RustBridgeInvokeResult> {
     return await TAURI_INVOKE("apps_invoke_system_bridge", { request });

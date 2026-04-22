@@ -146,7 +146,7 @@ pub fn run() {
             commands::get_xch_usd_price,
             apps::runtime::apps_create_inline_runtime,
             apps::runtime::apps_clear_runtime_browsing_data,
-            apps::bridge::apps_invoke_user_bridge,
+            apps::bridge::apps_invoke_bridge,
             apps::bridge::apps_invoke_system_bridge,
             apps::bridge::apps_resolve_bridge_approval,
             apps::sandbox::commands::apps_get_sandbox_state,

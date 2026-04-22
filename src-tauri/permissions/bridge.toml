@@ -1,7 +1,12 @@
 [[permission]]
 identifier = "allow-apps-invoke-bridge"
-description = "Allows embedded app webviews to invoke the Sage bridge entrypoint."
+description = "Allows embedded user app webviews to invoke the Sage bridge entrypoint."
 commands.allow = ["apps_invoke_bridge"]
+
+[[permission]]
+identifier = "allow-apps-invoke-system-bridge"
+description = "Allows embedded system app webviews to invoke the Sage system bridge entrypoint."
+commands.allow = ["apps_invoke_system_bridge"]
 
 [[permission]]
 identifier = "allow-apps-resolve-bridge-approval"
