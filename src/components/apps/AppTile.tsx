@@ -9,7 +9,7 @@ interface Props {
 }
 
 export function AppTile({ app, sandboxState, onOpen, onContextMenu }: Props) {
-  const iconSrc = `sage-app://${app.id}/${app.iconFile}`;
+  const iconSrc = `sage-app://${app.originId}/${app.iconFile}`;
   const decision = getSandboxLaunchDecision({
     app,
     sandboxState,

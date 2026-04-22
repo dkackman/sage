@@ -86,7 +86,7 @@ export function AppsWorkspace() {
           appId: runtime.appId,
           name: installedApp?.name ?? runtime.appName,
           iconSrc: installedApp
-            ? `sage-app://${installedApp.id}/${installedApp.iconFile}`
+            ? `sage-app://${installedApp.originId}/${installedApp.iconFile}`
             : null,
           isActive: runtime.appId === activeApp?.id,
         };
