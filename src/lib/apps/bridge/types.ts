@@ -1,4 +1,4 @@
-import type { UserSageApp } from '@/bindings';
+import type { SystemSageApp, UserSageApp } from '@/bindings';
 
 export type {
   SageBridgeVersion,
@@ -22,6 +22,10 @@ import type {
   SageWalletSendXchRequest,
 } from '@sage-app/sdk';
 
+export type ApprovalApp =
+  | ({ kind: 'user' } & UserSageApp)
+  | ({ kind: 'system' } & SystemSageApp);
+
 export type SageBridgeMethod =
   | 'bridge.ping'
   | 'bridge.send'
@@ -35,21 +39,21 @@ export type SageBridgeMethod =
 export type BridgeApprovalRequest =
   | {
       kind: 'send_xch';
-      app: UserSageApp;
+      app: ApprovalApp;
       sourceLabel: string;
       requestId: string;
       params: SageWalletSendXchRequest;
     }
   | {
       kind: 'capability_grant';
-      app: UserSageApp;
+      app: ApprovalApp;
       sourceLabel: string;
       requestId: string;
       capability: string;
     }
   | {
       kind: 'network_whitelist_grant';
-      app: UserSageApp;
+      app: ApprovalApp;
       sourceLabel: string;
       requestId: string;
       entry: SageRequestedNetworkWhitelistEntry;

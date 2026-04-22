@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use anyhow::{Result as AnyResult, anyhow};
+use anyhow::{anyhow, Result as AnyResult};
 use tauri::http::{Response, StatusCode};
 
 use crate::{
@@ -12,6 +12,12 @@ use crate::{
     security::build_app_csp,
     types::SageApp,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppProtocolKind {
+    User,
+    System,
+}
 
 fn serve_runtime_app_asset(
     request_path: &str,
@@ -105,15 +111,30 @@ fn handle_builtin_test_app_request(
 pub fn handle_app_protocol_request(
     base_path: &Path,
     request: &tauri::http::Request<Vec<u8>>,
+    protocol_kind: AppProtocolKind,
 ) -> AnyResult<Response<Vec<u8>>> {
     let uri = request.uri();
 
     let host = uri
         .host()
-        .ok_or_else(|| anyhow!("missing host in sage-app URL"))?;
+        .ok_or_else(|| anyhow!("missing host in app URL"))?;
 
     if builtin_test_app_spec(host).is_some() {
+        if protocol_kind != AppProtocolKind::System {
+            return Err(anyhow!(
+                "system app {} cannot be served through user protocol",
+                host
+            ));
+        }
+
         return handle_builtin_test_app_request(host, request);
+    }
+
+    if protocol_kind != AppProtocolKind::User {
+        return Err(anyhow!(
+            "user-installed app {} cannot be served through system protocol",
+            host
+        ));
     }
 
     let app = SageApp::User(read_installed_app_by_origin_id(base_path, host)?);
@@ -154,4 +175,18 @@ pub fn handle_app_protocol_request(
         .header("X-Content-Type-Options", "nosniff")
         .body(bytes)
         .map_err(|err| anyhow!("failed to build protocol response: {err}"))
+}
+
+pub fn handle_user_app_protocol_request(
+    base_path: &Path,
+    request: &tauri::http::Request<Vec<u8>>,
+) -> AnyResult<Response<Vec<u8>>> {
+    handle_app_protocol_request(base_path, request, AppProtocolKind::User)
+}
+
+pub fn handle_system_app_protocol_request(
+    base_path: &Path,
+    request: &tauri::http::Request<Vec<u8>>,
+) -> AnyResult<Response<Vec<u8>>> {
+    handle_app_protocol_request(base_path, request, AppProtocolKind::System)
 }

@@ -7,8 +7,8 @@ use crate::types::{InstalledSageAppStorage, PendingStorageCleanupTarget};
 
 use super::apps_create_inline_runtime;
 use super::inline::CreateInlineRuntimeArgs;
+use super::resolve::{resolve_app, runtime_kind_for_app};
 use super::records::inline_label_for;
-use super::resolve::resolve_app;
 
 #[cfg(target_os = "windows")]
 fn data_directory_for(directory_name: &str) -> std::path::PathBuf {
@@ -104,7 +104,14 @@ pub async fn apps_clear_runtime_browsing_data(
     app: AppHandle,
     app_id: String,
 ) -> Result<(), String> {
-    let webview_label = inline_label_for(&app_id);
+    let base_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
+
+    let resolved = resolve_app(&base_path, &app_id)?;
+    let runtime_kind = runtime_kind_for_app(&resolved);
+    let webview_label = inline_label_for(resolved.id(), runtime_kind);
 
     if let Some(host_window) = app.get_window("main") {
         if let Some(existing) = host_window.get_webview(&webview_label) {
@@ -112,12 +119,6 @@ pub async fn apps_clear_runtime_browsing_data(
         }
     }
 
-    let base_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
-
-    let resolved = resolve_app(&base_path, &app_id)?;
     let target = pending_target_from_storage(resolved.storage());
 
     clear_app_storage_by_target(&app, &target).await

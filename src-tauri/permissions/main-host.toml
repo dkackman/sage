@@ -121,7 +121,6 @@ commands.allow = [
     "get_logs",
     "is_asset_owned",
     "apps_create_inline_runtime",
-    "apps_assert_bridge_origin",
     "apps_clear_runtime_browsing_data",
     "apps_resolve_bridge_approval",
     "apps_get_sandbox_state",

@@ -14,6 +14,7 @@ export type SageAppRuntimeMode = 'inline';
 
 export interface SageAppRuntimeRecord {
   runtimeId: string;
+  runtimeKind: 'user' | 'system';
   appId: string;
   appName: string;
   entrySrc: string;
@@ -41,6 +42,14 @@ type AppLike = SageApp | UserSageApp | SystemSageApp;
 const runtimes = new Map<string, RuntimeInternalRecord>();
 export const runtimeByAppId = new Map<string, string>();
 const listeners = new Set<RuntimeListener>();
+
+function isSystemAppLike(app: AppLike): boolean {
+  if ('kind' in app) {
+    return app.kind === 'system';
+  }
+
+  return !('source' in app);
+}
 
 function isBuiltinTestApp(app: AppLike): boolean {
   return app.common.id.startsWith('__sage_test_');
@@ -82,6 +91,7 @@ async function emitRuntimeBeforeStop(appId: string) {
 function stripInternal(record: RuntimeInternalRecord): SageAppRuntimeRecord {
   return {
     runtimeId: record.runtimeId,
+    runtimeKind: record.runtimeKind,
     appId: record.appId,
     appName: record.appName,
     entrySrc: record.entrySrc,
@@ -99,8 +109,10 @@ function stripInternal(record: RuntimeInternalRecord): SageAppRuntimeRecord {
   };
 }
 
-export function inlineLabelFor(appId: string) {
-  return `app-inline-${appId}`;
+export function inlineLabelFor(appId: string, runtimeKind: 'user' | 'system') {
+  return runtimeKind === 'system'
+    ? `system-app-inline-${appId}`
+    : `app-inline-${appId}`;
 }
 
 export function shouldUseIncognito(app: AppLike): boolean {
@@ -150,7 +162,8 @@ async function createInlineRuntime(
   },
 ): Promise<SageAppRuntimeRecord> {
   const hostWebview = getCurrentWebview();
-  const webviewLabel = inlineLabelFor(app.common.id);
+  const runtimeKind = isSystemAppLike(app) ? 'system' : 'user';
+  const webviewLabel = inlineLabelFor(app.common.id, runtimeKind);
 
   const staleWebview = await Webview.getByLabel(webviewLabel).catch(() => null);
   if (staleWebview) {

@@ -365,14 +365,14 @@ async getXchUsdPrice(req: GetXchUsdPrice) : Promise<GetXchUsdPriceResponse> {
 async appsCreateInlineRuntime(args: CreateInlineRuntimeArgs) : Promise<SageAppRuntimeRecord> {
     return await TAURI_INVOKE("apps_create_inline_runtime", { args });
 },
-async appsAssertBridgeOrigin(sourceLabel: string) : Promise<string> {
-    return await TAURI_INVOKE("apps_assert_bridge_origin", { sourceLabel });
-},
 async appsClearRuntimeBrowsingData(appId: string) : Promise<null> {
     return await TAURI_INVOKE("apps_clear_runtime_browsing_data", { appId });
 },
-async appsInvokeBridge(request: RustBridgeRequest) : Promise<RustBridgeInvokeResult> {
-    return await TAURI_INVOKE("apps_invoke_bridge", { request });
+async appsInvokeUserBridge(request: RustBridgeRequest) : Promise<RustBridgeInvokeResult> {
+    return await TAURI_INVOKE("apps_invoke_user_bridge", { request });
+},
+async appsInvokeSystemBridge(request: RustBridgeRequest) : Promise<RustBridgeInvokeResult> {
+    return await TAURI_INVOKE("apps_invoke_system_bridge", { request });
 },
 async appsResolveBridgeApproval(args: ResolveBridgeApprovalArgs) : Promise<null> {
     return await TAURI_INVOKE("apps_resolve_bridge_approval", { args });
@@ -2244,7 +2244,8 @@ export type SageAppCommon = { id: string; originId: string; name: string; versio
 export type SageAppDonation = { address: string }
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
 export type SageAppPackageManifest = { name: string; version: string; permissions: SageRequestedPermissions; files: SageAppManifestFile[]; entry: string | null; icon: string | null; author: SageAppAuthor | null; donation: SageAppDonation | null }
-export type SageAppRuntimeRecord = { runtimeId: string; appId: string; appName: string; entrySrc: string; webviewLabel: string; hostWindowLabel: string; mode: string; state: string; startedAt: number; lastActiveAt: number; visible: boolean; internal: boolean; activeBatchCount: number; activeSocketCount: number; inFlightRequestCount: number }
+export type SageAppRuntimeKind = "user" | "system"
+export type SageAppRuntimeRecord = { runtimeId: string; appId: string; appName: string; entrySrc: string; webviewLabel: string; hostWindowLabel: string; runtimeKind: SageAppRuntimeKind; mode: string; state: string; startedAt: number; lastActiveAt: number; visible: boolean; internal: boolean; activeBatchCount: number; activeSocketCount: number; inFlightRequestCount: number }
 export type SageAppSnapshot = { manifestHash: string; snapshotDir: string; totalBytes: number; manifest: SageAppPackageManifest }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageAppsError = { kind: ErrorKind; reason: string }

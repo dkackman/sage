@@ -54,6 +54,7 @@ impl BridgeMethod for WalletSendXch {
     ) -> RustBridgeResponse {
         let Some(params_json) = request.params_json.clone() else {
             return failure(
+                &request.channel,
                 &request.id,
                 "invalid_request",
                 "wallet.sendXch requires params",
@@ -64,6 +65,7 @@ impl BridgeMethod for WalletSendXch {
             Ok(req) => req,
             Err(err) => {
                 return failure(
+                    &request.channel,
                     &request.id,
                     "invalid_request",
                     format!("Failed to decode wallet.sendXch params: {err}"),
@@ -75,14 +77,16 @@ impl BridgeMethod for WalletSendXch {
 
         match tools.app_state.lock().await.send_xch(req).await {
             Ok(result) => match serde_json::to_value(result) {
-                Ok(value) => success(&request.id, value),
+                Ok(value) => success(&request.channel, &request.id, value),
                 Err(err) => failure(
+                    &request.channel,
                     &request.id,
                     "internal_error",
                     format!("Failed to encode wallet.sendXch result: {err}"),
                 ),
             },
             Err(err) => failure(
+                &request.channel,
                 &request.id,
                 "internal_error",
                 format!("wallet.sendXch failed: {err}"),

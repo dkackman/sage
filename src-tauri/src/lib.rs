@@ -145,9 +145,9 @@ pub fn run() {
             commands::is_asset_owned,
             commands::get_xch_usd_price,
             apps::runtime::apps_create_inline_runtime,
-            apps::runtime::apps_assert_bridge_origin,
             apps::runtime::apps_clear_runtime_browsing_data,
-            apps::bridge::apps_invoke_bridge,
+            apps::bridge::apps_invoke_user_bridge,
+            apps::bridge::apps_invoke_system_bridge,
             apps::bridge::apps_resolve_bridge_approval,
             apps::sandbox::commands::apps_get_sandbox_state,
             apps::sandbox::commands::apps_get_app_launch_gate,
@@ -208,13 +208,30 @@ pub fn run() {
                 .app_data_dir()
                 .expect("failed to resolve app data dir");
 
-            apps::handle_app_protocol_request(&base_path, &request).unwrap_or_else(|err| {
+            apps::handle_user_app_protocol_request(&base_path, &request).unwrap_or_else(|err| {
                 tauri::http::Response::builder()
                     .status(404)
                     .header("Content-Type", "text/plain; charset=utf-8")
                     .body(format!("sage-app error: {err}").into_bytes())
                     .expect("failed to build error response")
             })
+        })
+        .register_uri_scheme_protocol("sage-system-app", move |ctx, request| {
+            let app_handle = ctx.app_handle();
+
+            let base_path: PathBuf = app_handle
+                .path()
+                .app_data_dir()
+                .expect("failed to resolve app data dir");
+
+            apps::handle_system_app_protocol_request(&base_path, &request)
+                .unwrap_or_else(|err| {
+                    tauri::http::Response::builder()
+                        .status(404)
+                        .header("Content-Type", "text/plain; charset=utf-8")
+                        .body(format!("sage-system-app error: {err}").into_bytes())
+                        .expect("failed to build error response")
+                })
         })
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {

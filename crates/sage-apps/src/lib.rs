@@ -9,5 +9,8 @@ pub mod state;
 pub mod types;
 pub mod build;
 
-pub use security::handle_app_protocol_request;
+pub use security::{
+    handle_system_app_protocol_request,
+    handle_user_app_protocol_request,
+};
 pub use state::AppsHostState;

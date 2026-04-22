@@ -54,6 +54,7 @@ fn parse_capability_grant_params(
 ) -> Result<RequestCapabilityGrantParams, RustBridgeResponse> {
     let Some(params_json) = request.params_json.clone() else {
         return Err(failure(
+            &request.channel,
             &request.id,
             "invalid_request",
             "sage.requestCapabilityGrant requires params",
@@ -62,6 +63,7 @@ fn parse_capability_grant_params(
 
     serde_json::from_str(&params_json).map_err(|err| {
         failure(
+            &request.channel,
             &request.id,
             "invalid_request",
             format!("Failed to decode sage.requestCapabilityGrant params: {err}"),
@@ -74,6 +76,7 @@ fn parse_network_whitelist_grant_params(
 ) -> Result<RequestNetworkWhitelistGrantParams, RustBridgeResponse> {
     let Some(params_json) = request.params_json.clone() else {
         return Err(failure(
+            &request.channel,
             &request.id,
             "invalid_request",
             "sage.requestNetworkWhitelistGrant requires params",
@@ -83,6 +86,7 @@ fn parse_network_whitelist_grant_params(
     let mut params: RequestNetworkWhitelistGrantParams =
         serde_json::from_str(&params_json).map_err(|err| {
             failure(
+                &request.channel,
                 &request.id,
                 "invalid_request",
                 format!(
@@ -95,7 +99,7 @@ fn parse_network_whitelist_grant_params(
         "{}://{}",
         params.entry.scheme, params.entry.host
     ))
-        .map_err(|err| failure(&request.id, "invalid_request", err))?;
+        .map_err(|err| failure(&request.channel, &request.id, "invalid_request", err))?;
 
     params.entry = normalized;
     Ok(params)
@@ -107,8 +111,12 @@ fn required_network_set(
     let mut out = BTreeSet::new();
 
     for entry in &ctx.app.requested_permissions().network.whitelist.required {
-        let normalized = parse_network_permission_target(&format!("{}://{}", entry.scheme, entry.host))
-            .map_err(|err| failure("app.getInfo", "internal_error", err))?;
+        let normalized = parse_network_permission_target(&format!(
+            "{}://{}",
+            entry.scheme, entry.host
+        ))
+            .map_err(|err| failure("sage-bridge", "app.getInfo", "internal_error", err))?;
+
         out.insert((normalized.scheme, normalized.host));
     }
 
@@ -117,7 +125,7 @@ fn required_network_set(
 
 fn resolve_app_base_path(
     tools: &BridgeTools<'_>,
-    request_id: &str,
+    request: &RustBridgeRequest,
 ) -> Result<PathBuf, RustBridgeResponse> {
     tools
         .app_handle
@@ -125,7 +133,8 @@ fn resolve_app_base_path(
         .app_data_dir()
         .map_err(|err| {
             failure(
-                request_id,
+                &request.channel,
+                &request.id,
                 "internal_error",
                 format!("failed to resolve app data dir: {err}"),
             )
@@ -141,6 +150,7 @@ impl BridgeMethod for BridgePing {
         request: &RustBridgeRequest,
     ) -> RustBridgeResponse {
         success(
+            &request.channel,
             &request.id,
             json!({
                 "ok": true,
@@ -174,7 +184,7 @@ impl BridgeMethod for BridgeSend {
         )
             .await;
 
-        success(&request.id, json!({ "ok": true }))
+        success(&request.channel, &request.id, json!({ "ok": true }))
     }
 }
 
@@ -211,6 +221,7 @@ impl BridgeMethod for AppGetInfo {
             .collect::<Vec<_>>();
 
         success(
+            &request.channel,
             &request.id,
             json!({
                 "id": ctx.app.id(),
@@ -237,6 +248,7 @@ impl BridgeMethod for SageGetCapabilities {
                 .unwrap_or_default();
 
         success(
+            &request.channel,
             &request.id,
             serde_json::to_value(&capabilities).unwrap_or_else(|_| json!([])),
         )
@@ -294,7 +306,7 @@ impl BridgeMethod for SageRequestCapabilityGrant {
             Err(err) => return err,
         };
 
-        let base_path = match resolve_app_base_path(&tools, &request.id) {
+        let base_path = match resolve_app_base_path(&tools, request) {
             Ok(path) => path,
             Err(err) => return err,
         };
@@ -304,6 +316,7 @@ impl BridgeMethod for SageRequestCapabilityGrant {
                    capability,
                    full_granted_capabilities,
                }) => success(
+                &request.channel,
                 &request.id,
                 json!({
                     "granted": true,
@@ -313,11 +326,14 @@ impl BridgeMethod for SageRequestCapabilityGrant {
                 }),
             ),
             Ok(GrantCapabilityOutcome::Granted { capability, change }) => {
+                let runtime_kind = crate::runtime::resolve::runtime_kind_for_app(ctx.app);
+
                 let _ = emit_bridge_event_to_source(
                     tools.app_handle,
                     ctx.source_label,
+                    runtime_kind,
                     json!({
-                        "channel": "sage-bridge",
+                        "channel": request.channel,
                         "type": "grantedCapabilitiesChange",
                         "removedGrantedCapabilities": change.removed,
                         "addedGrantedCapabilities": change.added,
@@ -326,6 +342,7 @@ impl BridgeMethod for SageRequestCapabilityGrant {
                 );
 
                 success(
+                    &request.channel,
                     &request.id,
                     json!({
                         "granted": true,
@@ -335,6 +352,7 @@ impl BridgeMethod for SageRequestCapabilityGrant {
                 )
             }
             Err(err) => failure(
+                &request.channel,
                 &request.id,
                 "internal_error",
                 format!("failed to grant requested capability: {err}"),
@@ -395,7 +413,7 @@ impl BridgeMethod for SageRequestNetworkWhitelistGrant {
             Err(err) => return err,
         };
 
-        let base_path = match resolve_app_base_path(&tools, &request.id) {
+        let base_path = match resolve_app_base_path(&tools, request) {
             Ok(path) => path,
             Err(err) => return err,
         };
@@ -409,6 +427,7 @@ impl BridgeMethod for SageRequestNetworkWhitelistGrant {
                    entry,
                    full_granted_network_whitelist,
                }) => success(
+                &request.channel,
                 &request.id,
                 json!({
                     "granted": true,
@@ -418,11 +437,14 @@ impl BridgeMethod for SageRequestNetworkWhitelistGrant {
                 }),
             ),
             Ok(GrantNetworkWhitelistOutcome::Granted { entry, change }) => {
+                let runtime_kind = crate::runtime::resolve::runtime_kind_for_app(ctx.app);
+
                 let _ = emit_bridge_event_to_source(
                     tools.app_handle,
                     ctx.source_label,
+                    runtime_kind,
                     json!({
-                        "channel": "sage-bridge",
+                        "channel": request.channel,
                         "type": "grantedNetworkWhitelistChange",
                         "removedGrantedNetworkWhitelist": change.removed,
                         "addedGrantedNetworkWhitelist": change.added,
@@ -431,6 +453,7 @@ impl BridgeMethod for SageRequestNetworkWhitelistGrant {
                 );
 
                 success(
+                    &request.channel,
                     &request.id,
                     json!({
                         "granted": true,
@@ -440,6 +463,7 @@ impl BridgeMethod for SageRequestNetworkWhitelistGrant {
                 )
             }
             Err(err) => failure(
+                &request.channel,
                 &request.id,
                 "internal_error",
                 format!("failed to grant requested network whitelist entry: {err}"),

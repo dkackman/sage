@@ -4,19 +4,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Deserialize;
 use specta::Type;
 use tauri::webview::NewWindowResponse;
-use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager, State, WebviewUrl,
-};
+use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, State, WebviewUrl};
 
 #[cfg(target_os = "windows")]
 use std::path::PathBuf;
 
 use crate::sandbox;
 use crate::state::AppsHostState;
-use crate::types::{InstalledSageAppStorage};
+use crate::types::InstalledSageAppStorage;
 
-use super::records::{inline_label_for, runtime_id_for, SageAppRuntimeRecord};
-use super::resolve::{build_entry_src, is_allowed_app_url, resolve_app, should_use_incognito};
+use super::records::{inline_label_for, runtime_id_for, SageAppRuntimeKind, SageAppRuntimeRecord};
+use super::resolve::{
+    build_entry_src, is_allowed_app_url, resolve_app, runtime_kind_for_app, should_use_incognito,
+};
 
 #[cfg(target_os = "windows")]
 fn data_directory_for(directory_name: &str) -> PathBuf {
@@ -64,6 +64,7 @@ pub async fn apps_create_inline_runtime(
         .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
 
     let resolved = resolve_app(&base_path, &args.app_id)?;
+    let runtime_kind = runtime_kind_for_app(&resolved);
     let is_builtin_test_app = resolved.id().starts_with("__sage_test_");
 
     if !args.internal && !is_builtin_test_app {
@@ -87,8 +88,8 @@ pub async fn apps_create_inline_runtime(
         .get_window("main")
         .ok_or_else(|| "missing main window".to_string())?;
 
-    let webview_label = inline_label_for(resolved.id());
-    let runtime_id = runtime_id_for(resolved.id());
+    let webview_label = inline_label_for(resolved.id(), runtime_kind);
+    let runtime_id = runtime_id_for(resolved.id(), runtime_kind);
     let entry_src = build_entry_src(&resolved, args.path.clone(), args.query.clone());
 
     if let Some(existing) = host_window.get_webview(&webview_label) {
@@ -96,6 +97,7 @@ pub async fn apps_create_inline_runtime(
     }
 
     let origin_id_for_nav = resolved.origin_id().to_string();
+    let runtime_kind_for_nav = runtime_kind;
 
     let mut builder = tauri::webview::WebviewBuilder::new(
         &webview_label,
@@ -105,7 +107,9 @@ pub async fn apps_create_inline_runtime(
                 .map_err(|e| format!("invalid entry url: {e}"))?,
         ),
     )
-        .on_navigation(move |url| is_allowed_app_url(url, &origin_id_for_nav))
+        .on_navigation(move |url| {
+            is_allowed_app_url(url, &origin_id_for_nav, runtime_kind_for_nav)
+        })
         .on_new_window(move |_url, _features| NewWindowResponse::Deny);
 
     if is_incognito {
@@ -153,6 +157,7 @@ pub async fn apps_create_inline_runtime(
         entry_src,
         webview_label: webview_label.clone(),
         host_window_label: "main".into(),
+        runtime_kind,
         mode: "inline".into(),
         state: if args.visible {
             "running".into()
