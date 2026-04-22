@@ -55,11 +55,9 @@ pub struct SageGrantedPermissions {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum InstalledSageAppStorage {
     AppleDataStore {
-        #[serde(rename = "identifierHex", alias = "identifier_hex")]
         identifier_hex: String,
     },
     WindowsProfile {
-        #[serde(rename = "directoryName", alias = "directory_name")]
         directory_name: String,
     },
     Unmanaged,
@@ -69,64 +67,36 @@ pub enum InstalledSageAppStorage {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum PendingStorageCleanupTarget {
     AppleDataStore {
-        #[serde(rename = "identifierHex", alias = "identifier_hex")]
         identifier_hex: String,
     },
     WindowsProfile {
-        #[serde(rename = "directoryName", alias = "directory_name")]
         directory_name: String,
     },
     Unmanaged,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct PendingStorageCleanupEntry {
     pub id: String,
-
-    #[serde(rename = "appId", alias = "app_id")]
     pub app_id: String,
-
-    #[serde(rename = "appName", alias = "app_name")]
     pub app_name: String,
-
     pub target: PendingStorageCleanupTarget,
-
-    #[serde(rename = "createdAtMs", alias = "created_at_ms")]
     pub created_at_ms: u64,
-
-    #[serde(rename = "lastAttemptAtMs", alias = "last_attempt_at_ms")]
     pub last_attempt_at_ms: Option<u64>,
-
-    #[serde(rename = "attemptCount", alias = "attempt_count")]
     pub attempt_count: u32,
-
-    #[serde(rename = "lastError", alias = "last_error")]
     pub last_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct RetiredAppOriginEntry {
     pub id: String,
-
-    #[serde(rename = "appId", alias = "app_id")]
     pub app_id: String,
-
-    #[serde(rename = "appName", alias = "app_name")]
     pub app_name: String,
-
-    #[serde(rename = "originId", alias = "origin_id")]
     pub origin_id: String,
-
-    #[serde(rename = "createdAtMs", alias = "created_at_ms")]
     pub created_at_ms: u64,
-
-    #[serde(
-        rename = "storageMayContainSecrets",
-        alias = "storage_may_contain_secrets"
-    )]
     pub storage_may_contain_secrets: bool,
-
-    #[serde(rename = "cleanupPending", alias = "cleanup_pending")]
     pub cleanup_pending: bool,
 }
 
@@ -143,16 +113,11 @@ pub struct SageAppPackageManifest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct SageAppUrlPreview {
-    #[serde(rename = "appUrl", alias = "app_url")]
     pub app_url: String,
-
-    #[serde(rename = "manifestUrl", alias = "manifest_url")]
     pub manifest_url: String,
-
-    #[serde(rename = "manifestHash", alias = "manifest_hash")]
     pub manifest_hash: String,
-
     pub manifest: SageAppPackageManifest,
 }
 
@@ -164,144 +129,240 @@ pub struct SageAppManifestFile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct InstalledSageAppSnapshot {
-    #[serde(rename = "manifestHash", alias = "manifest_hash")]
+#[serde(rename_all = "camelCase")]
+pub struct SageAppSnapshot {
     pub manifest_hash: String,
-
-    #[serde(rename = "snapshotDir", alias = "snapshot_dir")]
     pub snapshot_dir: String,
-
-    #[serde(rename = "totalBytes", alias = "total_bytes")]
     pub total_bytes: u64,
-
     pub manifest: SageAppPackageManifest,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, Default)]
-pub struct InstalledSageAppCapabilityFlags {
-    #[serde(rename = "hasSecretAccess", alias = "has_secret_access")]
+#[serde(rename_all = "camelCase")]
+pub struct SageAppCapabilityFlags {
     pub has_secret_access: bool,
-
-    #[serde(rename = "hasExternalAccess", alias = "has_external_access")]
     pub has_external_access: bool,
-
-    #[serde(
-        rename = "storageMayContainSecrets",
-        alias = "storage_may_contain_secrets"
-    )]
     pub storage_may_contain_secrets: bool,
-
     pub isolated: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct SageAppCapabilityFlagsView {
-    #[serde(rename = "externallyObservable", alias = "externally_observable")]
     pub externally_observable: bool,
-
-    #[serde(
-        rename = "accessesSensitiveSecret",
-        alias = "accesses_sensitive_secret"
-    )]
     pub accesses_sensitive_secret: bool,
-
-    #[serde(rename = "persistentStorage", alias = "persistent_storage")]
     pub persistent_storage: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct SageAppCapabilityDefinitionView {
     pub key: String,
     pub label: String,
     pub description: String,
-
     pub flags: SageAppCapabilityFlagsView,
-
-    #[serde(rename = "requestableByApp", alias = "requestable_by_app")]
     pub requestable_by_app: bool,
-
-    #[serde(rename = "sharedWithApp", alias = "shared_with_app")]
     pub shared_with_app: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct InstalledSageAppPendingUpdate {
-    #[serde(rename = "appUrl", alias = "app_url")]
+#[serde(rename_all = "camelCase")]
+pub struct UserSageAppPendingUpdate {
     pub app_url: String,
-
-    #[serde(rename = "manifestUrl", alias = "manifest_url")]
     pub manifest_url: String,
-
-    #[serde(rename = "manifestHash", alias = "manifest_hash")]
     pub manifest_hash: String,
-
     pub manifest: SageAppPackageManifest,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
-pub enum InstalledSageAppSource {
+pub enum UserSageAppSource {
     Zip,
     Url {
-        #[serde(rename = "appUrl", alias = "app_url")]
         app_url: String,
-        #[serde(rename = "manifestUrl", alias = "manifest_url")]
         manifest_url: String,
     },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct InstalledSageApp {
+#[serde(rename_all = "camelCase")]
+pub struct SageAppCommon {
     pub id: String,
-
-    #[serde(rename = "originId", alias = "origin_id")]
     pub origin_id: String,
-
     pub name: String,
     pub version: String,
-
-    #[serde(rename = "installDir", alias = "install_dir")]
-    pub install_dir: String,
-
-    #[serde(rename = "entryFile", alias = "entry_file")]
+    pub app_dir: String,
     pub entry_file: String,
-
-    #[serde(rename = "iconFile", alias = "icon_file")]
     pub icon_file: String,
-
-    #[serde(rename = "requestedPermissions", alias = "requested_permissions")]
     pub requested_permissions: SageRequestedPermissions,
-
-    #[serde(rename = "grantedPermissions", alias = "granted_permissions")]
     pub granted_permissions: SageGrantedPermissions,
-
-    #[serde(rename = "capabilityFlags", alias = "capability_flags")]
-    pub capability_flags: InstalledSageAppCapabilityFlags,
-
+    pub capability_flags: SageAppCapabilityFlags,
     pub storage: InstalledSageAppStorage,
-
-    pub source: InstalledSageAppSource,
-
-    #[serde(rename = "activeSnapshot", alias = "active_snapshot")]
-    pub active_snapshot: InstalledSageAppSnapshot,
-
-    #[serde(rename = "pendingUpdate", alias = "pending_update")]
-    pub pending_update: Option<InstalledSageAppPendingUpdate>,
+    pub active_snapshot: SageAppSnapshot,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub enum SystemAppPresentation {
+    Taskbar,
+    Modal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UserSageApp {
+    #[serde(flatten)]
+    pub common: SageAppCommon,
+    pub source: UserSageAppSource,
+    pub pending_update: Option<UserSageAppPendingUpdate>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemSageApp {
+    #[serde(flatten)]
+    pub common: SageAppCommon,
+    pub presentation: SystemAppPresentation,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum SageApp {
+    System(SystemSageApp),
+    User(UserSageApp),
+}
+
+impl SageApp {
+    pub fn common(&self) -> &SageAppCommon {
+        match self {
+            Self::System(app) => &app.common,
+            Self::User(app) => &app.common,
+        }
+    }
+
+    pub fn id(&self) -> &str {
+        &self.common().id
+    }
+
+    pub fn origin_id(&self) -> &str {
+        &self.common().origin_id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.common().name
+    }
+
+    pub fn version(&self) -> &str {
+        &self.common().version
+    }
+
+    pub fn app_dir(&self) -> &str {
+        &self.common().app_dir
+    }
+
+    pub fn entry_file(&self) -> &str {
+        &self.common().entry_file
+    }
+
+    pub fn icon_file(&self) -> &str {
+        &self.common().icon_file
+    }
+
+    pub fn requested_permissions(&self) -> &SageRequestedPermissions {
+        &self.common().requested_permissions
+    }
+
+    pub fn granted_permissions(&self) -> &SageGrantedPermissions {
+        &self.common().granted_permissions
+    }
+
+    pub fn capability_flags(&self) -> &SageAppCapabilityFlags {
+        &self.common().capability_flags
+    }
+
+    pub fn storage(&self) -> &InstalledSageAppStorage {
+        &self.common().storage
+    }
+
+    pub fn active_snapshot(&self) -> &SageAppSnapshot {
+        &self.common().active_snapshot
+    }
+
+    pub fn as_user(&self) -> Option<&UserSageApp> {
+        match self {
+            Self::User(app) => Some(app),
+            Self::System(_) => None,
+        }
+    }
+
+    pub fn as_user_mut(&mut self) -> Option<&mut UserSageApp> {
+        match self {
+            Self::User(app) => Some(app),
+            Self::System(_) => None,
+        }
+    }
+
+    pub fn as_system(&self) -> Option<&SystemSageApp> {
+        match self {
+            Self::System(app) => Some(app),
+            Self::User(_) => None,
+        }
+    }
+
+    pub fn as_system_mut(&mut self) -> Option<&mut SystemSageApp> {
+        match self {
+            Self::System(app) => Some(app),
+            Self::User(_) => None,
+        }
+    }
+
+    pub fn into_user(self) -> Option<UserSageApp> {
+        match self {
+            Self::User(app) => Some(app),
+            Self::System(_) => None,
+        }
+    }
+
+    pub fn into_system(self) -> Option<SystemSageApp> {
+        match self {
+            Self::System(app) => Some(app),
+            Self::User(_) => None,
+        }
+    }
+}
+
+impl UserSageApp {
+    pub fn into_sage_app(self) -> SageApp {
+        SageApp::User(self)
+    }
+}
+
+impl SystemSageApp {
+    pub fn into_sage_app(self) -> SageApp {
+        SageApp::System(self)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SageAppId {
+    pub id: String,
+    pub origin_id: String,
+    pub name: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct CorruptedInstalledSageApp {
     pub id: String,
-
-    #[serde(rename = "installDir", alias = "install_dir")]
-    pub install_dir: String,
+    pub app_dir: String,
     pub error: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ListedSageApp {
-    Installed(InstalledSageApp),
+    Installed(SageApp),
     Corrupted(CorruptedInstalledSageApp),
 }
 

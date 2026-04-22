@@ -3,16 +3,22 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result as AnyResult};
+use anyhow::{Context, Result as AnyResult, anyhow};
+use sha2::{Digest, Sha256};
 use zip::ZipArchive;
 
 use crate::{
-    lifecycle::hash_string,
-    lifecycle::manifest::validate_package_manifest,
-    types::{InstalledSageAppSnapshot, SageAppPackageManifest},
+    lifecycle::manifest::read_manifest,
+    types::{SageAppPackageManifest, SageAppSnapshot},
 };
 
 const MANIFEST_FILE_NAME: &str = "sage-manifest.json";
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    hex::encode(hasher.finalize())
+}
 
 pub fn unzip_to_dir(zip_path: &Path, out_dir: &Path) -> AnyResult<()> {
     let file = fs::File::open(zip_path)
@@ -36,7 +42,13 @@ pub fn detect_package_root(unpack_dir: &Path) -> AnyResult<PathBuf> {
 
     let mut dirs = fs::read_dir(unpack_dir)?
         .filter_map(|entry| entry.ok())
-        .filter_map(|entry| entry.file_type().ok().filter(|ft| ft.is_dir()).map(|_| entry.path()))
+        .filter_map(|entry| {
+            entry
+                .file_type()
+                .ok()
+                .filter(|ft| ft.is_dir())
+                .map(|_| entry.path())
+        })
         .collect::<Vec<_>>();
 
     dirs.sort();
@@ -48,16 +60,6 @@ pub fn detect_package_root(unpack_dir: &Path) -> AnyResult<PathBuf> {
     }
 
     anyhow::bail!("could not find {}", MANIFEST_FILE_NAME)
-}
-
-pub fn read_manifest(package_root: &Path) -> AnyResult<SageAppPackageManifest> {
-    let manifest_path = package_root.join(MANIFEST_FILE_NAME);
-    let manifest_text = fs::read_to_string(&manifest_path)
-        .with_context(|| format!("failed to read {}", manifest_path.display()))?;
-    let manifest: SageAppPackageManifest =
-        serde_json::from_str(&manifest_text).context("failed to parse manifest")?;
-    validate_package_manifest(&manifest)?;
-    Ok(manifest)
 }
 
 pub fn validate_package_structure(package_root: &Path) -> AnyResult<()> {
@@ -72,7 +74,7 @@ pub fn validate_package_structure(package_root: &Path) -> AnyResult<()> {
         let bytes = fs::read(&path)
             .with_context(|| format!("failed to read package file {}", path.display()))?;
 
-        let actual_hash = hash_string(&String::from_utf8_lossy(&bytes));
+        let actual_hash = sha256_hex(&bytes);
         if actual_hash != file.sha256 {
             anyhow::bail!("sha256 mismatch for {}", file.path);
         }
@@ -86,34 +88,80 @@ pub fn validate_package_structure(package_root: &Path) -> AnyResult<()> {
     Ok(())
 }
 
+fn copy_dir_recursive(src: &Path, dst: &Path) -> AnyResult<()> {
+    fs::create_dir_all(dst)
+        .with_context(|| format!("failed to create directory {}", dst.display()))?;
+
+    for entry in fs::read_dir(src)
+        .with_context(|| format!("failed to read directory {}", src.display()))?
+    {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+
+        if file_type.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else if file_type.is_file() {
+            fs::copy(&from, &to).with_context(|| {
+                format!("failed to copy {} to {}", from.display(), to.display())
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+fn compute_dir_size(root: &Path) -> AnyResult<u64> {
+    let mut total = 0_u64;
+
+    for entry in fs::read_dir(root)
+        .with_context(|| format!("failed to read directory {}", root.display()))?
+    {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let path = entry.path();
+
+        if file_type.is_dir() {
+            total = total
+                .checked_add(compute_dir_size(&path)?)
+                .ok_or_else(|| anyhow!("directory size overflow"))?;
+        } else if file_type.is_file() {
+            total = total
+                .checked_add(entry.metadata()?.len())
+                .ok_or_else(|| anyhow!("directory size overflow"))?;
+        }
+    }
+
+    Ok(total)
+}
+
 pub fn prepare_zip_snapshot(
     package_root: &Path,
-    install_dir: &Path,
+    app_dir: &Path,
     manifest: &SageAppPackageManifest,
-) -> AnyResult<InstalledSageAppSnapshot> {
-    let snapshot_dir = install_dir.join("active");
+) -> AnyResult<SageAppSnapshot> {
+    let snapshot_dir = app_dir.join("active");
+
     if snapshot_dir.exists() {
-        fs::remove_dir_all(&snapshot_dir)?;
-    }
-    fs::create_dir_all(&snapshot_dir)?;
-
-    let mut total_bytes = 0_u64;
-
-    for file in &manifest.files {
-        let src = package_root.join(&file.path);
-        let dst = snapshot_dir.join(&file.path);
-
-        if let Some(parent) = dst.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        fs::copy(&src, &dst)
-            .with_context(|| format!("failed to copy {} to {}", src.display(), dst.display()))?;
-        total_bytes = total_bytes.saturating_add(file.size);
+        fs::remove_dir_all(&snapshot_dir).with_context(|| {
+            format!("failed to remove existing snapshot dir {}", snapshot_dir.display())
+        })?;
     }
 
-    Ok(InstalledSageAppSnapshot {
-        manifest_hash: hash_string(&serde_json::to_string(manifest)?),
+    copy_dir_recursive(package_root, &snapshot_dir).with_context(|| {
+        format!(
+            "failed to copy unpacked package {} into snapshot {}",
+            package_root.display(),
+            snapshot_dir.display()
+        )
+    })?;
+
+    let total_bytes = compute_dir_size(&snapshot_dir)?;
+    let manifest_hash = sha256_hex(&serde_json::to_vec(manifest)?);
+
+    Ok(SageAppSnapshot {
+        manifest_hash,
         snapshot_dir: snapshot_dir.to_string_lossy().to_string(),
         total_bytes,
         manifest: manifest.clone(),

@@ -1,14 +1,7 @@
 use std::fs;
 use std::path::Path;
-
-use sage_apps::lifecycle::registry::app_install_dir;
-use sage_apps::types::{
-    InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppSnapshot,
-    InstalledSageAppSource, InstalledSageAppStorage, SageAppManifestFile,
-    SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions,
-    SageRequestedCapabilities, SageRequestedNetworkPermissions,
-    SageRequestedNetworkWhitelist, SageRequestedPermissions,
-};
+use sage_apps::lifecycle::app_dir;
+use sage_apps::types::{InstalledSageAppStorage, SageAppCapabilityFlags, SageAppCommon, SageAppManifestFile, SageAppPackageManifest, SageAppSnapshot, SageGrantedNetworkPermissions, SageGrantedPermissions, SageRequestedCapabilities, SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist, SageRequestedPermissions, UserSageApp, UserSageAppSource};
 
 pub fn empty_permissions() -> SageRequestedPermissions {
     SageRequestedPermissions {
@@ -46,34 +39,49 @@ pub fn sample_manifest(name: &str) -> SageAppPackageManifest {
     }
 }
 
-pub fn sample_installed_app(base: &Path, app_id: &str, name: &str) -> InstalledSageApp {
-    let install_dir = app_install_dir(base, app_id);
-    fs::create_dir_all(&install_dir).unwrap();
+pub fn sample_installed_app(base: &Path, app_id: &str, name: &str) -> UserSageApp {
+    let app_dir = app_dir(base, app_id);
+    fs::create_dir_all(&app_dir).unwrap();
 
-    InstalledSageApp {
-        id: app_id.to_string(),
-        origin_id: format!("origin-{app_id}"),
-        name: name.to_string(),
-        version: "1.0.0".to_string(),
-        install_dir: install_dir.to_string_lossy().to_string(),
-        entry_file: "index.html".to_string(),
-        icon_file: "icon.png".to_string(),
-        requested_permissions: empty_permissions(),
-        granted_permissions: SageGrantedPermissions {
-            capabilities: vec![],
-            network: SageGrantedNetworkPermissions { whitelist: vec![] },
+    UserSageApp {
+        common: SageAppCommon {
+            id: app_id.into(),
+            origin_id: app_id.into(),
+            name: name.into(),
+            version: "1.0.0".into(),
+            app_dir: app_dir.to_string_lossy().to_string(),
+            entry_file: "index.html".into(),
+            icon_file: "icon.png".into(),
+            requested_permissions: SageRequestedPermissions::default(),
+            granted_permissions: SageGrantedPermissions {
+                capabilities: vec![],
+                network: SageGrantedNetworkPermissions { whitelist: vec![] },
+            },
+            capability_flags: SageAppCapabilityFlags::default(),
+            storage: InstalledSageAppStorage::Unmanaged,
+            active_snapshot: SageAppSnapshot {
+                manifest_hash: "hash".into(),
+                snapshot_dir: app_dir.to_string_lossy().to_string(),
+                total_bytes: 1,
+                manifest: SageAppPackageManifest {
+                    name: name.into(),
+                    version: "1.0.0".into(),
+                    permissions: SageRequestedPermissions::default(),
+                    files: vec![SageAppManifestFile {
+                        path: "index.html".into(),
+                        sha256: "a".repeat(64),
+                        size: 1,
+                    }],
+                    entry: Some("index.html".into()),
+                    icon: Some("icon.png".into()),
+                    author: None,
+                    donation: None,
+                },
+            },
         },
-        capability_flags: InstalledSageAppCapabilityFlags::default(),
-        storage: InstalledSageAppStorage::Unmanaged,
-        source: InstalledSageAppSource::Url {
-            app_url: "https://example.com/app/".to_string(),
-            manifest_url: "https://example.com/app/sage-manifest.json".to_string(),
-        },
-        active_snapshot: InstalledSageAppSnapshot {
-            manifest_hash: "hash".to_string(),
-            snapshot_dir: install_dir.to_string_lossy().to_string(),
-            total_bytes: 1,
-            manifest: sample_manifest(name),
+        source: UserSageAppSource::Url {
+            app_url: "https://example.com/app/".into(),
+            manifest_url: "https://example.com/app/sage-manifest.json".into(),
         },
         pending_update: None,
     }

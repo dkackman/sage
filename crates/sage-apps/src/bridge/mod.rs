@@ -11,7 +11,7 @@ use crate::host::AppState;
 use crate::permissions::require_capability_definition;
 use crate::runtime::{apps_assert_bridge_origin, resolve_app};
 use crate::state::AppsHostState;
-use crate::types::InstalledSageApp;
+use crate::types::{SageApp};
 
 pub mod methods;
 pub mod registry;
@@ -67,7 +67,7 @@ pub enum RustBridgeResponse {
 #[serde(rename_all = "camelCase")]
 pub struct RustBridgeApprovalRequest {
     pub kind: String,
-    pub app: InstalledSageApp,
+    pub app: SageApp,
     pub source_label: String,
     pub request_id: String,
     pub params_json: String,
@@ -99,7 +99,7 @@ pub struct ResolveBridgeApprovalArgs {
 
 #[derive(Debug, Clone)]
 struct PendingBridgeApproval {
-    app: InstalledSageApp,
+    app: SageApp,
     source_label: String,
     request: RustBridgeRequest,
 }
@@ -163,7 +163,7 @@ fn validate_request_basics(
 async fn execute_bridge_request(
     app_handle: &AppHandle,
     app_state: &State<'_, AppState>,
-    app: &InstalledSageApp,
+    app: &SageApp,
     source_label: &str,
     request: &RustBridgeRequest,
 ) -> RustBridgeResponse {
@@ -191,7 +191,7 @@ async fn execute_bridge_request(
 }
 
 fn authorize_method_capability(
-    app: &InstalledSageApp,
+    app: &SageApp,
     request_id: &str,
     capability_key: &str,
 ) -> Result<(), RustBridgeResponse> {
@@ -218,7 +218,7 @@ fn authorize_method_capability(
     }
 
     if !app
-        .granted_permissions
+        .granted_permissions()
         .capabilities
         .iter()
         .any(|capability| capability == capability_definition.key)

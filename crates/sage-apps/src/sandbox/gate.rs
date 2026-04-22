@@ -1,105 +1,78 @@
-use crate::types::InstalledSageApp;
+use crate::types::SageApp;
 
-use super::types::{
+use super::{
     AppLaunchGateResult, SandboxCapability, SandboxCapabilityStatus, SandboxState,
-    cap_result,
 };
 
-fn cap_label(cap: SandboxCapability) -> &'static str {
-    match cap {
-        SandboxCapability::StorageIsolationFromSage => "storage isolation from Sage",
-        SandboxCapability::StoragePersistenceNormal => "persistent storage behavior",
-        SandboxCapability::StorageNonPersistenceIncognito => "incognito storage behavior",
-        SandboxCapability::StorageClearCycle => "storage clear cycle behavior",
-        SandboxCapability::NetworkAllowlistEnforced => "network allowlist enforcement",
+fn capability_status(
+    state: &SandboxState,
+    capability: SandboxCapability,
+) -> SandboxCapabilityStatus {
+    match capability {
+        SandboxCapability::StorageIsolationFromSage => {
+            state.storage_isolation_from_sage.status
+        }
+        SandboxCapability::StoragePersistenceNormal => {
+            state.storage_persistence_normal.status
+        }
+        SandboxCapability::StorageNonPersistenceIncognito => {
+            state.storage_non_persistence_incognito.status
+        }
+        SandboxCapability::StorageClearCycle => state.storage_clear_cycle.status,
+        SandboxCapability::NetworkAllowlistEnforced => {
+            state.network_allowlist_enforced.status
+        }
     }
 }
 
-pub fn get_required_sandbox_capabilities(
-    app: &InstalledSageApp,
-) -> Vec<SandboxCapability> {
-    let mut required = vec![SandboxCapability::StorageIsolationFromSage];
-
-    if app
-        .granted_permissions
-        .capabilities
-        .iter()
-        .any(|cap| cap == "persistent_storage")
-    {
-        required.push(SandboxCapability::StoragePersistenceNormal);
-    } else {
-        required.push(SandboxCapability::StorageNonPersistenceIncognito);
-    }
-
-    if !app.granted_permissions.network.whitelist.is_empty() {
-        required.push(SandboxCapability::NetworkAllowlistEnforced);
-    }
-
-    required
+fn app_requires_sandbox_gate(app: &SageApp) -> bool {
+    !app.id().starts_with("__sage_test_")
 }
 
 pub fn evaluate_app_launch_gate(
-    app: &InstalledSageApp,
-    sandbox: &SandboxState,
+    app: &SageApp,
+    effective: &SandboxState,
 ) -> AppLaunchGateResult {
-    let isolation = &sandbox.storage_isolation_from_sage;
-
-    if matches!(
-        isolation.status,
-        SandboxCapabilityStatus::Pending | SandboxCapabilityStatus::Running
-    ) {
+    if !app_requires_sandbox_gate(app) {
         return AppLaunchGateResult {
-            allowed: false,
-            kind: "running".into(),
-            capability: Some(SandboxCapability::StorageIsolationFromSage),
-            message: Some(format!(
-                "Sandbox tests are still running for {}.",
-                cap_label(SandboxCapability::StorageIsolationFromSage)
-            )),
+            allowed: true,
+            kind: "allowed".into(),
+            capability: None,
+            message: None,
         };
     }
 
-    if isolation.status == SandboxCapabilityStatus::Failed {
-        return AppLaunchGateResult {
-            allowed: false,
-            kind: "failed".into(),
-            capability: Some(SandboxCapability::StorageIsolationFromSage),
-            message: isolation.details.clone().or_else(|| {
-                Some(format!(
-                    "Sandbox test failed for {}.",
-                    cap_label(SandboxCapability::StorageIsolationFromSage)
-                ))
-            }),
-        };
-    }
+    let critical_caps = [
+        SandboxCapability::StorageIsolationFromSage,
+        SandboxCapability::StorageClearCycle,
+        SandboxCapability::NetworkAllowlistEnforced,
+    ];
 
-    for cap in get_required_sandbox_capabilities(app) {
-        let result = cap_result(sandbox, cap);
-
-        if matches!(
-            result.status,
-            SandboxCapabilityStatus::Pending | SandboxCapabilityStatus::Running
-        ) {
-            return AppLaunchGateResult {
-                allowed: false,
-                kind: "running".into(),
-                capability: Some(cap),
-                message: Some(format!(
-                    "Sandbox tests are still running for {}.",
-                    cap_label(cap)
-                )),
-            };
-        }
-
-        if result.status == SandboxCapabilityStatus::Failed {
-            return AppLaunchGateResult {
-                allowed: false,
-                kind: "failed".into(),
-                capability: Some(cap),
-                message: result.details.clone().or_else(|| {
-                    Some(format!("Sandbox test failed for {}.", cap_label(cap)))
-                }),
-            };
+    for capability in critical_caps {
+        match capability_status(effective, capability) {
+            SandboxCapabilityStatus::Passed => {}
+            SandboxCapabilityStatus::Pending | SandboxCapabilityStatus::Running => {
+                return AppLaunchGateResult {
+                    allowed: false,
+                    kind: "sandboxPending".into(),
+                    capability: Some(capability),
+                    message: Some(
+                        "Apps are allowed to launch only when all required sandbox capabilities have passed."
+                            .into(),
+                    ),
+                };
+            }
+            SandboxCapabilityStatus::Failed => {
+                return AppLaunchGateResult {
+                    allowed: false,
+                    kind: "sandboxFailed".into(),
+                    capability: Some(capability),
+                    message: Some(
+                        "Apps are blocked because a required sandbox capability failed."
+                            .into(),
+                    ),
+                };
+            }
         }
     }
 

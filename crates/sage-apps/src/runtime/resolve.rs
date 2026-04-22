@@ -6,7 +6,7 @@ use url::Url;
 
 use crate::lifecycle::read_installed_app_by_id;
 use crate::sandbox::build_builtin_test_app;
-use crate::types::InstalledSageApp;
+use crate::types::SageApp;
 
 use super::records::inline_label_for;
 
@@ -19,12 +19,12 @@ pub fn is_allowed_app_url(url: &Url, origin_id: &str) -> bool {
 }
 
 pub fn build_entry_src(
-    app: &InstalledSageApp,
+    app: &SageApp,
     path: Option<String>,
     query: BTreeMap<String, String>,
 ) -> String {
-    let entry_path = path.unwrap_or_else(|| format!("/{}", app.entry_file));
-    let mut url = Url::parse(&format!("sage-app://{}{}", app.origin_id, entry_path))
+    let entry_path = path.unwrap_or_else(|| format!("/{}", app.entry_file()));
+    let mut url = Url::parse(&format!("sage-app://{}{}", app.origin_id(), entry_path))
         .expect("failed to build sage-app entry URL");
 
     for (key, value) in query {
@@ -37,9 +37,9 @@ pub fn build_entry_src(
 pub fn resolve_app(
     base_path: &Path,
     app_id: &str,
-) -> Result<InstalledSageApp, String> {
+) -> Result<SageApp, String> {
     match read_installed_app_by_id(base_path, app_id) {
-        Ok(app) => Ok(app),
+        Ok(app) => Ok(SageApp::User(app)),
         Err(installed_err) => build_builtin_test_app(app_id)
             .map_err(|builtin_err| {
                 format!(
@@ -50,9 +50,9 @@ pub fn resolve_app(
     }
 }
 
-pub fn should_use_incognito(app: &InstalledSageApp) -> bool {
+pub fn should_use_incognito(app: &SageApp) -> bool {
     let has_persistent_storage = app
-        .granted_permissions
+        .granted_permissions()
         .capabilities
         .iter()
         .any(|cap| cap == "persistent_storage");
@@ -61,7 +61,7 @@ pub fn should_use_incognito(app: &InstalledSageApp) -> bool {
         return true;
     }
 
-    if app.capability_flags.storage_may_contain_secrets {
+    if app.capability_flags().storage_may_contain_secrets {
         return true;
     }
 
@@ -97,11 +97,11 @@ pub fn apps_assert_bridge_origin(
         .url()
         .map_err(|e| format!("failed to read current webview url: {e}"))?;
 
-    if !is_allowed_app_url(&current_url, &resolved.origin_id) {
+    if !is_allowed_app_url(&current_url, resolved.origin_id()) {
         return Err(format!(
             "bridge denied for {source_label}: current url {} is outside sage-app://{}/...",
             current_url,
-            resolved.origin_id
+            resolved.origin_id()
         ));
     }
 
@@ -118,64 +118,60 @@ mod tests {
     use std::collections::BTreeMap;
 
     use crate::types::{
-        InstalledSageApp,
-        InstalledSageAppCapabilityFlags,
-        InstalledSageAppSnapshot,
-        InstalledSageAppSource,
-        InstalledSageAppStorage,
-        SageAppManifestFile,
-        SageAppPackageManifest,
-        SageGrantedNetworkPermissions,
-        SageGrantedPermissions,
-        SageRequestedPermissions,
+        InstalledSageAppStorage, SageApp, SageAppCapabilityFlags, SageAppCommon,
+        SageAppManifestFile, SageAppPackageManifest, SageAppSnapshot,
+        SageGrantedNetworkPermissions, SageGrantedPermissions, SageRequestedPermissions,
+        SystemAppPresentation, SystemSageApp,
     };
 
-    fn sample_app(origin_id: &str, capabilities: Vec<&str>, storage_may_contain_secrets: bool) -> InstalledSageApp {
-        InstalledSageApp {
-            id: "url-abc123".into(),
-            origin_id: origin_id.into(),
-            name: "Test App".into(),
-            version: "1.0.0".into(),
-            install_dir: "/tmp/app".into(),
-            entry_file: "index.html".into(),
-            icon_file: "icon.png".into(),
-            requested_permissions: SageRequestedPermissions::default(),
-            granted_permissions: SageGrantedPermissions {
-                capabilities: capabilities.into_iter().map(|s| s.to_string()).collect(),
-                network: SageGrantedNetworkPermissions { whitelist: vec![] },
-            },
-            capability_flags: InstalledSageAppCapabilityFlags {
-                has_secret_access: false,
-                has_external_access: false,
-                storage_may_contain_secrets,
-                isolated: false,
-            },
-            storage: InstalledSageAppStorage::Unmanaged,
-            source: InstalledSageAppSource::Url {
-                app_url: "https://example.com/app/".into(),
-                manifest_url: "https://example.com/app/sage-manifest.json".into(),
-            },
-            active_snapshot: InstalledSageAppSnapshot {
-                manifest_hash: "hash".into(),
-                snapshot_dir: "/tmp/app".into(),
-                total_bytes: 1,
-                manifest: SageAppPackageManifest {
-                    name: "Test App".into(),
-                    version: "1.0.0".into(),
-                    permissions: SageRequestedPermissions::default(),
-                    files: vec![SageAppManifestFile {
-                        path: "index.html".into(),
-                        sha256: "a".repeat(64),
-                        size: 1,
-                    }],
-                    entry: Some("index.html".into()),
-                    icon: Some("icon.png".into()),
-                    author: None,
-                    donation: None,
+    fn sample_app(
+        origin_id: &str,
+        capabilities: Vec<&str>,
+        storage_may_contain_secrets: bool,
+    ) -> SageApp {
+        SageApp::System(SystemSageApp {
+            common: SageAppCommon {
+                id: "url-abc123".into(),
+                origin_id: origin_id.into(),
+                name: "Test App".into(),
+                version: "1.0.0".into(),
+                app_dir: "/tmp/app".into(),
+                entry_file: "index.html".into(),
+                icon_file: "icon.png".into(),
+                requested_permissions: SageRequestedPermissions::default(),
+                granted_permissions: SageGrantedPermissions {
+                    capabilities: capabilities.into_iter().map(|s| s.to_string()).collect(),
+                    network: SageGrantedNetworkPermissions { whitelist: vec![] },
+                },
+                capability_flags: SageAppCapabilityFlags {
+                    has_secret_access: false,
+                    has_external_access: false,
+                    storage_may_contain_secrets,
+                    isolated: false,
+                },
+                storage: InstalledSageAppStorage::Unmanaged,
+                active_snapshot: SageAppSnapshot {
+                    manifest_hash: "hash".into(),
+                    snapshot_dir: "/tmp/app".into(),
+                    total_bytes: 1,
+                    manifest: SageAppPackageManifest {
+                        name: "Test App".into(),
+                        version: "1.0.0".into(),
+                        permissions: SageRequestedPermissions::default(),
+                        files: vec![SageAppManifestFile {
+                            path: "index.html".into(),
+                            sha256: "a".repeat(64),
+                            size: 1,
+                        }],
+                        entry: Some("index.html".into()),
+                        icon: Some("icon.png".into()),
+                        author: None,
+                        donation: None,
+                    },
                 },
             },
-            pending_update: None,
-        }
+            presentation: SystemAppPresentation::Taskbar,
+        })
     }
 
     #[test]

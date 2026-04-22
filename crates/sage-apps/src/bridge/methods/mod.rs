@@ -5,11 +5,11 @@ use async_trait::async_trait;
 
 use crate::host::AppState;
 use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
-use crate::types::InstalledSageApp;
+use crate::types::SageApp;
 
 #[derive(Debug)]
 pub struct BridgeContext<'a> {
-    pub app: &'a InstalledSageApp,
+    pub app: &'a SageApp,
     pub source_label: &'a str,
 }
 
@@ -28,7 +28,7 @@ pub trait BridgeMethod: Send + Sync {
 
     fn requires_approval(
         &self,
-        _app: &InstalledSageApp,
+        _app: &SageApp,
         _request: &RustBridgeRequest,
     ) -> bool {
         false

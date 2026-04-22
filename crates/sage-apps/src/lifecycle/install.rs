@@ -9,20 +9,26 @@ use anyhow::{Context, Result as AnyResult, anyhow};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, State, command};
 use uuid::Uuid;
+
 use crate::host::{AppState, Result};
-use crate::lifecycle::{derive_manifest_url, download_url_snapshot, enqueue_pending_storage_cleanup, enqueue_retired_app_origin, fetch_url_manifest, list_installed_apps_internal, prepare_zip_snapshot, read_manifest, read_retired_app_origins, retry_pending_storage_cleanup, unzip_to_dir, validate_package_structure, write_installed_app_metadata};
-use crate::lifecycle::registry::{apps_root, read_installed_app_by_id};
+use crate::lifecycle::{
+    apps_root, derive_manifest_url, download_url_snapshot, enqueue_pending_storage_cleanup,
+    enqueue_retired_app_origin, fetch_url_manifest, list_installed_apps_internal,
+    prepare_zip_snapshot, read_manifest, read_retired_app_origins,
+    retry_pending_storage_cleanup, unzip_to_dir, validate_package_structure,
+    write_installed_app_metadata,
+};
+use crate::lifecycle::registry::read_installed_app_by_id;
 use crate::permissions::{
     normalize_and_validate_requested_permissions, resolve_capability_flags,
     validate_granted_capabilities,
 };
 use crate::runtime::apps_clear_runtime_browsing_data;
 use crate::types::{
-    InstalledSageApp, InstalledSageAppSource, InstalledSageAppStorage, ListedSageApp,
-    SageAppPackageManifest, SageAppUrlPreview,
-};
-use crate::types::{
-    SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedNetworkPermissions,
+    InstalledSageAppStorage, ListedSageApp, SageApp, SageAppCommon,
+    SageAppPackageManifest, SageAppSnapshot, SageAppUrlPreview,
+    UserSageApp, UserSageAppSource, SageGrantedPermissions,
+    SageNetworkPermissionTarget, SageRequestedNetworkPermissions,
     SageRequestedPermissions,
 };
 
@@ -78,7 +84,6 @@ fn should_rotate_url_origin_on_install(
     app_id: &str,
 ) -> AnyResult<bool> {
     let retired = read_retired_app_origins(base_path)?;
-
     Ok(retired.iter().any(|entry| entry.app_id == app_id))
 }
 
@@ -123,13 +128,15 @@ pub fn normalize_app_url(url: &str) -> AnyResult<String> {
 fn find_existing_installed_app_by_name(
     root: &Path,
     app_name: &str,
-) -> AnyResult<Option<InstalledSageApp>> {
+) -> AnyResult<Option<UserSageApp>> {
     Ok(list_installed_apps_internal(root)?
         .into_iter()
         .find_map(|app| match app {
-            ListedSageApp::Installed(installed) if installed.name == app_name => {
-                Some(installed)
-            }
+            ListedSageApp::Installed(SageApp::User(installed))
+            if installed.common.name == app_name =>
+                {
+                    Some(installed)
+                }
             _ => None,
         }))
 }
@@ -137,41 +144,43 @@ fn find_existing_installed_app_by_name(
 fn build_installed_app(
     app_id: String,
     origin_id: String,
-    install_dir: &Path,
+    app_dir: &Path,
     manifest: &SageAppPackageManifest,
     granted_permissions: SageGrantedPermissions,
-    permission_flags: crate::types::InstalledSageAppCapabilityFlags,
+    permission_flags: crate::types::SageAppCapabilityFlags,
     storage: InstalledSageAppStorage,
-    source: InstalledSageAppSource,
-    snapshot: crate::types::InstalledSageAppSnapshot,
-) -> InstalledSageApp {
-    InstalledSageApp {
-        id: app_id,
-        origin_id,
-        name: manifest.name.clone(),
-        version: manifest.version.clone(),
-        install_dir: install_dir.to_string_lossy().to_string(),
-        entry_file: manifest_entry_file(manifest).to_string(),
-        icon_file: manifest_icon_file(manifest).to_string(),
-        requested_permissions: manifest.permissions.clone(),
-        granted_permissions,
-        capability_flags: permission_flags,
-        storage,
+    source: UserSageAppSource,
+    snapshot: SageAppSnapshot,
+) -> UserSageApp {
+    UserSageApp {
+        common: SageAppCommon {
+            id: app_id,
+            origin_id,
+            name: manifest.name.clone(),
+            version: manifest.version.clone(),
+            app_dir: app_dir.to_string_lossy().to_string(),
+            entry_file: manifest_entry_file(manifest).to_string(),
+            icon_file: manifest_icon_file(manifest).to_string(),
+            requested_permissions: manifest.permissions.clone(),
+            granted_permissions,
+            capability_flags: permission_flags,
+            storage,
+            active_snapshot: snapshot,
+        },
         source,
-        active_snapshot: snapshot,
         pending_update: None,
     }
 }
 
-fn recreate_install_dir(install_dir: &Path) -> AnyResult<()> {
-    if install_dir.exists() {
-        fs::remove_dir_all(install_dir).with_context(|| {
-            format!("failed to remove existing install dir {}", install_dir.display())
+fn recreate_app_dir(app_dir: &Path) -> AnyResult<()> {
+    if app_dir.exists() {
+        fs::remove_dir_all(app_dir).with_context(|| {
+            format!("failed to remove existing app dir {}", app_dir.display())
         })?;
     }
 
-    fs::create_dir_all(install_dir)
-        .with_context(|| format!("failed to create install dir {}", install_dir.display()))?;
+    fs::create_dir_all(app_dir)
+        .with_context(|| format!("failed to create app dir {}", app_dir.display()))?;
 
     Ok(())
 }
@@ -179,10 +188,10 @@ fn recreate_install_dir(install_dir: &Path) -> AnyResult<()> {
 fn resolve_zip_install_target(
     root: &Path,
     app_name: &str,
-) -> AnyResult<(String, std::path::PathBuf, Option<InstalledSageApp>)> {
+) -> AnyResult<(String, std::path::PathBuf, Option<UserSageApp>)> {
     if let Some(existing) = find_existing_installed_app_by_name(root, app_name)? {
-        let install_dir = Path::new(&existing.install_dir).to_path_buf();
-        return Ok((existing.id.clone(), install_dir, Some(existing)));
+        let app_dir = Path::new(&existing.common.app_dir).to_path_buf();
+        return Ok((existing.common.id.clone(), app_dir, Some(existing)));
     }
 
     let app_id = generate_zip_app_id(app_name);
@@ -192,17 +201,17 @@ fn resolve_zip_install_target(
 fn resolve_url_install_target(
     root: &Path,
     manifest_url: &str,
-) -> AnyResult<(String, std::path::PathBuf, Option<InstalledSageApp>)> {
+) -> AnyResult<(String, std::path::PathBuf, Option<UserSageApp>)> {
     let app_id = generate_url_app_id(manifest_url);
-    let install_dir = root.join(&app_id);
+    let app_dir = root.join(&app_id);
 
-    let existing = if install_dir.exists() {
+    let existing = if app_dir.exists() {
         Some(read_installed_app_by_id(root.parent().unwrap_or(root), &app_id)?)
     } else {
         None
     };
 
-    Ok((app_id.clone(), install_dir, existing))
+    Ok((app_id.clone(), app_dir, existing))
 }
 
 pub fn hash_string(input: &str) -> String {
@@ -344,10 +353,10 @@ async fn allocate_new_storage(
 async fn resolve_storage_for_install(
     app: &AppHandle,
     base_path: &Path,
-    existing: Option<&InstalledSageApp>,
+    existing: Option<&UserSageApp>,
 ) -> AnyResult<InstalledSageAppStorage> {
     if let Some(existing) = existing {
-        return Ok(existing.storage.clone());
+        return Ok(existing.common.storage.clone());
     }
 
     allocate_new_storage(app, base_path).await
@@ -419,7 +428,7 @@ pub async fn install_app_zip(
     state: State<'_, AppState>,
     zip_path: String,
     granted_permissions: SageGrantedPermissions,
-) -> Result<InstalledSageApp> {
+) -> Result<UserSageApp> {
     let base_path = {
         let state = state.lock().await;
         state.path.clone()
@@ -441,7 +450,7 @@ pub async fn install_app_zip(
         })?;
     }
 
-    let result: AnyResult<InstalledSageApp> = async {
+    let result: AnyResult<UserSageApp> = async {
         unzip_to_dir(Path::new(&zip_path), &unpack_dir)?;
         let package_root = crate::lifecycle::detect_package_root(&unpack_dir)?;
         validate_package_structure(&package_root)?;
@@ -453,28 +462,28 @@ pub async fn install_app_zip(
 
         let permission_flags = resolve_capability_flags(&granted_permissions.capabilities, None)?;
 
-        let (app_id, install_dir, existing_app) = resolve_zip_install_target(&root, &manifest.name)?;
+        let (app_id, app_dir, existing_app) = resolve_zip_install_target(&root, &manifest.name)?;
         let storage = resolve_storage_for_install(&app, &base_path, existing_app.as_ref()).await?;
 
-        recreate_install_dir(&install_dir)?;
-        let snapshot = prepare_zip_snapshot(&package_root, &install_dir, &manifest)?;
+        recreate_app_dir(&app_dir)?;
+        let snapshot = prepare_zip_snapshot(&package_root, &app_dir, &manifest)?;
 
         let installed = build_installed_app(
             app_id.clone(),
             app_id,
-            &install_dir,
+            &app_dir,
             &manifest,
             granted_permissions,
             permission_flags,
             storage,
-            InstalledSageAppSource::Zip,
+            UserSageAppSource::Zip,
             snapshot,
         );
 
-        write_installed_app_metadata(&installed, &install_dir)?;
+        write_installed_app_metadata(&installed, &app_dir)?;
         Ok(installed)
     }
-    .await;
+        .await;
 
     if unpack_dir.exists() {
         let _ = fs::remove_dir_all(&unpack_dir);
@@ -490,7 +499,7 @@ pub async fn install_app_url(
     state: State<'_, AppState>,
     app_url: String,
     granted_permissions: SageGrantedPermissions,
-) -> Result<InstalledSageApp> {
+) -> Result<UserSageApp> {
     let base_path = {
         let state = state.lock().await;
         state.path.clone()
@@ -517,28 +526,28 @@ pub async fn install_app_url(
             io::Error::other(format!("invalid granted permission policy for URL app {}: {err}", app_url))
         })?;
 
-    let (app_id, install_dir, existing_app) =
+    let (app_id, app_dir, existing_app) =
         resolve_url_install_target(&root, &preview.manifest_url)
-            .map_err(|err| io::Error::other(format!("failed to resolve install dir: {err}")))?;
+            .map_err(|err| io::Error::other(format!("failed to resolve app dir: {err}")))?;
 
     let storage = resolve_storage_for_install(&app, &base_path, existing_app.as_ref())
         .await
         .map_err(|err| io::Error::other(format!("failed to resolve storage for install: {err}")))?;
 
-    recreate_install_dir(&install_dir)
-        .map_err(|err| io::Error::other(format!("failed to recreate install dir: {err}")))?;
+    recreate_app_dir(&app_dir)
+        .map_err(|err| io::Error::other(format!("failed to recreate app dir: {err}")))?;
 
     let snapshot = download_url_snapshot(
-        &install_dir,
+        &app_dir,
         &preview.app_url,
         &preview.manifest,
         &preview.manifest_hash,
     )
-    .await
-    .map_err(|err| io::Error::other(format!("failed to download URL app snapshot: {err}")))?;
+        .await
+        .map_err(|err| io::Error::other(format!("failed to download URL app snapshot: {err}")))?;
 
     let origin_id = match existing_app.as_ref() {
-        Some(existing) => existing.origin_id.clone(),
+        Some(existing) => existing.common.origin_id.clone(),
         None => {
             if should_rotate_url_origin_on_install(&base_path, &app_id)
                 .map_err(|err| io::Error::other(format!("failed to inspect retired origins: {err}")))? {
@@ -552,19 +561,19 @@ pub async fn install_app_url(
     let installed = build_installed_app(
         app_id.clone(),
         origin_id,
-        &install_dir,
+        &app_dir,
         &preview.manifest,
         granted_permissions,
         permission_flags,
         storage,
-        InstalledSageAppSource::Url {
+        UserSageAppSource::Url {
             app_url: preview.app_url.clone(),
             manifest_url: preview.manifest_url.clone(),
         },
         snapshot,
     );
 
-    write_installed_app_metadata(&installed, &install_dir).map_err(|err| {
+    write_installed_app_metadata(&installed, &app_dir).map_err(|err| {
         io::Error::other(format!("failed to write installed app metadata for {}: {err}", app_id))
     })?;
 
@@ -612,13 +621,13 @@ pub async fn uninstall_app(
         }
     }
 
-    let install_dir = apps_root(&base_path).join(&app_id);
-    if install_dir.exists() {
-        fs::remove_dir_all(&install_dir).map_err(|err| {
+    let dir = apps_root(&base_path).join(&app_id);
+    if dir.exists() {
+        fs::remove_dir_all(&dir).map_err(|err| {
             io::Error::other(format!(
                 "failed to remove installed app {} at {}: {err}",
                 app_id,
-                install_dir.display()
+                dir.display()
             ))
         })?;
     }
@@ -642,23 +651,7 @@ mod tests {
     use crate::lifecycle::{
         write_retired_app_origins,
     };
-    use crate::types::{
-        InstalledSageApp,
-        InstalledSageAppCapabilityFlags,
-        InstalledSageAppSnapshot,
-        InstalledSageAppSource,
-        InstalledSageAppStorage,
-        RetiredAppOriginEntry,
-        SageAppManifestFile,
-        SageAppPackageManifest,
-        SageGrantedNetworkPermissions,
-        SageGrantedPermissions,
-        SageNetworkPermissionTarget,
-        SageRequestedCapabilities,
-        SageRequestedNetworkPermissions,
-        SageRequestedNetworkWhitelist,
-        SageRequestedPermissions,
-    };
+    use crate::types::{InstalledSageAppStorage, RetiredAppOriginEntry, SageAppCapabilityFlags, SageAppManifestFile, SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedCapabilities, SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist, SageRequestedPermissions};
 
     fn sample_manifest() -> SageAppPackageManifest {
         SageAppPackageManifest {
@@ -694,40 +687,42 @@ mod tests {
         }
     }
 
-    fn sample_app(app_id: &str, origin_id: &str) -> InstalledSageApp {
+    fn sample_app(app_id: &str, origin_id: &str) -> UserSageApp {
         let dir = tempdir().unwrap();
-        let install_dir = dir.path().join(app_id);
-        fs::create_dir_all(&install_dir).unwrap();
+        let app_dir = dir.path().join(app_id);
+        fs::create_dir_all(&app_dir).unwrap();
 
-        InstalledSageApp {
-            id: app_id.into(),
-            origin_id: origin_id.into(),
-            name: "Test App".into(),
-            version: "1.0.0".into(),
-            install_dir: install_dir.to_string_lossy().to_string(),
-            entry_file: "index.html".into(),
-            icon_file: "icon.png".into(),
-            requested_permissions: sample_manifest().permissions.clone(),
-            granted_permissions: SageGrantedPermissions {
-                capabilities: vec!["persistent_storage".into()],
-                network: SageGrantedNetworkPermissions {
-                    whitelist: vec![SageNetworkPermissionTarget {
-                        scheme: "https".into(),
-                        host: "api.example.com".into(),
-                    }],
+        UserSageApp {
+            common: SageAppCommon {
+                id: app_id.into(),
+                origin_id: origin_id.into(),
+                name: "Test App".into(),
+                version: "1.0.0".into(),
+                app_dir: app_dir.to_string_lossy().to_string(),
+                entry_file: "index.html".into(),
+                icon_file: "icon.png".into(),
+                requested_permissions: sample_manifest().permissions.clone(),
+                granted_permissions: SageGrantedPermissions {
+                    capabilities: vec!["persistent_storage".into()],
+                    network: SageGrantedNetworkPermissions {
+                        whitelist: vec![SageNetworkPermissionTarget {
+                            scheme: "https".into(),
+                            host: "api.example.com".into(),
+                        }],
+                    },
+                },
+                capability_flags: SageAppCapabilityFlags::default(),
+                storage: InstalledSageAppStorage::Unmanaged,
+                active_snapshot: SageAppSnapshot {
+                    manifest_hash: "hash".into(),
+                    snapshot_dir: app_dir.to_string_lossy().to_string(),
+                    total_bytes: 123,
+                    manifest: sample_manifest(),
                 },
             },
-            capability_flags: InstalledSageAppCapabilityFlags::default(),
-            storage: InstalledSageAppStorage::Unmanaged,
-            source: InstalledSageAppSource::Url {
+            source: UserSageAppSource::Url {
                 app_url: "https://example.com/app/".into(),
                 manifest_url: "https://example.com/app/sage-manifest.json".into(),
-            },
-            active_snapshot: InstalledSageAppSnapshot {
-                manifest_hash: "hash".into(),
-                snapshot_dir: install_dir.to_string_lossy().to_string(),
-                total_bytes: 123,
-                manifest: sample_manifest(),
             },
             pending_update: None,
         }
@@ -868,41 +863,41 @@ mod tests {
     #[test]
     fn build_installed_app_sets_id_and_origin_id_independently() {
         let dir = tempdir().unwrap();
-        let install_dir = dir.path().join("url-abc123");
-        fs::create_dir_all(&install_dir).unwrap();
+        let app_dir = dir.path().join("url-abc123");
+        fs::create_dir_all(&app_dir).unwrap();
 
         let manifest = sample_manifest();
         let app = build_installed_app(
             "url-abc123".into(),
             "r123-url-abc123".into(),
-            &install_dir,
+            &app_dir,
             &manifest,
             SageGrantedPermissions {
                 capabilities: vec!["persistent_storage".into()],
                 network: SageGrantedNetworkPermissions { whitelist: vec![] },
             },
-            InstalledSageAppCapabilityFlags::default(),
+            SageAppCapabilityFlags::default(),
             InstalledSageAppStorage::Unmanaged,
-            InstalledSageAppSource::Url {
+            UserSageAppSource::Url {
                 app_url: "https://example.com/app/".into(),
                 manifest_url: "https://example.com/app/sage-manifest.json".into(),
             },
-            InstalledSageAppSnapshot {
+            SageAppSnapshot {
                 manifest_hash: "hash".into(),
-                snapshot_dir: install_dir.to_string_lossy().to_string(),
+                snapshot_dir: app_dir.to_string_lossy().to_string(),
                 total_bytes: 1,
                 manifest: manifest.clone(),
             },
         );
 
-        assert_eq!(app.id, "url-abc123");
-        assert_eq!(app.origin_id, "r123-url-abc123");
+        assert_eq!(app.common.id, "url-abc123");
+        assert_eq!(app.common.origin_id, "r123-url-abc123");
     }
 
     #[test]
     fn sample_app_helper_is_valid_shape() {
         let app = sample_app("url-abc123", "origin-1");
-        assert_eq!(app.id, "url-abc123");
-        assert_eq!(app.origin_id, "origin-1");
+        assert_eq!(app.common.id, "url-abc123");
+        assert_eq!(app.common.origin_id, "origin-1");
     }
 }

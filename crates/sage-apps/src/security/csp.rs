@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::types::{InstalledSageApp, SageNetworkPermissionTarget};
+use crate::types::{SageApp, SageNetworkPermissionTarget};
 
 fn csp_source_list(items: &[String]) -> String {
     items.join(" ")
@@ -31,7 +31,7 @@ fn network_permission_to_csp_source(
     Some(format!("{scheme}://{host}"))
 }
 
-pub fn build_app_csp(app: &InstalledSageApp) -> String {
+pub fn build_app_csp(app: &SageApp) -> String {
     let default_src = csp_source_list(&vec!["'self'".to_string()]);
     let script_src = csp_source_list(&vec![
         "'self'".to_string(),
@@ -63,7 +63,7 @@ pub fn build_app_csp(app: &InstalledSageApp) -> String {
 
     let mut connect_sources = BTreeSet::from(["'self'".to_string()]);
 
-    for entry in &app.granted_permissions.network.whitelist {
+    for entry in &app.granted_permissions().network.whitelist {
         if let Some(source) = network_permission_to_csp_source(entry) {
             connect_sources.insert(source);
         }

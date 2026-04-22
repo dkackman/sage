@@ -118,7 +118,7 @@ pub async fn apps_clear_runtime_browsing_data(
         .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
 
     let resolved = resolve_app(&base_path, &app_id)?;
-    let target = pending_target_from_storage(&resolved.storage);
+    let target = pending_target_from_storage(resolved.storage());
 
     clear_app_storage_by_target(&app, &target).await
 }

@@ -4,7 +4,7 @@ use super::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{
     failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
 };
-use crate::types::InstalledSageApp;
+use crate::types::SageApp;
 use sage_api::SendXch;
 
 #[derive(Debug, Clone, Copy)]
@@ -18,11 +18,11 @@ impl BridgeMethod for WalletSendXch {
 
     fn requires_approval(
         &self,
-        app: &InstalledSageApp,
+        app: &SageApp,
         _request: &RustBridgeRequest,
     ) -> bool {
         !app
-            .granted_permissions
+            .granted_permissions()
             .capabilities
             .iter()
             .any(|cap| cap == "wallet.send_xch_auto_submit")

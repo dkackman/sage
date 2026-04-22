@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use crate::sandbox;
 use crate::state::AppsHostState;
-use crate::types::InstalledSageAppStorage;
+use crate::types::{InstalledSageAppStorage};
 
 use super::records::{inline_label_for, runtime_id_for, SageAppRuntimeRecord};
 use super::resolve::{build_entry_src, is_allowed_app_url, resolve_app, should_use_incognito};
@@ -63,15 +63,15 @@ pub async fn apps_create_inline_runtime(
         .app_data_dir()
         .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
 
-    let installed = resolve_app(&base_path, &args.app_id)?;
-    let is_builtin_test_app = installed.id.starts_with("__sage_test_");
+    let resolved = resolve_app(&base_path, &args.app_id)?;
+    let is_builtin_test_app = resolved.id().starts_with("__sage_test_");
 
     if !args.internal && !is_builtin_test_app {
         let baseline = apps_state.sandbox.baseline.lock().await.clone();
         let current_run = apps_state.sandbox.current_run.lock().await.clone();
         let effective =
             sandbox::state_view::build_effective_state(&baseline, current_run.as_ref());
-        let gate = sandbox::evaluate_app_launch_gate(&installed, &effective);
+        let gate = sandbox::evaluate_app_launch_gate(&resolved, &effective);
 
         if !gate.allowed {
             return Err(
@@ -81,21 +81,21 @@ pub async fn apps_create_inline_runtime(
         }
     }
 
-    let is_incognito = should_use_incognito(&installed);
+    let is_incognito = should_use_incognito(&resolved);
 
     let host_window = app
         .get_window("main")
         .ok_or_else(|| "missing main window".to_string())?;
 
-    let webview_label = inline_label_for(&installed.id);
-    let runtime_id = runtime_id_for(&installed.id);
-    let entry_src = build_entry_src(&installed, args.path.clone(), args.query.clone());
+    let webview_label = inline_label_for(resolved.id());
+    let runtime_id = runtime_id_for(resolved.id());
+    let entry_src = build_entry_src(&resolved, args.path.clone(), args.query.clone());
 
     if let Some(existing) = host_window.get_webview(&webview_label) {
         let _ = existing.close();
     }
 
-    let origin_id_for_nav = installed.origin_id.clone();
+    let origin_id_for_nav = resolved.origin_id().to_string();
 
     let mut builder = tauri::webview::WebviewBuilder::new(
         &webview_label,
@@ -111,7 +111,7 @@ pub async fn apps_create_inline_runtime(
     if is_incognito {
         builder = builder.incognito(true);
     } else {
-        match &installed.storage {
+        match resolved.storage() {
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             InstalledSageAppStorage::AppleDataStore { identifier_hex } => {
                 let identifier = parse_data_store_id(identifier_hex)?;
@@ -148,8 +148,8 @@ pub async fn apps_create_inline_runtime(
 
     let record = SageAppRuntimeRecord {
         runtime_id: runtime_id.clone(),
-        app_id: installed.id.clone(),
-        app_name: installed.name.clone(),
+        app_id: resolved.id().to_string(),
+        app_name: resolved.name().to_string(),
         entry_src,
         webview_label: webview_label.clone(),
         host_window_label: "main".into(),
@@ -175,7 +175,7 @@ pub async fn apps_create_inline_runtime(
 
     {
         let mut runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
-        runtime_by_app_id.insert(installed.id.clone(), runtime_id);
+        runtime_by_app_id.insert(resolved.id().to_string(), runtime_id);
     }
 
     if !args.visible {

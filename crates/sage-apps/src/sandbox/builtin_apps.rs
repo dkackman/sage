@@ -4,17 +4,17 @@ use anyhow::{Context, Result as AnyResult, anyhow};
 use sha2::{Digest, Sha256};
 use tauri::command;
 
+use crate::host::Result;
 use crate::lifecycle::{manifest_entry_file, manifest_icon_file};
 use crate::permissions::{
     normalize_and_validate_requested_permissions, resolve_capability_flags,
     validate_granted_capabilities,
 };
 use crate::types::{
-    InstalledSageApp, InstalledSageAppSnapshot, InstalledSageAppSource,
-    InstalledSageAppStorage, SageAppPackageManifest, SageGrantedNetworkPermissions,
-    SageGrantedPermissions,
+    InstalledSageAppStorage, SageApp, SageAppCommon, SageAppSnapshot,
+    SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions,
+    SystemAppPresentation, SystemSageApp,
 };
-use crate::host::Result;
 
 pub const BUILTIN_STORAGE_ISOLATION_PERSISTENT_ID: &str =
     "__sage_test_storage_isolation_persistent";
@@ -166,7 +166,7 @@ fn compute_total_bytes(app_dir: &PathBuf) -> AnyResult<u64> {
     Ok(total_bytes)
 }
 
-pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp>> {
+pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<SageApp>> {
     let Some(spec) = builtin_test_app_spec(app_id) else {
         return Ok(None);
     };
@@ -224,36 +224,37 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<InstalledSageApp
 
     let total_bytes = compute_total_bytes(&app_dir)?;
 
-    let app = InstalledSageApp {
-        id: spec.app_id.to_string(),
-        origin_id: spec.app_id.to_string(),
-        name: manifest.name.clone(),
-        version: manifest.version.clone(),
-        install_dir: app_dir.to_string_lossy().to_string(),
-        entry_file: entry_file_name,
-        icon_file: icon_file_name,
-        requested_permissions: manifest.permissions.clone(),
-        granted_permissions,
-        capability_flags: permission_flags,
-        storage: builtin_storage(spec.app_id),
-        source: InstalledSageAppSource::Zip,
-        active_snapshot: InstalledSageAppSnapshot {
-            manifest_hash: format!("builtin:{}", spec.app_id),
-            snapshot_dir: app_dir.to_string_lossy().to_string(),
-            total_bytes,
-            manifest,
+    let app = SystemSageApp {
+        common: SageAppCommon {
+            id: spec.app_id.to_string(),
+            origin_id: spec.app_id.to_string(),
+            name: manifest.name.clone(),
+            version: manifest.version.clone(),
+            app_dir: app_dir.to_string_lossy().to_string(),
+            entry_file: entry_file_name,
+            icon_file: icon_file_name,
+            requested_permissions: manifest.permissions.clone(),
+            granted_permissions,
+            capability_flags: permission_flags,
+            storage: builtin_storage(spec.app_id),
+            active_snapshot: SageAppSnapshot {
+                manifest_hash: format!("builtin:{}", spec.app_id),
+                snapshot_dir: app_dir.to_string_lossy().to_string(),
+                total_bytes,
+                manifest,
+            },
         },
-        pending_update: None,
+        presentation: SystemAppPresentation::Taskbar,
     };
 
-    Ok(Some(app))
+    Ok(Some(SageApp::System(app)))
 }
 
 #[command]
 #[specta::specta]
 pub async fn get_builtin_test_app(
     app_id: String,
-) -> Result<Option<InstalledSageApp>> {
+) -> Result<Option<SageApp>> {
     build_builtin_test_app(&app_id).map_err(|err| {
         std::io::Error::other(format!("failed to load builtin test app: {err}")).into()
     })

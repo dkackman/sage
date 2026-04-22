@@ -2,159 +2,153 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-
+use std::path::Component;
 use anyhow::{Context, Result as AnyResult, anyhow};
-use reqwest::{Client, Url};
+use sha2::{Digest, Sha256};
 
-use crate::{
-    lifecycle::limits::{MAX_APP_TOTAL_SIZE_BYTES, MAX_MANIFEST_SIZE_BYTES},
-    lifecycle::manifest::validate_package_manifest,
-    types::{InstalledSageAppSnapshot, SageAppPackageManifest},
-};
+use crate::types::{SageAppPackageManifest, SageAppSnapshot};
 
-fn is_local_dev_host(host: &str) -> bool {
-    host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
+fn hash_bytes(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    hex::encode(hasher.finalize())
 }
 
-fn app_download_client_for_url(url: &Url) -> AnyResult<Client> {
-    let host = url
-        .host_str()
-        .ok_or_else(|| anyhow!("URL is missing host"))?;
-
-    let mut builder = Client::builder();
-
-    if url.scheme() == "https" && is_local_dev_host(host) {
-        builder = builder.danger_accept_invalid_certs(true);
-    }
-
-    builder
-        .build()
-        .context("failed to build app download HTTP client")
-}
-
-pub fn derive_manifest_url(app_url: &str) -> AnyResult<String> {
-    let mut url = Url::parse(app_url).context("invalid app URL")?;
-    if !url.path().ends_with('/') {
-        let path = format!("{}/", url.path());
-        url.set_path(&path);
-    }
-    url.set_path(&format!("{}sage-manifest.json", url.path()));
-    Ok(url.to_string())
-}
-
-pub async fn fetch_url_manifest(
-    manifest_url: &str,
-) -> AnyResult<(SageAppPackageManifest, String)> {
-    let url = Url::parse(manifest_url).context("invalid manifest URL")?;
-    let client = app_download_client_for_url(&url)?;
-
-    let response = client.get(url).send().await?;
-    let status = response.status();
-    if !status.is_success() {
-        anyhow::bail!("manifest request failed with status {}", status);
-    }
-
-    let bytes = response.bytes().await?;
-    if bytes.len() > MAX_MANIFEST_SIZE_BYTES as usize {
-        anyhow::bail!("manifest exceeds size limit");
-    }
-
-    let manifest_hash = {
-        let mut hasher = sha2::Sha256::new();
-        use sha2::Digest;
-        hasher.update(&bytes);
-        hex::encode(hasher.finalize())
+pub fn read_snapshot_file(root: &Path, request_path: &str) -> AnyResult<PathBuf> {
+    let normalized = if request_path.is_empty() || request_path == "/" {
+        "index.html"
+    } else {
+        request_path.trim_start_matches('/')
     };
 
-    let manifest: SageAppPackageManifest =
-        serde_json::from_slice(&bytes).context("failed to parse manifest JSON")?;
-    validate_package_manifest(&manifest)?;
+    let relative = Path::new(normalized);
 
-    Ok((manifest, manifest_hash))
+    if relative.is_absolute() {
+        return Err(anyhow!("snapshot path must be relative"));
+    }
+
+    for component in relative.components() {
+        match component {
+            Component::Normal(_) => {}
+            _ => {
+                return Err(anyhow!(
+                    "invalid snapshot path component in {}",
+                    request_path
+                ));
+            }
+        }
+    }
+
+    let path = root.join(relative);
+
+    if !path.is_file() {
+        return Err(anyhow!("snapshot file not found: {}", request_path));
+    }
+
+    Ok(path)
+}
+
+async fn download_bytes(url: &str) -> AnyResult<Vec<u8>> {
+    let response = reqwest::get(url)
+        .await
+        .with_context(|| format!("failed to GET {url}"))?
+        .error_for_status()
+        .with_context(|| format!("request failed for {url}"))?;
+
+    let bytes = response
+        .bytes()
+        .await
+        .with_context(|| format!("failed to read response body from {url}"))?;
+
+    Ok(bytes.to_vec())
+}
+
+fn write_file(path: &Path, bytes: &[u8]) -> AnyResult<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create directory {}", parent.display()))?;
+    }
+
+    fs::write(path, bytes)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+
+    Ok(())
+}
+
+fn compute_dir_size(root: &Path) -> AnyResult<u64> {
+    let mut total = 0_u64;
+
+    for entry in fs::read_dir(root)
+        .with_context(|| format!("failed to read directory {}", root.display()))?
+    {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let path = entry.path();
+
+        if file_type.is_dir() {
+            total = total
+                .checked_add(compute_dir_size(&path)?)
+                .ok_or_else(|| anyhow!("directory size overflow"))?;
+        } else if file_type.is_file() {
+            total = total
+                .checked_add(entry.metadata()?.len())
+                .ok_or_else(|| anyhow!("directory size overflow"))?;
+        }
+    }
+
+    Ok(total)
+}
+
+fn join_app_url(base_url: &str, relative_path: &str) -> AnyResult<String> {
+    let base = reqwest::Url::parse(base_url)
+        .with_context(|| format!("invalid app url {base_url}"))?;
+    let joined = base
+        .join(relative_path)
+        .with_context(|| format!("failed to join app url {base_url} with path {relative_path}"))?;
+    Ok(joined.to_string())
 }
 
 pub async fn download_url_snapshot(
-    install_dir: &Path,
+    app_dir: &Path,
     app_url: &str,
     manifest: &SageAppPackageManifest,
     manifest_hash: &str,
-) -> AnyResult<InstalledSageAppSnapshot> {
-    let snapshot_dir = install_dir.join("active");
+) -> AnyResult<SageAppSnapshot> {
+    let snapshot_dir = app_dir.join("active");
+
     if snapshot_dir.exists() {
-        fs::remove_dir_all(&snapshot_dir)?;
+        fs::remove_dir_all(&snapshot_dir).with_context(|| {
+            format!("failed to remove existing snapshot dir {}", snapshot_dir.display())
+        })?;
     }
-    fs::create_dir_all(&snapshot_dir)?;
 
-    let base_url = Url::parse(app_url).context("invalid app URL")?;
-    let client = app_download_client_for_url(&base_url)?;
-
-    let mut total_bytes = 0_u64;
+    fs::create_dir_all(&snapshot_dir)
+        .with_context(|| format!("failed to create snapshot dir {}", snapshot_dir.display()))?;
 
     for file in &manifest.files {
-        total_bytes = total_bytes.saturating_add(file.size);
-        if total_bytes > MAX_APP_TOTAL_SIZE_BYTES {
-            anyhow::bail!("app exceeds total size limit");
-        }
+        let url = join_app_url(app_url, &file.path)?;
+        let bytes = download_bytes(&url).await?;
 
-        let file_url = base_url
-            .join(&file.path)
-            .with_context(|| format!("failed to join app URL with {}", file.path))?;
-
-        let response = client.get(file_url).send().await?;
-        let status = response.status();
-        if !status.is_success() {
-            anyhow::bail!("file download failed with status {}", status);
-        }
-
-        let bytes = response.bytes().await?;
-        let actual_size = u64::try_from(bytes.len()).context("downloaded file too large")?;
-        if actual_size != file.size {
-            anyhow::bail!("downloaded file size mismatch for {}", file.path);
-        }
-
-        let mut hasher = sha2::Sha256::new();
-        use sha2::Digest;
-        hasher.update(&bytes);
-        let actual_hash = hex::encode(hasher.finalize());
+        let actual_hash = hash_bytes(&bytes);
         if actual_hash != file.sha256 {
-            anyhow::bail!("downloaded file hash mismatch for {}", file.path);
+            return Err(anyhow!(
+                "hash mismatch for {}: expected {}, got {}",
+                file.path,
+                file.sha256,
+                actual_hash
+            ));
         }
 
-        let dst = snapshot_dir.join(&file.path);
-        if let Some(parent) = dst.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        fs::write(&dst, &bytes)
-            .with_context(|| format!("failed to write downloaded file {}", dst.display()))?;
+        let output_path = snapshot_dir.join(PathBuf::from(&file.path));
+        write_file(&output_path, &bytes)?;
     }
 
-    Ok(InstalledSageAppSnapshot {
+    let total_bytes = compute_dir_size(&snapshot_dir)?;
+
+    Ok(SageAppSnapshot {
         manifest_hash: manifest_hash.to_string(),
         snapshot_dir: snapshot_dir.to_string_lossy().to_string(),
         total_bytes,
         manifest: manifest.clone(),
     })
-}
-
-pub fn read_snapshot_file(root: &Path, request_path: &str) -> AnyResult<PathBuf> {
-    let normalized = if request_path.is_empty() || request_path == "/" {
-        PathBuf::from("../../../../index.html")
-    } else {
-        PathBuf::from(request_path.trim_start_matches('/'))
-    };
-
-    if normalized
-        .components()
-        .any(|component| matches!(component, std::path::Component::ParentDir))
-    {
-        anyhow::bail!("path traversal denied");
-    }
-
-    let file_path = root.join(normalized);
-    if !file_path.is_file() {
-        anyhow::bail!("file not found: {}", file_path.display());
-    }
-
-    Ok(file_path)
 }

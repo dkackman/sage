@@ -106,7 +106,7 @@ fn required_network_set(
 ) -> Result<BTreeSet<(String, String)>, RustBridgeResponse> {
     let mut out = BTreeSet::new();
 
-    for entry in &ctx.app.requested_permissions.network.whitelist.required {
+    for entry in &ctx.app.requested_permissions().network.whitelist.required {
         let normalized = parse_network_permission_target(&format!("{}://{}", entry.scheme, entry.host))
             .map_err(|err| failure("app.getInfo", "internal_error", err))?;
         out.insert((normalized.scheme, normalized.host));
@@ -144,8 +144,8 @@ impl BridgeMethod for BridgePing {
             &request.id,
             json!({
                 "ok": true,
-                "appId": ctx.app.id,
-                "appName": ctx.app.name,
+                "appId": ctx.app.id(),
+                "appName": ctx.app.name(),
             }),
         )
     }
@@ -168,7 +168,7 @@ impl BridgeMethod for BridgeSend {
             .unwrap_or(serde_json::Value::Null);
 
         crate::sandbox::ingest_bridge_send_payload(
-            &ctx.app.id,
+            &ctx.app.id(),
             &payload,
             tools.host_state,
         )
@@ -187,7 +187,7 @@ impl BridgeMethod for AppGetInfo {
         request: &RustBridgeRequest,
     ) -> RustBridgeResponse {
         let capabilities =
-            resolve_shared_capabilities(&ctx.app.granted_permissions.capabilities)
+            resolve_shared_capabilities(&ctx.app.granted_permissions().capabilities)
                 .unwrap_or_default();
 
         let required_network = match required_network_set(&ctx) {
@@ -197,7 +197,7 @@ impl BridgeMethod for AppGetInfo {
 
         let network = ctx
             .app
-            .granted_permissions
+            .granted_permissions()
             .network
             .whitelist
             .iter()
@@ -213,10 +213,10 @@ impl BridgeMethod for AppGetInfo {
         success(
             &request.id,
             json!({
-                "id": ctx.app.id,
-                "name": ctx.app.name,
-                "version": ctx.app.version,
-                "requestedPermissions": ctx.app.requested_permissions,
+                "id": ctx.app.id(),
+                "name": ctx.app.name(),
+                "version": ctx.app.version(),
+                "requestedPermissions": ctx.app.requested_permissions(),
                 "capabilities": capabilities,
                 "network": network,
             }),
@@ -233,7 +233,7 @@ impl BridgeMethod for SageGetCapabilities {
         request: &RustBridgeRequest,
     ) -> RustBridgeResponse {
         let capabilities =
-            resolve_shared_capabilities(&ctx.app.granted_permissions.capabilities)
+            resolve_shared_capabilities(&ctx.app.granted_permissions().capabilities)
                 .unwrap_or_default();
 
         success(
@@ -247,7 +247,7 @@ impl BridgeMethod for SageGetCapabilities {
 impl BridgeMethod for SageRequestCapabilityGrant {
     fn requires_approval(
         &self,
-        app: &crate::types::InstalledSageApp,
+        app: &crate::types::SageApp,
         request: &RustBridgeRequest,
     ) -> bool {
         let Ok(params) = parse_capability_grant_params(request) else {
@@ -255,7 +255,7 @@ impl BridgeMethod for SageRequestCapabilityGrant {
         };
 
         !app
-            .granted_permissions
+            .granted_permissions()
             .capabilities
             .iter()
             .any(|cap| cap == &params.capability)
@@ -299,7 +299,7 @@ impl BridgeMethod for SageRequestCapabilityGrant {
             Err(err) => return err,
         };
 
-        match grant_requested_capability_internal(&base_path, &ctx.app.id, &params.capability) {
+        match grant_requested_capability_internal(&base_path, &ctx.app.id(), &params.capability) {
             Ok(GrantCapabilityOutcome::AlreadyGranted {
                    capability,
                    full_granted_capabilities,
@@ -347,7 +347,7 @@ impl BridgeMethod for SageRequestCapabilityGrant {
 impl BridgeMethod for SageRequestNetworkWhitelistGrant {
     fn requires_approval(
         &self,
-        app: &crate::types::InstalledSageApp,
+        app: &crate::types::SageApp,
         request: &RustBridgeRequest,
     ) -> bool {
         let Ok(params) = parse_network_whitelist_grant_params(request) else {
@@ -355,7 +355,7 @@ impl BridgeMethod for SageRequestNetworkWhitelistGrant {
         };
 
         !app
-            .granted_permissions
+            .granted_permissions()
             .network
             .whitelist
             .iter()
@@ -402,7 +402,7 @@ impl BridgeMethod for SageRequestNetworkWhitelistGrant {
 
         match grant_requested_network_whitelist_entry_internal(
             &base_path,
-            &ctx.app.id,
+            &ctx.app.id(),
             &params.entry,
         ) {
             Ok(GrantNetworkWhitelistOutcome::AlreadyGranted {

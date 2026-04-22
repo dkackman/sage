@@ -6,7 +6,7 @@ use crate::{
         get_capability_definition, require_capability_definition,
     },
     types::{
-        InstalledSageAppCapabilityFlags, SageRequestedCapabilities,
+        SageAppCapabilityFlags, SageRequestedCapabilities,
         SageRequestedNetworkPermissions, SageRequestedPermissions,
     },
 };
@@ -213,8 +213,8 @@ pub fn validate_requested_permission_policy(
 
 pub fn resolve_capability_flags(
     granted: &[String],
-    previous_flags: Option<&InstalledSageAppCapabilityFlags>,
-) -> AnyResult<InstalledSageAppCapabilityFlags> {
+    previous_flags: Option<&SageAppCapabilityFlags>,
+) -> AnyResult<SageAppCapabilityFlags> {
     let summary = summarize_capabilities(granted)?;
 
     let previous_storage_may_contain_secrets = previous_flags
@@ -236,7 +236,7 @@ pub fn resolve_capability_flags(
         return Err(anyhow!("STORAGE_TAINTED"));
     }
 
-    Ok(InstalledSageAppCapabilityFlags {
+    Ok(SageAppCapabilityFlags {
         has_secret_access,
         has_external_access,
         storage_may_contain_secrets,
@@ -245,9 +245,9 @@ pub fn resolve_capability_flags(
 }
 
 pub fn mark_storage_may_contain_secrets(
-    flags: &InstalledSageAppCapabilityFlags,
-) -> InstalledSageAppCapabilityFlags {
-    InstalledSageAppCapabilityFlags {
+    flags: &SageAppCapabilityFlags,
+) -> SageAppCapabilityFlags {
+    SageAppCapabilityFlags {
         has_secret_access: flags.has_secret_access,
         has_external_access: flags.has_external_access,
         storage_may_contain_secrets: true,
@@ -256,9 +256,9 @@ pub fn mark_storage_may_contain_secrets(
 }
 
 pub fn clear_storage_may_contain_secrets(
-    flags: &InstalledSageAppCapabilityFlags,
-) -> InstalledSageAppCapabilityFlags {
-    InstalledSageAppCapabilityFlags {
+    flags: &SageAppCapabilityFlags,
+) -> SageAppCapabilityFlags {
+    SageAppCapabilityFlags {
         has_secret_access: flags.has_secret_access,
         has_external_access: flags.has_external_access,
         storage_may_contain_secrets: false,
@@ -549,7 +549,7 @@ mod tests {
 
     #[test]
     fn resolve_capability_flags_rejects_external_access_when_storage_is_tainted() {
-        let previous = InstalledSageAppCapabilityFlags {
+        let previous = SageAppCapabilityFlags {
             has_secret_access: false,
             has_external_access: false,
             storage_may_contain_secrets: true,
@@ -567,7 +567,7 @@ mod tests {
 
     #[test]
     fn mark_storage_may_contain_secrets_sets_taint_and_isolation() {
-        let flags = InstalledSageAppCapabilityFlags {
+        let flags = SageAppCapabilityFlags {
             has_secret_access: true,
             has_external_access: false,
             storage_may_contain_secrets: false,
@@ -583,7 +583,7 @@ mod tests {
 
     #[test]
     fn clear_storage_may_contain_secrets_preserves_secret_access_isolation_only() {
-        let flags = InstalledSageAppCapabilityFlags {
+        let flags = SageAppCapabilityFlags {
             has_secret_access: true,
             has_external_access: false,
             storage_may_contain_secrets: true,

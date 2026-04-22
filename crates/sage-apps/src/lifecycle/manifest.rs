@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
-use anyhow::{Result as AnyResult, anyhow};
+use anyhow::{Context, Result as AnyResult, anyhow};
+use sha2::{Digest, Sha256};
 
 use crate::{
     lifecycle::limits::{
@@ -9,6 +10,60 @@ use crate::{
     permissions::normalize_and_validate_requested_permissions,
     types::{SageAppManifestFile, SageAppPackageManifest},
 };
+
+const MANIFEST_FILE_NAME: &str = "sage-manifest.json";
+
+pub fn derive_manifest_url(app_url: &str) -> AnyResult<String> {
+    let base = reqwest::Url::parse(app_url)
+        .with_context(|| format!("invalid app url: {app_url}"))?;
+
+    base.join(MANIFEST_FILE_NAME)
+        .map(|url| url.to_string())
+        .with_context(|| format!("failed to derive manifest url from app url: {app_url}"))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    hex::encode(hasher.finalize())
+}
+
+pub async fn fetch_url_manifest(
+    manifest_url: &str,
+) -> AnyResult<(SageAppPackageManifest, String)> {
+    let response = reqwest::get(manifest_url)
+        .await
+        .with_context(|| format!("failed to GET manifest url {manifest_url}"))?
+        .error_for_status()
+        .with_context(|| format!("manifest request failed for {manifest_url}"))?;
+
+    let bytes = response
+        .bytes()
+        .await
+        .with_context(|| format!("failed to read manifest response body from {manifest_url}"))?;
+
+    let manifest_hash = sha256_hex(&bytes);
+
+    let manifest_text = std::str::from_utf8(&bytes)
+        .with_context(|| format!("manifest is not valid UTF-8: {manifest_url}"))?;
+
+    let manifest: SageAppPackageManifest = serde_json::from_str(manifest_text)
+        .with_context(|| format!("failed to parse manifest json from {manifest_url}"))?;
+
+    validate_package_manifest(&manifest)?;
+
+    Ok((manifest, manifest_hash))
+}
+
+pub fn read_manifest(package_root: &std::path::Path) -> AnyResult<SageAppPackageManifest> {
+    let manifest_path = package_root.join(MANIFEST_FILE_NAME);
+    let manifest_text = std::fs::read_to_string(&manifest_path)
+        .with_context(|| format!("failed to read {}", manifest_path.display()))?;
+    let manifest: SageAppPackageManifest =
+        serde_json::from_str(&manifest_text).context("failed to parse manifest")?;
+    validate_package_manifest(&manifest)?;
+    Ok(manifest)
+}
 
 pub fn validate_manifest_file_path(path: &str) -> AnyResult<()> {
     if path.is_empty() {
