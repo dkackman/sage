@@ -418,6 +418,9 @@ async appsMarkStorageMayContainSecrets(appId: string) : Promise<null> {
 },
 async getBuiltinTestApp(appId: string) : Promise<InstalledSageApp | null> {
     return await TAURI_INVOKE("get_builtin_test_app", { appId });
+},
+async appsGetCapabilityRegistry() : Promise<SageAppCapabilityDefinitionView[]> {
+    return await TAURI_INVOKE("apps_get_capability_registry");
 }
 }
 
@@ -2232,6 +2235,8 @@ export type RustBridgeInvokeResult = { kind: "immediate"; response: RustBridgeRe
 export type RustBridgeRequest = { channel: string; bridgeVersion: string | null; id: string; method: string; paramsJson: string | null }
 export type RustBridgeResponse = RustBridgeSuccessResponse | RustBridgeErrorResponse
 export type RustBridgeSuccessResponse = { channel: string; bridgeVersion: string; id: string; ok: boolean; resultJson: string }
+export type SageAppCapabilityDefinitionView = { key: string; label: string; description: string; flags: SageAppCapabilityFlagsView; requestableByApp: boolean; sharedWithApp: boolean }
+export type SageAppCapabilityFlagsView = { externallyObservable: boolean; accessesSensitiveSecret: boolean; persistentStorage: boolean }
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
 export type SageAppPackageManifest = { name: string; version: string; permissions: SageRequestedPermissions; files: SageAppManifestFile[]; entry: string | null; icon: string | null }
 export type SageAppRuntimeRecord = { runtimeId: string; appId: string; appName: string; entrySrc: string; webviewLabel: string; hostWindowLabel: string; mode: string; state: string; startedAt: number; lastActiveAt: number; visible: boolean; internal: boolean; activeBatchCount: number; activeSocketCount: number; inFlightRequestCount: number }

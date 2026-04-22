@@ -192,6 +192,36 @@ pub struct InstalledSageAppCapabilityFlags {
     pub isolated: bool,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
+pub struct SageAppCapabilityFlagsView {
+    #[serde(rename = "externallyObservable", alias = "externally_observable")]
+    pub externally_observable: bool,
+
+    #[serde(
+        rename = "accessesSensitiveSecret",
+        alias = "accesses_sensitive_secret"
+    )]
+    pub accesses_sensitive_secret: bool,
+
+    #[serde(rename = "persistentStorage", alias = "persistent_storage")]
+    pub persistent_storage: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+pub struct SageAppCapabilityDefinitionView {
+    pub key: String,
+    pub label: String,
+    pub description: String,
+
+    pub flags: SageAppCapabilityFlagsView,
+
+    #[serde(rename = "requestableByApp", alias = "requestable_by_app")]
+    pub requestable_by_app: bool,
+
+    #[serde(rename = "sharedWithApp", alias = "shared_with_app")]
+    pub shared_with_app: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct InstalledSageAppPendingUpdate {
     #[serde(rename = "appUrl", alias = "app_url")]

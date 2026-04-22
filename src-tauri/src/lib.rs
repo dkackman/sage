@@ -163,6 +163,7 @@ pub fn run() {
             apps::lifecycle::apps_update_permissions,
             apps::lifecycle::apps_mark_storage_may_contain_secrets,
             apps::sandbox::get_builtin_test_app,
+            apps::permissions::apps_get_capability_registry,
         ])
         .events(collect_events![SyncEvent]);
 

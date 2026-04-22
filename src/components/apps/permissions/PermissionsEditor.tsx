@@ -1,14 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   InstalledSageApp,
+  SageAppCapabilityDefinitionView,
   SageGrantedPermissions,
   SageNetworkPermissionTarget,
 } from '@/bindings';
+import { commands } from '@/bindings';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   ChevronDown,
   ChevronRight,
+  CircleHelp,
   Globe,
   HardDrive,
   KeyRound,
@@ -30,7 +39,7 @@ interface PermissionEntry {
   kind: PermissionKind;
   key: string;
   label: string;
-  detail?: string;
+  description: string | null;
   required: boolean;
   granted: boolean;
   sensitivityRank: number;
@@ -79,60 +88,21 @@ function normalizeKey(key: string): string {
   return key.trim().toLowerCase();
 }
 
-function isSecretCapability(key: string): boolean {
-  const normalized = normalizeKey(key);
+function capabilitySensitivityRankFromRegistry(
+  key: string,
+  registry: Record<string, SageAppCapabilityDefinitionView>,
+): number {
+  const definition = registry[key];
 
-  return (
-    normalized.includes('secret') ||
-    normalized.includes('mnemonic') ||
-    normalized.includes('seed') ||
-    normalized.includes('private_key') ||
-    normalized.includes('privatekey') ||
-    normalized.includes('keychain') ||
-    normalized.includes('wallet.sign') ||
-    normalized.includes('sign_spend') ||
-    normalized.includes('export_key')
-  );
-}
-
-function isPersistentStorageCapability(key: string): boolean {
-  const normalized = normalizeKey(key);
-
-  return (
-    normalized === 'persistent_storage' ||
-    normalized.includes('persistent_storage') ||
-    normalized.includes('persistentstorage')
-  );
-}
-
-function isExternallyObservableCapability(key: string): boolean {
-  const normalized = normalizeKey(key);
-
-  return (
-    normalized.includes('send') ||
-    normalized.includes('transfer') ||
-    normalized.includes('submit') ||
-    normalized.includes('broadcast') ||
-    normalized.includes('publish') ||
-    normalized.includes('issue') ||
-    normalized.includes('mint') ||
-    normalized.includes('offer') ||
-    normalized.includes('exercise') ||
-    normalized.includes('message') ||
-    normalized.includes('sign_message')
-  );
-}
-
-function capabilitySensitivityRank(key: string): number {
-  if (isSecretCapability(key)) {
+  if (definition?.flags.accessesSensitiveSecret) {
     return 0;
   }
 
-  if (isPersistentStorageCapability(key)) {
+  if (definition?.flags.persistentStorage) {
     return 2;
   }
 
-  if (isExternallyObservableCapability(key)) {
+  if (definition?.flags.externallyObservable) {
     return 3;
   }
 
@@ -143,30 +113,39 @@ function buildCapabilityEntries(
   requestedRequired: string[],
   requestedOptional: string[],
   grantedCapabilities: string[],
+  registry: Record<string, SageAppCapabilityDefinitionView>,
 ): PermissionEntry[] {
   const grantedSet = new Set(grantedCapabilities);
 
-  const requiredEntries: PermissionEntry[] = requestedRequired.map((key) => ({
-    id: `capability:${key}`,
-    kind: 'capability',
-    key,
-    label: formatCapabilityLeafLabel(key),
-    detail: key,
-    required: true,
-    granted: true,
-    sensitivityRank: capabilitySensitivityRank(key),
-  }));
+  const requiredEntries: PermissionEntry[] = requestedRequired.map((key) => {
+    const definition = registry[key];
 
-  const optionalEntries: PermissionEntry[] = requestedOptional.map((key) => ({
-    id: `capability:${key}`,
-    kind: 'capability',
-    key,
-    label: formatCapabilityLeafLabel(key),
-    detail: key,
-    required: false,
-    granted: grantedSet.has(key),
-    sensitivityRank: capabilitySensitivityRank(key),
-  }));
+    return {
+      id: `capability:${key}`,
+      kind: 'capability',
+      key,
+      label: definition?.label ?? formatCapabilityLeafLabel(key),
+      description: definition?.description ?? null,
+      required: true,
+      granted: true,
+      sensitivityRank: capabilitySensitivityRankFromRegistry(key, registry),
+    };
+  });
+
+  const optionalEntries: PermissionEntry[] = requestedOptional.map((key) => {
+    const definition = registry[key];
+
+    return {
+      id: `capability:${key}`,
+      kind: 'capability',
+      key,
+      label: definition?.label ?? formatCapabilityLeafLabel(key),
+      description: definition?.description ?? null,
+      required: false,
+      granted: grantedSet.has(key),
+      sensitivityRank: capabilitySensitivityRankFromRegistry(key, registry),
+    };
+  });
 
   return [...requiredEntries, ...optionalEntries];
 }
@@ -188,7 +167,7 @@ function buildNetworkEntries(
       kind: 'network',
       key,
       label: key,
-      detail: undefined,
+      description: null,
       required: true,
       granted: true,
       sensitivityRank: 1,
@@ -203,7 +182,7 @@ function buildNetworkEntries(
       kind: 'network',
       key,
       label: key,
-      detail: undefined,
+      description: null,
       required: false,
       granted: grantedSet.has(key),
       sensitivityRank: 1,
@@ -225,26 +204,6 @@ function sortPermissionEntries(entries: PermissionEntry[]): PermissionEntry[] {
 
     return a.key.localeCompare(b.key);
   });
-}
-
-function entryBadge(entry: PermissionEntry): string | null {
-  if (entry.kind === 'network') {
-    return 'Network';
-  }
-
-  if (isSecretCapability(entry.key)) {
-    return 'Secrets';
-  }
-
-  if (isPersistentStorageCapability(entry.key)) {
-    return 'Storage';
-  }
-
-  if (isExternallyObservableCapability(entry.key)) {
-    return 'External';
-  }
-
-  return null;
 }
 
 function groupIcon(node: PermissionGroupNode) {
@@ -302,7 +261,8 @@ function buildGroupedPermissionTree(
 
   const persistentEntries = entries.filter(
     (entry) =>
-      entry.kind === 'capability' && isPersistentStorageCapability(entry.key),
+      entry.kind === 'capability' &&
+      normalizeKey(entry.key) === 'persistent_storage',
   );
   if (persistentEntries.length > 0) {
     const persistentNode = makeNode('persistent_storage', 'Persistent storage');
@@ -313,7 +273,8 @@ function buildGroupedPermissionTree(
 
   const generalCapabilityEntries = entries.filter(
     (entry) =>
-      entry.kind === 'capability' && !isPersistentStorageCapability(entry.key),
+      entry.kind === 'capability' &&
+      normalizeKey(entry.key) !== 'persistent_storage',
   );
 
   const capabilityRoot = makeNode('capabilities_root', 'Capabilities');
@@ -389,6 +350,30 @@ function buildGroupedPermissionTree(
   return roots;
 }
 
+function CapabilityHelp({ description }: { description: string | null }) {
+  if (!description) {
+    return null;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type='button'
+          className='shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground'
+          onClick={(event) => event.preventDefault()}
+          aria-label='Permission details'
+        >
+          <CircleHelp className='h-4 w-4' />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent className='max-w-xs text-left'>
+        {description}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function PermissionRow({
   entry,
   editable,
@@ -398,8 +383,6 @@ function PermissionRow({
   editable: boolean;
   onToggle: (entry: PermissionEntry, nextGranted: boolean) => void;
 }) {
-  const badge = entryBadge(entry);
-
   return (
     <label className='flex items-start gap-3 rounded-xl border px-3 py-3 text-sm'>
       <Checkbox
@@ -412,21 +395,19 @@ function PermissionRow({
       />
 
       <div className='min-w-0 flex-1'>
-        <div className='flex flex-wrap items-center gap-2'>
+        <div className='flex items-center gap-2'>
           <div
             className={
               entry.kind === 'network'
-                ? 'min-w-0 truncate font-mono text-sm'
-                : 'min-w-0 truncate font-medium'
+                ? 'min-w-0 flex-1 truncate font-mono text-sm'
+                : 'min-w-0 flex-1 truncate font-medium'
             }
           >
             {entry.label}
           </div>
 
-          {badge ? (
-            <span className='rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground'>
-              {badge}
-            </span>
+          {entry.kind === 'capability' ? (
+            <CapabilityHelp description={entry.description} />
           ) : null}
 
           {entry.required ? (
@@ -435,12 +416,6 @@ function PermissionRow({
             </span>
           ) : null}
         </div>
-
-        {entry.detail && entry.detail !== entry.label ? (
-          <div className='mt-1 break-all text-xs text-muted-foreground'>
-            {entry.detail}
-          </div>
-        ) : null}
       </div>
     </label>
   );
@@ -491,6 +466,13 @@ function PermissionGroupBlock({
   );
 }
 
+function countNodeEntries(node: PermissionGroupNode): number {
+  return (
+    node.entries.length +
+    node.children.reduce((sum, child) => sum + countNodeEntries(child), 0)
+  );
+}
+
 function PermissionSection({
   title,
   subtitle,
@@ -512,17 +494,10 @@ function PermissionSection({
     return null;
   }
 
-  const itemCount = groups.reduce((count, group) => {
-    function countNode(node: PermissionGroupNode): number {
-      return (
-        node.entries.length +
-        node.children.reduce((sum, child) => sum + countNode(child), 0)
-      );
-    }
-
-    return count + countNode(group);
-  }, 0);
-
+  const itemCount = groups.reduce(
+    (count, group) => count + countNodeEntries(group),
+    0,
+  );
   const contentHidden = Boolean(collapsed);
 
   return (
@@ -577,6 +552,27 @@ export function PermissionsEditor({
 }: Props) {
   const manifest = app.pendingUpdate?.manifest ?? app.activeSnapshot.manifest;
   const [showOptional, setShowOptional] = useState(false);
+  const [capabilityRegistry, setCapabilityRegistry] = useState<
+    Record<string, SageAppCapabilityDefinitionView>
+  >({});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void commands.appsGetCapabilityRegistry().then((entries) => {
+      if (cancelled) {
+        return;
+      }
+
+      setCapabilityRegistry(
+        Object.fromEntries(entries.map((entry) => [entry.key, entry])),
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const grantedCapabilities = grantedPermissions.capabilities ?? [];
   const grantedNetworkWhitelist = grantedPermissions.network.whitelist ?? [];
@@ -596,6 +592,7 @@ export function PermissionsEditor({
       requestedRequiredCapabilities,
       [],
       grantedCapabilities,
+      capabilityRegistry,
     );
 
     const networkEntries = buildNetworkEntries(
@@ -608,6 +605,7 @@ export function PermissionsEditor({
   }, [
     requestedRequiredCapabilities,
     grantedCapabilities,
+    capabilityRegistry,
     requestedRequiredNetwork,
     grantedNetworkWhitelist,
   ]);
@@ -617,6 +615,7 @@ export function PermissionsEditor({
       [],
       requestedOptionalCapabilities,
       grantedCapabilities,
+      capabilityRegistry,
     );
 
     const networkEntries = buildNetworkEntries(
@@ -629,6 +628,7 @@ export function PermissionsEditor({
   }, [
     requestedOptionalCapabilities,
     grantedCapabilities,
+    capabilityRegistry,
     requestedOptionalNetwork,
     grantedNetworkWhitelist,
   ]);
@@ -714,28 +714,30 @@ export function PermissionsEditor({
   }
 
   return (
-    <div className='space-y-5'>
-      {requiredGroups.length > 0 ? (
-        <PermissionSection
-          title='Required permissions'
-          subtitle='These are necessary for the app to function.'
-          groups={requiredGroups}
-          editable={editable}
-          onToggleEntry={handleToggleEntry}
-        />
-      ) : null}
+    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+      <div className='space-y-5'>
+        {requiredGroups.length > 0 ? (
+          <PermissionSection
+            title='Required permissions'
+            subtitle='These are necessary for the app to function.'
+            groups={requiredGroups}
+            editable={editable}
+            onToggleEntry={handleToggleEntry}
+          />
+        ) : null}
 
-      {optionalGroups.length > 0 ? (
-        <PermissionSection
-          title='Optional permissions'
-          subtitle='You can grant these now or keep them disabled.'
-          groups={optionalGroups}
-          editable={editable}
-          collapsed={!showOptional}
-          onToggleCollapsed={() => setShowOptional((prev) => !prev)}
-          onToggleEntry={handleToggleEntry}
-        />
-      ) : null}
-    </div>
+        {optionalGroups.length > 0 ? (
+          <PermissionSection
+            title='Optional permissions'
+            subtitle='You can grant these now or keep them disabled.'
+            groups={optionalGroups}
+            editable={editable}
+            collapsed={!showOptional}
+            onToggleCollapsed={() => setShowOptional((prev) => !prev)}
+            onToggleEntry={handleToggleEntry}
+          />
+        ) : null}
+      </div>
+    </TooltipProvider>
   );
 }
