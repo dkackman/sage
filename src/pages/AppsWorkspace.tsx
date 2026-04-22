@@ -16,9 +16,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
 import {
   commands,
-  InstalledSageApp,
-  SageAppUrlPreview,
-  SageGrantedPermissions,
+  type SageAppUrlPreview,
+  type SageGrantedPermissions,
+  type UserSageApp,
 } from '@/bindings';
 import { AppUpdateDialog } from '@/components/apps/AppUpdateDialog.tsx';
 import { getAppUpdatePermissionsDelta } from '@/lib/apps/updatePermissionsDelta.ts';
@@ -52,21 +52,25 @@ export function AppsWorkspace() {
   useEffect(() => {
     setTabOrder((prev) => {
       const runtimeIds = runtimes.map((runtime) => runtime.appId);
-      const kept = prev.filter((appId) => runtimeIds.includes(appId));
-      const added = runtimeIds.filter((appId) => !kept.includes(appId));
+      const kept = prev.filter((runtimeAppId) =>
+        runtimeIds.includes(runtimeAppId),
+      );
+      const added = runtimeIds.filter(
+        (runtimeAppId) => !kept.includes(runtimeAppId),
+      );
       return [...kept, ...added];
     });
   }, [runtimes]);
 
-  const activeApp: InstalledSageApp | null = appId
-    ? (getApp(appId) ?? null)
-    : null;
+  const activeApp: UserSageApp | null = appId ? (getApp(appId) ?? null) : null;
   const activeUpdatePreview: SageAppUrlPreview | null = activeApp
-    ? (updateAvailability[activeApp.id] ?? null)
+    ? (updateAvailability[activeApp.common.id] ?? null)
     : null;
-  const activeBusy = activeApp ? (busyAppIds[activeApp.id] ?? false) : false;
+  const activeBusy = activeApp
+    ? (busyAppIds[activeApp.common.id] ?? false)
+    : false;
   const [donationOpen, setDonationOpen] = useState(false);
-  const activeManifest = activeApp?.activeSnapshot.manifest;
+  const activeManifest = activeApp?.common.activeSnapshot.manifest;
 
   const hasDonation = !!activeManifest?.donation?.address;
 
@@ -80,8 +84,8 @@ export function AppsWorkspace() {
     );
 
     return tabOrder
-      .map((appId) => {
-        const runtime = runtimeByAppId.get(appId);
+      .map((runtimeAppId) => {
+        const runtime = runtimeByAppId.get(runtimeAppId);
         if (!runtime) {
           return null;
         }
@@ -90,15 +94,15 @@ export function AppsWorkspace() {
 
         return {
           appId: runtime.appId,
-          name: installedApp?.name ?? runtime.appName,
+          name: installedApp?.common.name ?? runtime.appName,
           iconSrc: installedApp
-            ? `sage-app://${installedApp.originId}/${installedApp.iconFile}`
+            ? `sage-app://${installedApp.common.originId}/${installedApp.common.iconFile}`
             : null,
-          isActive: runtime.appId === activeApp?.id,
+          isActive: runtime.appId === activeApp?.common.id,
         };
       })
       .filter((tab): tab is AppTaskBarTab => tab !== null);
-  }, [runtimes, tabOrder, getApp, activeApp?.id]);
+  }, [runtimes, tabOrder, getApp, activeApp?.common.id]);
 
   const approvalStripData = useMemo<PendingApproval>(() => {
     if (!currentApproval) {
@@ -108,8 +112,8 @@ export function AppsWorkspace() {
     if (currentApproval.request.kind === 'send_xch') {
       return {
         kind: 'send_xch',
-        appId: currentApproval.request.app.id,
-        appName: currentApproval.request.app.name,
+        appId: currentApproval.request.app.common.id,
+        appName: currentApproval.request.app.common.name,
         requestId: currentApproval.request.requestId,
         summary: {
           address: currentApproval.request.params.address,
@@ -124,8 +128,8 @@ export function AppsWorkspace() {
     if (currentApproval.request.kind === 'capability_grant') {
       return {
         kind: 'capability_grant',
-        appId: currentApproval.request.app.id,
-        appName: currentApproval.request.app.name,
+        appId: currentApproval.request.app.common.id,
+        appName: currentApproval.request.app.common.name,
         requestId: currentApproval.request.requestId,
         capability: currentApproval.request.capability,
       };
@@ -134,8 +138,8 @@ export function AppsWorkspace() {
     if (currentApproval.request.kind === 'network_whitelist_grant') {
       return {
         kind: 'network_whitelist_grant',
-        appId: currentApproval.request.app.id,
-        appName: currentApproval.request.app.name,
+        appId: currentApproval.request.app.common.id,
+        appName: currentApproval.request.app.common.name,
         requestId: currentApproval.request.requestId,
         entry: {
           scheme: currentApproval.request.entry.scheme,
@@ -157,7 +161,7 @@ export function AppsWorkspace() {
         setApplyingUpdate(true);
         setUpdateDialogError(null);
 
-        await performAppUpdate(activeApp.id, nextGrantedPermissions, {
+        await performAppUpdate(activeApp.common.id, nextGrantedPermissions, {
           restartIfRunning: true,
           visibleAfterRestart: true,
         });
@@ -178,7 +182,6 @@ export function AppsWorkspace() {
     }
 
     const delta = getAppUpdatePermissionsDelta(activeApp, activeUpdatePreview);
-    console.log('update delta', delta);
 
     if (!delta.requiresUserReview) {
       setUpdateDialogOpen(false);
@@ -195,7 +198,7 @@ export function AppsWorkspace() {
     <div className='flex h-full min-h-0 w-full flex-col overflow-hidden'>
       <AppTaskBar
         tabs={tabs}
-        activeAppId={activeApp?.id ?? null}
+        activeAppId={activeApp?.common.id ?? null}
         onOpenApps={() => {
           navigate('/apps');
         }}
@@ -206,7 +209,7 @@ export function AppsWorkspace() {
         }}
         onCloseApp={(targetAppId) => {
           void killRuntime(targetAppId).then(() => {
-            if (targetAppId === activeApp?.id) {
+            if (targetAppId === activeApp?.common.id) {
               navigate('/apps');
             }
           });
@@ -218,7 +221,7 @@ export function AppsWorkspace() {
 
       {activeApp &&
       currentApproval &&
-      currentApproval.request.app.id === activeApp.id ? (
+      currentApproval.request.app.common.id === activeApp.common.id ? (
         <AppApprovalStrip
           approval={approvalStripData}
           expanded={approvalExpanded}
@@ -231,13 +234,14 @@ export function AppsWorkspace() {
           onReject={rejectCurrentApproval}
         />
       ) : null}
+
       {donationOpen && activeApp && activeManifest?.donation ? (
         <AppDonationStrip
-          appName={activeApp.name}
+          appName={activeApp.common.name}
           authorName={activeManifest.author?.name}
           authorAvatarSrc={
             activeManifest.author?.avatar
-              ? `sage-app://${activeApp.originId}/${activeManifest.author.avatar}`
+              ? `sage-app://${activeApp.common.originId}/${activeManifest.author.avatar}`
               : null
           }
           donationAddress={activeManifest.donation.address}
@@ -246,7 +250,7 @@ export function AppsWorkspace() {
               return;
             }
             void commands.sendXch({
-              address: activeManifest?.donation.address,
+              address: activeManifest.donation.address,
               amount: amountMojos,
               fee: '0',
               memos: [],
@@ -256,13 +260,13 @@ export function AppsWorkspace() {
         />
       ) : null}
 
-      {activeApp?.source?.kind === 'url' && activeUpdatePreview ? (
+      {activeApp?.source.kind === 'url' && activeUpdatePreview ? (
         <Alert className='shrink-0 rounded-none border-x-0 border-t-0'>
           <AlertTitle>New version available</AlertTitle>
           <AlertDescription className='flex items-center justify-between gap-4'>
             <span>
               Version {activeUpdatePreview.manifest.version} is available for{' '}
-              {activeApp.name}.
+              {activeApp.common.name}.
             </span>
 
             <Button

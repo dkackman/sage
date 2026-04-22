@@ -1,15 +1,15 @@
-import type { InstalledSageApp, SandboxStateView } from '@/bindings';
+import type { SageApp, SandboxStateView } from '@/bindings';
 import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
 
 interface Props {
-  app: InstalledSageApp;
+  app: SageApp;
   sandboxState: SandboxStateView | null;
   onOpen: () => void;
   onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 export function AppTile({ app, sandboxState, onOpen, onContextMenu }: Props) {
-  const iconSrc = `sage-app://${app.originId}/${app.iconFile}`;
+  const iconSrc = `sage-app://${app.common.originId}/${app.common.iconFile}`;
   const decision = getSandboxLaunchDecision({
     app,
     sandboxState,
@@ -53,10 +53,10 @@ export function AppTile({ app, sandboxState, onOpen, onContextMenu }: Props) {
       </div>
 
       <div className='min-w-0 w-full'>
-        <div className='truncate text-sm font-medium'>{app.name}</div>
+        <div className='truncate text-sm font-medium'>{app.common.name}</div>
 
         <div className='truncate text-xs text-muted-foreground'>
-          v{app.version}
+          v{app.common.version}
         </div>
 
         {!decision.allowed && !isChecking ? (

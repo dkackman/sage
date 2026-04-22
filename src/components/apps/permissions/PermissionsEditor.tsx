@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
-  InstalledSageApp,
+  SageApp,
   SageAppCapabilityDefinitionView,
   SageGrantedPermissions,
   SageNetworkPermissionTarget,
+  SystemSageApp,
+  UserSageApp,
 } from '@/bindings';
 import { commands } from '@/bindings';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -26,7 +28,7 @@ import {
 } from 'lucide-react';
 
 interface Props {
-  app: InstalledSageApp;
+  app: SageApp | UserSageApp | SystemSageApp;
   grantedPermissions: SageGrantedPermissions;
   onGrantedPermissionsChange?: (next: SageGrantedPermissions) => void;
   editable?: boolean;
@@ -550,7 +552,11 @@ export function PermissionsEditor({
   onGrantedPermissionsChange,
   editable = true,
 }: Props) {
-  const manifest = app.pendingUpdate?.manifest ?? app.activeSnapshot.manifest;
+  const manifest =
+    'pendingUpdate' in app && app.pendingUpdate
+      ? app.pendingUpdate.manifest
+      : app.common.activeSnapshot.manifest;
+
   const [showOptional, setShowOptional] = useState(false);
   const [capabilityRegistry, setCapabilityRegistry] = useState<
     Record<string, SageAppCapabilityDefinitionView>
@@ -653,7 +659,7 @@ export function PermissionsEditor({
     }
 
     if (entry.kind === 'capability') {
-      const requiredSet = new Set(requestedRequiredCapabilities);
+      const requiredSet = new Set<string>(requestedRequiredCapabilities);
       const nextSet = new Set(grantedCapabilities);
 
       if (nextGranted) {
@@ -674,25 +680,29 @@ export function PermissionsEditor({
       return;
     }
 
-    const requiredKeys = new Set(
-      requestedRequiredNetwork.map((item) => networkKey(item)),
+    const requiredKeys = new Set<string>(
+      requestedRequiredNetwork.map((item: SageNetworkPermissionTarget) =>
+        networkKey(item),
+      ),
     );
 
-    const nextOptional = requestedOptionalNetwork.filter((item) => {
-      const key = networkKey(item);
+    const nextOptional = requestedOptionalNetwork.filter(
+      (item: SageNetworkPermissionTarget) => {
+        const key = networkKey(item);
 
-      if (requiredKeys.has(key)) {
-        return false;
-      }
+        if (requiredKeys.has(key)) {
+          return false;
+        }
 
-      if (key !== entry.key) {
-        return grantedNetworkWhitelist.some(
-          (grantedEntry) => networkKey(grantedEntry) === key,
-        );
-      }
+        if (key !== entry.key) {
+          return grantedNetworkWhitelist.some(
+            (grantedEntry) => networkKey(grantedEntry) === key,
+          );
+        }
 
-      return nextGranted;
-    });
+        return nextGranted;
+      },
+    );
 
     emitGrantedPermissions({
       ...grantedPermissions,

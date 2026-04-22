@@ -210,7 +210,6 @@ pub enum SystemAppPresentation {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UserSageApp {
-    #[serde(flatten)]
     pub common: SageAppCommon,
     pub source: UserSageAppSource,
     pub pending_update: Option<UserSageAppPendingUpdate>,
@@ -219,7 +218,6 @@ pub struct UserSageApp {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemSageApp {
-    #[serde(flatten)]
     pub common: SageAppCommon,
     pub presentation: SystemAppPresentation,
 }
@@ -362,7 +360,8 @@ pub struct CorruptedInstalledSageApp {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ListedSageApp {
-    Installed(SageApp),
+    User(UserSageApp),
+    System(SystemSageApp),
     Corrupted(CorruptedInstalledSageApp),
 }
 

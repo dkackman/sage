@@ -1,9 +1,13 @@
 import type {
-  InstalledSageApp,
   SandboxCapabilityResult,
   SandboxState,
   SandboxStateView,
+  SageApp,
+  SystemSageApp,
+  UserSageApp,
 } from '@/bindings';
+
+type AppLike = SageApp | UserSageApp | SystemSageApp;
 
 export type SandboxCapability =
   | 'storage_isolation_from_sage'
@@ -68,17 +72,19 @@ export function listSandboxCapabilities(
 }
 
 export function getRequiredSandboxCapabilities(
-  app: InstalledSageApp,
+  app: AppLike,
 ): SandboxCapability[] {
   const required: SandboxCapability[] = ['storage_isolation_from_sage'];
 
-  if (app.grantedPermissions.capabilities.includes('persistent_storage')) {
+  if (
+    app.common.grantedPermissions.capabilities.includes('persistent_storage')
+  ) {
     required.push('storage_persistence_normal');
   } else {
     required.push('storage_non_persistence_incognito');
   }
 
-  if ((app.grantedPermissions.network.whitelist?.length ?? 0) > 0) {
+  if ((app.common.grantedPermissions.network.whitelist?.length ?? 0) > 0) {
     required.push('network_allowlist_enforced');
   }
 
@@ -86,7 +92,7 @@ export function getRequiredSandboxCapabilities(
 }
 
 export function evaluateAppLaunchGate(
-  app: InstalledSageApp,
+  app: AppLike,
   sandbox: SandboxState,
 ): AppLaunchGateResult {
   const isolation = sandbox.storageIsolationFromSage;

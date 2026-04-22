@@ -1824,7 +1824,7 @@ innerPuzzleHash: string | null;
  * Amount
  */
 amount: number | null }
-export type ListedSageApp = ({ kind: "installed" } & SageApp) | ({ kind: "corrupted" } & CorruptedInstalledSageApp)
+export type ListedSageApp = ({ kind: "user" } & UserSageApp) | ({ kind: "system" } & SystemSageApp) | ({ kind: "corrupted" } & CorruptedInstalledSageApp)
 export type LogFile = { name: string; text: string }
 /**
  * Login to a wallet using a fingerprint
@@ -2240,6 +2240,7 @@ export type SageAppAuthor = { name: string; avatar: string | null }
 export type SageAppCapabilityDefinitionView = { key: string; label: string; description: string; flags: SageAppCapabilityFlagsView; requestableByApp: boolean; sharedWithApp: boolean }
 export type SageAppCapabilityFlags = { hasSecretAccess: boolean; hasExternalAccess: boolean; storageMayContainSecrets: boolean; isolated: boolean }
 export type SageAppCapabilityFlagsView = { externallyObservable: boolean; accessesSensitiveSecret: boolean; persistentStorage: boolean }
+export type SageAppCommon = { id: string; originId: string; name: string; version: string; appDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; capabilityFlags: SageAppCapabilityFlags; storage: InstalledSageAppStorage; activeSnapshot: SageAppSnapshot }
 export type SageAppDonation = { address: string }
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
 export type SageAppPackageManifest = { name: string; version: string; permissions: SageRequestedPermissions; files: SageAppManifestFile[]; entry: string | null; icon: string | null; author: SageAppAuthor | null; donation: SageAppDonation | null }
@@ -2602,7 +2603,7 @@ spend_bundle: SpendBundleJson }
 export type SubmitTransactionResponse = Record<string, never>
 export type SyncEvent = { type: "start"; ip: string } | { type: "stop" } | { type: "subscribed" } | { type: "derivation" } | { type: "coin_state" } | { type: "transaction_failed"; transaction_id: string; error: string | null } | { type: "puzzle_batch_synced" } | { type: "cat_info" } | { type: "did_info" } | { type: "nft_data" }
 export type SystemAppPresentation = "Taskbar" | "Modal"
-export type SystemSageApp = ({ id: string; originId: string; name: string; version: string; appDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; capabilityFlags: SageAppCapabilityFlags; storage: InstalledSageAppStorage; activeSnapshot: SageAppSnapshot }) & { presentation: SystemAppPresentation }
+export type SystemSageApp = { common: SageAppCommon; presentation: SystemAppPresentation }
 /**
  * Accept an offer
  */
@@ -2819,7 +2820,7 @@ visible: boolean }
  * Response after updating an option
  */
 export type UpdateOptionResponse = Record<string, never>
-export type UserSageApp = ({ id: string; originId: string; name: string; version: string; appDir: string; entryFile: string; iconFile: string; requestedPermissions: SageRequestedPermissions; grantedPermissions: SageGrantedPermissions; capabilityFlags: SageAppCapabilityFlags; storage: InstalledSageAppStorage; activeSnapshot: SageAppSnapshot }) & { source: UserSageAppSource; pendingUpdate: UserSageAppPendingUpdate | null }
+export type UserSageApp = { common: SageAppCommon; source: UserSageAppSource; pendingUpdate: UserSageAppPendingUpdate | null }
 export type UserSageAppPendingUpdate = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type UserSageAppSource = { kind: "zip" } | { kind: "url"; app_url: string; manifest_url: string }
 /**

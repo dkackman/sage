@@ -10,11 +10,11 @@ import {
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   commands,
-  type InstalledSageApp,
   type ListedSageApp,
   type SageAppUrlPreview,
   type SageGrantedPermissions,
   type SandboxStateView,
+  type UserSageApp,
 } from '@/bindings';
 import { useAppPendingApprovals } from '@/hooks/useAppPendingApprovals';
 import { useBridgeHost } from '@/hooks/useBridgeHost';
@@ -40,7 +40,7 @@ interface AppsContextValue {
   approveCurrentApproval: () => void;
   rejectCurrentApproval: () => void;
 
-  getApp: (appId: string) => InstalledSageApp | undefined;
+  getApp: (appId: string) => UserSageApp | undefined;
   refresh: () => Promise<void>;
   refreshInstalledApps: () => Promise<void>;
   setBusy: (appId: string, busy: boolean) => void;
@@ -55,18 +55,18 @@ interface AppsContextValue {
   installApp: (
     zipPath: string,
     grantedPermissions: SageGrantedPermissions,
-  ) => Promise<InstalledSageApp>;
+  ) => Promise<UserSageApp>;
   installUrlApp: (
     appUrl: string,
     grantedPermissions: SageGrantedPermissions,
-  ) => Promise<InstalledSageApp>;
+  ) => Promise<UserSageApp>;
   uninstallApp: (appId: string) => Promise<void>;
   checkForUpdate: (appId: string) => Promise<SageAppUrlPreview | null>;
   performAppUpdate: (
     appId: string,
     grantedPermissions: SageGrantedPermissions,
     options?: PerformAppUpdateOptions,
-  ) => Promise<InstalledSageApp>;
+  ) => Promise<UserSageApp>;
   clearAppStorage: (appId: string) => Promise<void>;
   rerunSandboxTests: () => Promise<SandboxStateView>;
 }
@@ -206,11 +206,17 @@ export function AppsProvider({ children }: { children: ReactNode }) {
 
   const refresh = refreshInstalledApps;
 
+  function isUserListedApp(
+    entry: ListedSageApp,
+  ): entry is { kind: 'user' } & UserSageApp {
+    return entry.kind === 'user';
+  }
+
   const getApp = useCallback(
-    (appId: string) => {
+    (appId: string): UserSageApp | undefined => {
       return apps.find(
-        (item): item is Extract<ListedSageApp, { kind: 'installed' }> =>
-          item.kind === 'installed' && item.id === appId,
+        (item): item is { kind: 'user' } & UserSageApp =>
+          isUserListedApp(item) && item.common.id === appId,
       );
     },
     [apps],
@@ -318,7 +324,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
               visible: options.visibleAfterRestart ?? true,
             });
           } catch {
-            // Ignore restart failures here; callers still get updated metadata.
+            //
           }
         }
 

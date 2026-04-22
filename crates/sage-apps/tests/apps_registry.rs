@@ -73,7 +73,9 @@ fn corrupted_metadata_is_reported_as_corrupted_listing() {
             assert_eq!(app.id, "broken-app");
             assert!(!app.error.is_empty());
         }
-        ListedSageApp::Installed(_) => panic!("expected corrupted app listing"),
+        ListedSageApp::User(_) | ListedSageApp::System(_) => {
+            panic!("expected corrupted app listing")
+        }
     }
 }
 
@@ -173,7 +175,9 @@ fn corrupted_persisted_network_entry_is_reported_as_corrupted_listing() {
                 app.error
             );
         }
-        ListedSageApp::Installed(_) => panic!("expected corrupted app listing"),
+        ListedSageApp::User(_) | ListedSageApp::System(_) => {
+            panic!("expected corrupted app listing")
+        }
     }
 }
 
@@ -195,7 +199,8 @@ fn installed_apps_are_sorted_by_name() {
     let names: Vec<_> = listed
         .into_iter()
         .map(|entry| match entry {
-            ListedSageApp::Installed(app) => app.name().to_string(),
+            ListedSageApp::User(app) => app.common.name.to_string(),
+            ListedSageApp::System(app) => app.common.name.to_string(),
             ListedSageApp::Corrupted(app) => app.id,
         })
         .collect();

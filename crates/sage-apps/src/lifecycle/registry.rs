@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{
     CorruptedInstalledSageApp, ListedSageApp, PendingStorageCleanupEntry,
-    RetiredAppOriginEntry, SageApp, SageAppAuthor, SageAppCommon, SageAppDonation,
+    RetiredAppOriginEntry, SageAppAuthor, SageAppCommon, SageAppDonation,
     SageAppManifestFile, SageAppPackageManifest, SageAppSnapshot,
     SageAppCapabilityFlags, SageGrantedPermissions, SageNetworkPermissionTarget,
     SageRequestedCapabilities, SageRequestedNetworkPermissions,
@@ -417,7 +417,7 @@ pub fn list_installed_apps_internal(root: &Path) -> AnyResult<Vec<ListedSageApp>
         }
 
         match read_installed_app_from_dir(&path) {
-            Ok(app) => apps.push(ListedSageApp::Installed(SageApp::User(app))),
+            Ok(app) => apps.push(ListedSageApp::User(app)),
             Err(err) => apps.push(ListedSageApp::Corrupted(CorruptedInstalledSageApp {
                 id,
                 app_dir: path.to_string_lossy().to_string(),
@@ -428,12 +428,14 @@ pub fn list_installed_apps_internal(root: &Path) -> AnyResult<Vec<ListedSageApp>
 
     apps.sort_by(|a, b| {
         let a_key = match a {
-            ListedSageApp::Installed(app) => app.name().to_lowercase(),
+            ListedSageApp::User(app) => app.common.name.to_lowercase(),
+            ListedSageApp::System(app) => app.common.name.to_lowercase(),
             ListedSageApp::Corrupted(app) => app.id.to_lowercase(),
         };
 
         let b_key = match b {
-            ListedSageApp::Installed(app) => app.name().to_lowercase(),
+            ListedSageApp::User(app) => app.common.name.to_lowercase(),
+            ListedSageApp::System(app) => app.common.name.to_lowercase(),
             ListedSageApp::Corrupted(app) => app.id.to_lowercase(),
         };
 
@@ -520,7 +522,7 @@ pub fn read_installed_app_by_origin_id(
     let root = apps_root(base_path);
 
     for entry in list_installed_apps_internal(&root)? {
-        if let ListedSageApp::Installed(SageApp::User(app)) = entry {
+        if let ListedSageApp::User(app) = entry {
             if app.common.origin_id == origin_id {
                 return Ok(app);
             }

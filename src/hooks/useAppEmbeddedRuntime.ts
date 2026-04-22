@@ -6,7 +6,7 @@ import {
   getRuntimeWebview,
   markRuntimeVisible,
 } from '@/lib/apps/runtimeRegistry';
-import type { InstalledSageApp } from '@/bindings';
+import type { SageApp } from '@/bindings';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
 async function getMacWindowedTopInsetPx(): Promise<number> {
@@ -17,14 +17,14 @@ async function getMacWindowedTopInsetPx(): Promise<number> {
 }
 
 interface Args {
-  app: InstalledSageApp | null | undefined;
+  app: SageApp | null | undefined;
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
   const syncBounds = useCallback(
-    async (installedAppId: string) => {
-      const webview = await getRuntimeWebview(installedAppId);
+    async (appId: string) => {
+      const webview = await getRuntimeWebview(appId);
       const container = containerRef.current;
 
       if (!webview || !container) {
@@ -47,9 +47,9 @@ export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
   );
 
   const scheduleSyncBounds = useCallback(
-    (installedAppId: string) => {
+    (appId: string) => {
       requestAnimationFrame(() => {
-        void syncBounds(installedAppId).catch((err) => {
+        void syncBounds(appId).catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
 
           if (message.includes('webview not found')) {
@@ -84,21 +84,21 @@ export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
 
     const mount = async () => {
       await ensureInlineRuntime(installedApp);
-      await markRuntimeVisible(installedApp.id, true);
+      await markRuntimeVisible(installedApp.common.id, true);
 
-      scheduleSyncBounds(installedApp.id);
+      scheduleSyncBounds(installedApp.common.id);
 
       delayedSyncTimers = [0, 50, 150, 300].map((delay) =>
         window.setTimeout(() => {
           if (!disposed) {
-            scheduleSyncBounds(installedApp.id);
+            scheduleSyncBounds(installedApp.common.id);
           }
         }, delay),
       );
 
       resizeObserver = new ResizeObserver(() => {
         if (!disposed) {
-          scheduleSyncBounds(installedApp.id);
+          scheduleSyncBounds(installedApp.common.id);
         }
       });
 
@@ -111,7 +111,7 @@ export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
 
       const handleWindowResize = () => {
         if (!disposed) {
-          scheduleSyncBounds(installedApp.id);
+          scheduleSyncBounds(installedApp.common.id);
         }
       };
 
@@ -127,7 +127,7 @@ export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
 
     return () => {
       disposed = true;
-      void markRuntimeVisible(installedApp.id, false);
+      void markRuntimeVisible(installedApp.common.id, false);
       resizeObserver?.disconnect();
       removeWindowResize?.();
       clearDelayedSyncTimers();

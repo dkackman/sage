@@ -1,8 +1,15 @@
-import type { InstalledSageApp, SandboxStateView } from '@/bindings';
+import type {
+  SandboxStateView,
+  SageApp,
+  SystemSageApp,
+  UserSageApp,
+} from '@/bindings';
 import {
   evaluateAppLaunchGate,
   getEffectiveSandboxState,
 } from '@/lib/apps/sandbox';
+
+type AppLike = SageApp | UserSageApp | SystemSageApp;
 
 export interface SandboxLaunchDecision {
   allowed: boolean;
@@ -11,7 +18,7 @@ export interface SandboxLaunchDecision {
 }
 
 export function getSandboxLaunchDecision(args: {
-  app: InstalledSageApp;
+  app: AppLike;
   sandboxState: SandboxStateView | null | undefined;
 }): SandboxLaunchDecision {
   const { app, sandboxState } = args;

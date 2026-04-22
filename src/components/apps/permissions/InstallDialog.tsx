@@ -1,8 +1,8 @@
 import type {
-  InstalledSageApp,
   SageAppPackageManifest,
   SageAppUrlPreview,
   SageGrantedPermissions,
+  UserSageApp,
 } from '@/bindings';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,42 +40,44 @@ interface Props {
 function buildPreviewApp(
   manifest: SageAppPackageManifest,
   grantedPermissions: SageGrantedPermissions,
-): InstalledSageApp {
+): UserSageApp {
   return {
-    id: '__install_preview__',
-    originId: '__install_preview__',
-    name: manifest.name,
-    version: manifest.version,
-    installDir: '',
-    entryFile: manifest.entry ?? 'index.html',
-    iconFile: manifest.icon ?? 'icon.png',
-    requestedPermissions: manifest.permissions ?? {
-      network: {
-        whitelist: {
+    common: {
+      id: '__install_preview__',
+      originId: '__install_preview__',
+      name: manifest.name,
+      version: manifest.version,
+      appDir: '',
+      entryFile: manifest.entry ?? 'index.html',
+      iconFile: manifest.icon ?? 'icon.png',
+      requestedPermissions: manifest.permissions ?? {
+        network: {
+          whitelist: {
+            required: [],
+            optional: [],
+          },
+        },
+        capabilities: {
           required: [],
           optional: [],
         },
       },
-      capabilities: {
-        required: [],
-        optional: [],
+      grantedPermissions,
+      capabilityFlags: {
+        hasSecretAccess: false,
+        hasExternalAccess: false,
+        storageMayContainSecrets: false,
+        isolated: false,
+      },
+      storage: { kind: 'unmanaged' },
+      activeSnapshot: {
+        manifestHash: '__install_preview__',
+        snapshotDir: '',
+        totalBytes: 0,
+        manifest,
       },
     },
-    grantedPermissions,
-    capabilityFlags: {
-      hasSecretAccess: false,
-      hasExternalAccess: false,
-      storageMayContainSecrets: false,
-      isolated: false,
-    },
-    storage: { kind: 'unmanaged' },
     source: { kind: 'zip' },
-    activeSnapshot: {
-      manifestHash: '__install_preview__',
-      snapshotDir: '',
-      totalBytes: 0,
-      manifest,
-    },
     pendingUpdate: null,
   };
 }
@@ -132,7 +134,7 @@ function resolveInstallIconUrl(
     try {
       return new URL(existing, base).toString();
     } catch {
-      // try next base
+      //
     }
   }
 
@@ -276,4 +278,3 @@ export function InstallPermissionsDialog({
     </Dialog>
   );
 }
-

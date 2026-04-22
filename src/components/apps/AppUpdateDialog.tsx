@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
-  InstalledSageApp,
   SageAppPackageManifest,
   SageAppUrlPreview,
   SageGrantedPermissions,
   SageNetworkPermissionTarget,
+  UserSageApp,
 } from '@/bindings';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,7 +22,7 @@ import {
 
 interface Props {
   open: boolean;
-  app: InstalledSageApp | null;
+  app: UserSageApp | null;
   preview: SageAppUrlPreview | null;
   submitting: boolean;
   error: string | null;
@@ -66,30 +66,33 @@ function buildReviewManifest(
 }
 
 function buildReviewApp(
-  app: InstalledSageApp,
+  app: UserSageApp,
   preview: SageAppUrlPreview,
   delta: AppUpdatePermissionsDelta,
   grantedPermissions: SageGrantedPermissions,
-): InstalledSageApp {
+): UserSageApp {
   const reviewManifest = buildReviewManifest(preview, delta);
 
   return {
     ...app,
-    version: preview.manifest.version,
-    requestedPermissions: reviewManifest.permissions,
-    grantedPermissions,
-    activeSnapshot: {
-      ...app.activeSnapshot,
-      manifest: reviewManifest,
+    common: {
+      ...app.common,
+      version: preview.manifest.version,
+      requestedPermissions: reviewManifest.permissions,
+      grantedPermissions,
+      activeSnapshot: {
+        ...app.common.activeSnapshot,
+        manifest: reviewManifest,
+      },
     },
   };
 }
 
 function buildRemovedPermissionsApp(
-  app: InstalledSageApp,
+  app: UserSageApp,
   preview: SageAppUrlPreview,
   delta: AppUpdatePermissionsDelta,
-): InstalledSageApp | null {
+): UserSageApp | null {
   const hasRemoved =
     delta.removedGrantedCapabilities.length > 0 ||
     delta.removedGrantedNetwork.length > 0;
@@ -116,17 +119,20 @@ function buildRemovedPermissionsApp(
 
   return {
     ...app,
-    version: preview.manifest.version,
-    requestedPermissions: manifest.permissions,
-    grantedPermissions: {
-      capabilities: delta.removedGrantedCapabilities,
-      network: {
-        whitelist: delta.removedGrantedNetwork,
+    common: {
+      ...app.common,
+      version: preview.manifest.version,
+      requestedPermissions: manifest.permissions,
+      grantedPermissions: {
+        capabilities: delta.removedGrantedCapabilities,
+        network: {
+          whitelist: delta.removedGrantedNetwork,
+        },
       },
-    },
-    activeSnapshot: {
-      ...app.activeSnapshot,
-      manifest,
+      activeSnapshot: {
+        ...app.common.activeSnapshot,
+        manifest,
+      },
     },
   };
 }
@@ -270,9 +276,9 @@ export function AppUpdateDialog({
 
         <div className='space-y-5'>
           <div className='space-y-1 text-sm text-muted-foreground'>
-            <div>{app.name}</div>
+            <div>{app.common.name}</div>
             <div>
-              v{app.version} → v{preview.manifest.version}
+              v{app.common.version} → v{preview.manifest.version}
             </div>
           </div>
 
@@ -330,7 +336,7 @@ export function AppUpdateDialog({
                   <PermissionsEditor
                     app={removedPermissionsApp}
                     grantedPermissions={
-                      removedPermissionsApp.grantedPermissions
+                      removedPermissionsApp.common.grantedPermissions
                     }
                     editable={false}
                   />

@@ -25,7 +25,7 @@ use crate::permissions::{
 };
 use crate::runtime::apps_clear_runtime_browsing_data;
 use crate::types::{
-    InstalledSageAppStorage, ListedSageApp, SageApp, SageAppCommon,
+    InstalledSageAppStorage, ListedSageApp, SageAppCommon,
     SageAppPackageManifest, SageAppSnapshot, SageAppUrlPreview,
     UserSageApp, UserSageAppSource, SageGrantedPermissions,
     SageNetworkPermissionTarget, SageRequestedNetworkPermissions,
@@ -132,11 +132,9 @@ fn find_existing_installed_app_by_name(
     Ok(list_installed_apps_internal(root)?
         .into_iter()
         .find_map(|app| match app {
-            ListedSageApp::Installed(SageApp::User(installed))
-            if installed.common.name == app_name =>
-                {
-                    Some(installed)
-                }
+            ListedSageApp::User(installed) if installed.common.name == app_name => {
+                Some(installed)
+            }
             _ => None,
         }))
 }

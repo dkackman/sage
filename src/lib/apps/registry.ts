@@ -1,19 +1,19 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { InstalledSageApp } from '@/bindings.ts';
+import type { SageApp } from '@/bindings.ts';
 
-const builtinAppCache = new Map<string, InstalledSageApp | null>();
+const builtinAppCache = new Map<string, SageApp | null>();
 
 export async function getBuiltinApp(
   appId: string,
-): Promise<InstalledSageApp | undefined> {
+): Promise<SageApp | undefined> {
   if (builtinAppCache.has(appId)) {
     return builtinAppCache.get(appId) ?? undefined;
   }
 
-  let app: InstalledSageApp | null;
+  let app: SageApp | null;
 
   try {
-    app = await invoke<InstalledSageApp | null>('get_builtin_test_app', {
+    app = await invoke<SageApp | null>('get_builtin_test_app', {
       appId,
     });
   } catch (err) {

@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import { useApps } from '@/contexts/AppsContext';
 import { useAppEmbeddedRuntime } from '@/hooks/useAppEmbeddedRuntime.ts';
 import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
+import { asUserApp } from '@/lib/apps/types.ts';
 
 function AppNotFound() {
   return (
@@ -30,7 +31,7 @@ export function AppHost() {
     : null;
 
   useAppEmbeddedRuntime({
-    app: app && launchDecision?.allowed ? app : null,
+    app: app && launchDecision?.allowed ? asUserApp(app) : null,
     containerRef,
   });
 

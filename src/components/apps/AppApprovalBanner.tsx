@@ -58,8 +58,8 @@ export function AppApprovalBanner({
       <AlertTitle>Approval required</AlertTitle>
       <AlertDescription className='space-y-3'>
         <div className='text-sm'>
-          App <strong>{currentApproval.request.app.name}</strong> wants to
-          perform{' '}
+          App <strong>{currentApproval.request.app.common.name}</strong> wants
+          to perform{' '}
           <span className='font-mono'>{currentApproval.request.kind}</span>.
         </div>
 

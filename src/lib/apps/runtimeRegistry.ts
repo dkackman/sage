@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview, Webview } from '@tauri-apps/api/webview';
-import { InstalledSageApp } from '@/bindings.ts';
+import type { SageApp, SystemSageApp, UserSageApp } from '@/bindings.ts';
 
 export type SageAppRuntimeState =
   | 'starting'
@@ -36,6 +36,8 @@ type RuntimeInternalRecord = SageAppRuntimeRecord & {
   webview: Webview;
 };
 
+type AppLike = SageApp | UserSageApp | SystemSageApp;
+
 const runtimes = new Map<string, RuntimeInternalRecord>();
 export const runtimeByAppId = new Map<string, string>();
 const listeners = new Set<RuntimeListener>();
@@ -46,11 +48,11 @@ export function setForceIncognitoForSecretApps(value: boolean) {
   forceIncognitoForSecretApps = value;
 }
 
-function isBuiltinTestApp(app: InstalledSageApp): boolean {
-  return app.id.startsWith('__sage_test_');
+function isBuiltinTestApp(app: AppLike): boolean {
+  return app.common.id.startsWith('__sage_test_');
 }
 
-function shouldDebugTestAppWindows(app: InstalledSageApp): boolean {
+function shouldDebugTestAppWindows(app: AppLike): boolean {
   return (
     import.meta.env.DEV &&
     import.meta.env.VITE_SAGE_DEBUG_TEST_APPS === '1' &&
@@ -107,19 +109,21 @@ export function inlineLabelFor(appId: string) {
   return `app-inline-${appId}`;
 }
 
-export function shouldUseIncognito(app: InstalledSageApp): boolean {
+export function shouldUseIncognito(app: AppLike): boolean {
   const hasPersistentStorage =
-    app.grantedPermissions.capabilities.includes('persistent_storage');
+    app.common.grantedPermissions.capabilities.includes('persistent_storage');
 
   if (!hasPersistentStorage) {
     return true;
   }
 
-  if (app.capabilityFlags.storageMayContainSecrets) {
+  if (app.common.capabilityFlags.storageMayContainSecrets) {
     return true;
   }
 
-  return forceIncognitoForSecretApps && app.capabilityFlags.hasSecretAccess;
+  return (
+    forceIncognitoForSecretApps && app.common.capabilityFlags.hasSecretAccess
+  );
 }
 
 export async function waitForWebviewClosed(
@@ -143,7 +147,7 @@ export async function waitForWebviewClosed(
 }
 
 async function createInlineRuntime(
-  app: InstalledSageApp,
+  app: AppLike,
   options?: {
     visible?: boolean;
     internal?: boolean;
@@ -152,7 +156,7 @@ async function createInlineRuntime(
   },
 ): Promise<SageAppRuntimeRecord> {
   const hostWebview = getCurrentWebview();
-  const webviewLabel = inlineLabelFor(app.id);
+  const webviewLabel = inlineLabelFor(app.common.id);
 
   const staleWebview = await Webview.getByLabel(webviewLabel).catch(() => null);
   if (staleWebview) {
@@ -166,9 +170,9 @@ async function createInlineRuntime(
 
   const isIncognito = shouldUseIncognito(app);
 
-  if (!isIncognito && app.capabilityFlags.hasSecretAccess) {
+  if (!isIncognito && app.common.capabilityFlags.hasSecretAccess) {
     await invoke('apps_mark_storage_may_contain_secrets', {
-      appId: app.id,
+      appId: app.common.id,
     });
   }
 
@@ -176,7 +180,7 @@ async function createInlineRuntime(
     'apps_create_inline_runtime',
     {
       args: {
-        appId: app.id,
+        appId: app.common.id,
         visible: options?.visible ?? true,
         internal: options?.internal ?? false,
         debugLayout: shouldDebugTestAppWindows(app),
@@ -200,7 +204,7 @@ async function createInlineRuntime(
   };
 
   runtimes.set(record.runtimeId, internalRecord);
-  runtimeByAppId.set(app.id, record.runtimeId);
+  runtimeByAppId.set(app.common.id, record.runtimeId);
   emitChange();
 
   return stripInternal(internalRecord);
@@ -257,9 +261,9 @@ export async function closeAppRuntime(
 }
 
 export async function ensureInlineRuntime(
-  app: InstalledSageApp,
+  app: AppLike,
 ): Promise<SageAppRuntimeRecord> {
-  const existingRuntimeId = runtimeByAppId.get(app.id);
+  const existingRuntimeId = runtimeByAppId.get(app.common.id);
   if (existingRuntimeId) {
     const existing = runtimes.get(existingRuntimeId);
 
@@ -280,10 +284,10 @@ export async function ensureInlineRuntime(
       }
 
       runtimes.delete(existingRuntimeId);
-      runtimeByAppId.delete(app.id);
+      runtimeByAppId.delete(app.common.id);
       emitChange();
     } else {
-      runtimeByAppId.delete(app.id);
+      runtimeByAppId.delete(app.common.id);
     }
   }
 
@@ -291,12 +295,12 @@ export async function ensureInlineRuntime(
 }
 
 export async function startInternalInlineRuntime(
-  app: InstalledSageApp,
+  app: AppLike,
   options?: { query?: Record<string, string>; path?: string },
 ): Promise<SageAppRuntimeRecord> {
-  const existingRuntimeId = runtimeByAppId.get(app.id);
+  const existingRuntimeId = runtimeByAppId.get(app.common.id);
   if (existingRuntimeId) {
-    await closeAppRuntime(app.id, { timeoutMs: 8000 });
+    await closeAppRuntime(app.common.id, { timeoutMs: 8000 });
   }
 
   return createInlineRuntime(app, {
@@ -313,16 +317,14 @@ export async function startInternalInlineRuntime(
  * This does NOT prove the app origin is clean; the verification cycle should
  * still decide whether the capability passed for this environment.
  */
-export async function clearAppRuntimeBrowsingData(
-  app: InstalledSageApp,
-): Promise<void> {
-  const existingRuntimeId = runtimeByAppId.get(app.id);
+export async function clearAppRuntimeBrowsingData(app: AppLike): Promise<void> {
+  const existingRuntimeId = runtimeByAppId.get(app.common.id);
   if (existingRuntimeId) {
-    await closeAppRuntime(app.id, { timeoutMs: 8000 });
+    await closeAppRuntime(app.common.id, { timeoutMs: 8000 });
   }
 
   await invoke('apps_clear_runtime_browsing_data', {
-    appId: app.id,
+    appId: app.common.id,
   });
 }
 

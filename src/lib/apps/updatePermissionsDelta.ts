@@ -1,5 +1,5 @@
 import type {
-  InstalledSageApp,
+  UserSageApp,
   SageAppPackageManifest,
   SageAppUrlPreview,
   SageGrantedPermissions,
@@ -73,10 +73,10 @@ export interface AppUpdatePermissionsDelta {
 }
 
 export function getAppUpdatePermissionsDelta(
-  app: InstalledSageApp,
+  app: UserSageApp,
   preview: SageAppUrlPreview | SageAppPackageManifest,
 ): AppUpdatePermissionsDelta {
-  const previousRequested = app.requestedPermissions;
+  const previousRequested = app.common.requestedPermissions;
   const nextRequested = getManifestRequestedPermissions(preview);
 
   const previousCaps = getRequestedCapabilities(previousRequested);
@@ -85,8 +85,10 @@ export function getAppUpdatePermissionsDelta(
   const previousNetwork = getRequestedNetwork(previousRequested);
   const nextNetwork = getRequestedNetwork(nextRequested);
 
-  const oldGrantedCapabilities = app.grantedPermissions.capabilities ?? [];
-  const oldGrantedNetwork = app.grantedPermissions.network.whitelist ?? [];
+  const oldGrantedCapabilities =
+    app.common.grantedPermissions.capabilities ?? [];
+  const oldGrantedNetwork =
+    app.common.grantedPermissions.network.whitelist ?? [];
 
   const oldGrantedCapabilitiesSet = new Set(oldGrantedCapabilities);
   const oldGrantedNetworkSet = new Set(oldGrantedNetwork.map(networkKey));
