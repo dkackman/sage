@@ -42,12 +42,6 @@ const runtimes = new Map<string, RuntimeInternalRecord>();
 export const runtimeByAppId = new Map<string, string>();
 const listeners = new Set<RuntimeListener>();
 
-let forceIncognitoForSecretApps = false;
-
-export function setForceIncognitoForSecretApps(value: boolean) {
-  forceIncognitoForSecretApps = value;
-}
-
 function isBuiltinTestApp(app: AppLike): boolean {
   return app.common.id.startsWith('__sage_test_');
 }
@@ -122,7 +116,7 @@ export function shouldUseIncognito(app: AppLike): boolean {
   }
 
   return (
-    forceIncognitoForSecretApps && app.common.capabilityFlags.hasSecretAccess
+    app.common.capabilityFlags.hasSecretAccess
   );
 }
 
@@ -292,40 +286,6 @@ export async function ensureInlineRuntime(
   }
 
   return createInlineRuntime(app, { visible: true, internal: false });
-}
-
-export async function startInternalInlineRuntime(
-  app: AppLike,
-  options?: { query?: Record<string, string>; path?: string },
-): Promise<SageAppRuntimeRecord> {
-  const existingRuntimeId = runtimeByAppId.get(app.common.id);
-  if (existingRuntimeId) {
-    await closeAppRuntime(app.common.id, { timeoutMs: 8000 });
-  }
-
-  return createInlineRuntime(app, {
-    visible: false,
-    internal: true,
-    query: options?.query,
-    path: options?.path,
-  });
-}
-
-/**
- * Best-effort host-side clear.
- *
- * This does NOT prove the app origin is clean; the verification cycle should
- * still decide whether the capability passed for this environment.
- */
-export async function clearAppRuntimeBrowsingData(app: AppLike): Promise<void> {
-  const existingRuntimeId = runtimeByAppId.get(app.common.id);
-  if (existingRuntimeId) {
-    await closeAppRuntime(app.common.id, { timeoutMs: 8000 });
-  }
-
-  await invoke('apps_clear_runtime_browsing_data', {
-    appId: app.common.id,
-  });
 }
 
 export async function getRuntimeWebview(
