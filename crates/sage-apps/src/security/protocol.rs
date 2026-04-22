@@ -120,9 +120,9 @@ pub fn handle_app_protocol_request(
         .ok_or_else(|| anyhow!("missing host in app URL"))?;
 
     if builtin_test_app_spec(host).is_some() {
-        if protocol_kind != AppProtocolKind::System {
+        if protocol_kind != AppProtocolKind::User {
             return Err(anyhow!(
-                "system app {} cannot be served through user protocol",
+                "builtin sandbox test app {} cannot be served through system protocol",
                 host
             ));
         }

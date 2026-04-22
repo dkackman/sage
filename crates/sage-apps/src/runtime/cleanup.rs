@@ -15,6 +15,13 @@ fn data_directory_for(directory_name: &str) -> std::path::PathBuf {
     std::path::PathBuf::from("profiles").join(directory_name)
 }
 
+fn debug_test_apps_enabled() -> bool {
+    cfg!(debug_assertions)
+        && std::env::var("SAGE_DEBUG_TEST_APPS")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+}
+
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn parse_data_store_id(identifier_hex: &str) -> Result<[u8; 16], String> {
     let bytes = hex::decode(identifier_hex)
@@ -185,11 +192,13 @@ pub(crate) async fn start_internal_runtime_for_sandbox(
     path: Option<String>,
     query: BTreeMap<String, String>,
 ) -> Result<(), String> {
+    let debug_test_apps = debug_test_apps_enabled();
+
     let args = CreateInlineRuntimeArgs {
         app_id: app_id.to_string(),
-        visible,
+        visible: if debug_test_apps { true } else { visible },
         internal: true,
-        debug_layout: false,
+        debug_layout: debug_test_apps,
         path,
         query,
     };

@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type {
   SageAppInfo,
   SageBridgeRequest,
@@ -33,18 +34,11 @@ type SageWebviewHandle = {
   ): Promise<SageUnlisten>;
 };
 
-type SageTauriGlobal = {
-  webview?: {
-    getCurrentWebview(): SageWebviewHandle;
-  };
-};
-
 type SageWindow = Window &
   typeof globalThis & {
     __SAGE__?: SageClient;
     __SAGE_APP_INFO__?: SageAppInfo;
     __SAGE_RUNTIME_BRIDGE_INITIALIZED__?: boolean;
-    __TAURI__?: SageTauriGlobal;
   };
 
 type PendingBridgeRequest = {
@@ -109,12 +103,11 @@ function buildFallbackAppInfo(): SageAppInfo {
 }
 
 function tryGetCurrentWebview(): SageWebviewHandle | null {
-  const tauri = getSageWindow().__TAURI__;
-  if (!tauri?.webview?.getCurrentWebview) {
+  try {
+    return getCurrentWebview() as SageWebviewHandle;
+  } catch {
     return null;
   }
-
-  return tauri.webview.getCurrentWebview();
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -191,7 +184,7 @@ export function initSageRuntimeBridge(): boolean {
   const pendingRequests = new Map<string, PendingBridgeRequest>();
 
   webview
-    .listen('sage-bridge:event', (event: SageListenEvent<unknown>) => {
+    .listen('sage-bridge:event', (event: SageListenEvent) => {
       const data = event.payload;
 
       if (!isBridgeRuntimeEvent(data)) {
@@ -475,4 +468,3 @@ export function initSageRuntimeBridge(): boolean {
 
   return true;
 }
-
