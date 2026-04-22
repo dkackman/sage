@@ -105,18 +105,18 @@ export function TopNav({ isCollapsed }: NavProps) {
         <BookUser className={className} aria-hidden='true' />
       </NavLink>
       <NavLink
-        url={'/apps'}
-        isCollapsed={isCollapsed}
-        message={<Trans>Apps</Trans>}
-      >
-        <Blocks className={className} aria-hidden='true' />
-      </NavLink>
-      <NavLink
         url={'/transactions'}
         isCollapsed={isCollapsed}
         message={<Trans>Transactions</Trans>}
       >
         <ArrowDownUp className={className} />
+      </NavLink>
+      <NavLink
+        url={'/apps'}
+        isCollapsed={isCollapsed}
+        message={<Trans>Apps</Trans>}
+      >
+        <Blocks className={className} aria-hidden='true' />
       </NavLink>
     </nav>
   );

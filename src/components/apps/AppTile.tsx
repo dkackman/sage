@@ -60,7 +60,9 @@ export function AppTile({ app, sandboxState, onOpen, onContextMenu }: Props) {
         </div>
 
         {!decision.allowed && !isChecking ? (
-          <div className='mt-1 text-xs text-amber-600'>{decision.title}</div>
+          <div className='relative z-20 mt-1 text-xs text-amber-600'>
+            {decision.title}
+          </div>
         ) : null}
       </div>
     </button>
