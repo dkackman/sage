@@ -7,6 +7,7 @@ use url::Url;
 use crate::lifecycle::read_installed_app_by_id;
 use crate::sandbox::build_builtin_test_app;
 use crate::types::SageApp;
+use crate::system_apps::build_builtin_system_app;
 
 use super::records::{inline_label_for, SageAppRuntimeKind};
 
@@ -67,13 +68,25 @@ pub fn build_entry_src(
 pub fn resolve_app(base_path: &Path, app_id: &str) -> Result<SageApp, String> {
     match read_installed_app_by_id(base_path, app_id) {
         Ok(app) => Ok(SageApp::User(app)),
-        Err(installed_err) => build_builtin_test_app(app_id)
-            .map_err(|builtin_err| {
+        Err(installed_err) => {
+            if let Some(app) = build_builtin_test_app(app_id).map_err(|builtin_err| {
                 format!(
-                    "failed to resolve app {app_id}: installed lookup error: {installed_err}; builtin lookup error: {builtin_err}"
+                    "failed to resolve app {app_id}: installed lookup error: {installed_err}; builtin sandbox lookup error: {builtin_err}"
                 )
-            })?
-            .ok_or_else(|| format!("failed to read app {app_id}: {installed_err}")),
+            })? {
+                return Ok(app);
+            }
+
+            if let Some(app) = build_builtin_system_app(app_id).map_err(|builtin_err| {
+                format!(
+                    "failed to resolve app {app_id}: installed lookup error: {installed_err}; builtin system lookup error: {builtin_err}"
+                )
+            })? {
+                return Ok(app);
+            }
+
+            Err(format!("failed to read app {app_id}: {installed_err}"))
+        }
     }
 }
 

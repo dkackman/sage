@@ -11,6 +11,9 @@ use crate::{
     },
     security::build_app_csp,
     types::SageApp,
+    system_apps::{
+        build_builtin_system_app, builtin_system_app_dir, builtin_system_app_spec,
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,6 +111,50 @@ fn handle_builtin_test_app_request(
         .map_err(|err| anyhow!("failed to build builtin test app response: {err}"))
 }
 
+fn handle_builtin_system_app_request(
+    app_id: &str,
+    request: &tauri::http::Request<Vec<u8>>,
+) -> AnyResult<Response<Vec<u8>>> {
+    let app = build_builtin_system_app(app_id)?
+        .ok_or_else(|| anyhow!("unknown builtin system app {}", app_id))?;
+
+    let request_path = request.uri().path();
+    let csp = build_app_csp(&app);
+
+    let app_dir = builtin_system_app_dir(app_id)?
+        .ok_or_else(|| anyhow!("missing builtin system app dir for {}", app_id))?;
+
+    let file_path = read_snapshot_file(&app_dir, request_path)?;
+
+    if request_path.is_empty() || request_path == "/" || request_path == "/index.html" {
+        let html = fs::read_to_string(&file_path)?;
+
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "text/html; charset=utf-8")
+            .header("Cache-Control", "no-store")
+            .header("Content-Security-Policy", &csp)
+            .header("X-Content-Type-Options", "nosniff")
+            .body(html.into_bytes())
+            .map_err(|err| anyhow!("failed to build builtin system app HTML response: {err}"));
+    }
+
+    let bytes = fs::read(&file_path)?;
+    let mime = mime_guess::from_path(&file_path)
+        .first_or_octet_stream()
+        .essence_str()
+        .to_string();
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", mime)
+        .header("Cache-Control", "no-store")
+        .header("Content-Security-Policy", csp)
+        .header("X-Content-Type-Options", "nosniff")
+        .body(bytes)
+        .map_err(|err| anyhow!("failed to build builtin system app response: {err}"))
+}
+
 pub fn handle_app_protocol_request(
     base_path: &Path,
     request: &tauri::http::Request<Vec<u8>>,
@@ -128,6 +175,17 @@ pub fn handle_app_protocol_request(
         }
 
         return handle_builtin_test_app_request(host, request);
+    }
+
+    if builtin_system_app_spec(host).is_some() {
+        if protocol_kind != AppProtocolKind::System {
+            return Err(anyhow!(
+                "builtin system app {} cannot be served through user protocol",
+                host
+            ));
+        }
+
+        return handle_builtin_system_app_request(host, request);
     }
 
     if protocol_kind != AppProtocolKind::User {

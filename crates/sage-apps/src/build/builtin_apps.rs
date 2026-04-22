@@ -244,6 +244,12 @@ struct RuntimeApp {
     out_dir_name: &'static str,
 }
 
+#[derive(Clone, Copy)]
+struct SystemApp {
+    source_dir_name: &'static str,
+    out_dir_name: &'static str,
+}
+
 const TEST_BUILD_PLAN: &[TestGroup] = &[
     TestGroup {
         source_dir_name: "sage-storage-isolation",
@@ -296,6 +302,11 @@ const RUNTIME_BUILD_PLAN: &[RuntimeApp] = &[RuntimeApp {
     out_dir_name: "storage-clear-probe",
 }];
 
+const SYSTEM_BUILD_PLAN: &[SystemApp] = &[SystemApp {
+    source_dir_name: "task-manager",
+    out_dir_name: "task-manager",
+}];
+
 pub fn build_builtin_apps() -> Result<(), String> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
@@ -304,10 +315,12 @@ pub fn build_builtin_apps() -> Result<(), String> {
     let shared_dir = builtin_root.join("shared");
     let test_src_dir = builtin_root.join("test-apps-src");
     let runtime_src_dir = builtin_root.join("runtime-apps-src");
+    let system_src_dir = builtin_root.join("system-apps-src");
 
     let dist_root = builtin_root.join("dist");
     let test_out_dir = dist_root.join("test-apps");
     let runtime_out_dir = dist_root.join("runtime-apps");
+    let system_out_dir = dist_root.join("system-apps");
 
     let workspace_root = manifest_dir
         .parent()
@@ -322,12 +335,15 @@ pub fn build_builtin_apps() -> Result<(), String> {
     println!("cargo:rerun-if-changed={}", shared_dir.display());
     println!("cargo:rerun-if-changed={}", test_src_dir.display());
     println!("cargo:rerun-if-changed={}", runtime_src_dir.display());
+    println!("cargo:rerun-if-changed={}", system_src_dir.display());
     println!("cargo:rerun-if-changed={}", sdk_dist.display());
 
     fs::create_dir_all(&test_out_dir)
         .map_err(|err| format!("failed to create {}: {err}", test_out_dir.display()))?;
     fs::create_dir_all(&runtime_out_dir)
         .map_err(|err| format!("failed to create {}: {err}", runtime_out_dir.display()))?;
+    fs::create_dir_all(&system_out_dir)
+        .map_err(|err| format!("failed to create {}: {err}", system_out_dir.display()))?;
 
     for group in TEST_BUILD_PLAN {
         for variant in group.variants {
@@ -347,6 +363,16 @@ pub fn build_builtin_apps() -> Result<(), String> {
             &runtime_src_dir.join(runtime_app.source_dir_name),
             &runtime_out_dir.join(runtime_app.out_dir_name),
             None,
+            &sdk_dist,
+        )?;
+    }
+
+    for system_app in SYSTEM_BUILD_PLAN {
+        finalize_built_app(
+            &shared_dir,
+            &system_src_dir.join(system_app.source_dir_name),
+            &system_out_dir.join(system_app.out_dir_name),
+            Some("sage-manifest.json"),
             &sdk_dist,
         )?;
     }
