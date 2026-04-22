@@ -55,6 +55,8 @@ fn sample_app(base: &Path, app_id: &str) -> InstalledSageApp {
             files: vec![sample_manifest_file("index.html", 1)],
             entry: Some("index.html".to_string()),
             icon: Some("icon.png".to_string()),
+            author: None,
+            donation: None,
         },
     };
 

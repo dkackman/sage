@@ -14,13 +14,15 @@ import { focusRuntime, killRuntime } from '@/lib/apps/runtimeRegistry';
 import { formatAppError } from '@/lib/apps/formatAppError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
-import type {
+import {
+  commands,
   InstalledSageApp,
   SageAppUrlPreview,
   SageGrantedPermissions,
 } from '@/bindings';
 import { AppUpdateDialog } from '@/components/apps/AppUpdateDialog.tsx';
 import { getAppUpdatePermissionsDelta } from '@/lib/apps/updatePermissionsDelta.ts';
+import { AppDonationStrip } from '@/components/apps/AppDonationStrip.tsx';
 
 export function AppsWorkspace() {
   const { appId } = useParams();
@@ -63,6 +65,10 @@ export function AppsWorkspace() {
     ? (updateAvailability[activeApp.id] ?? null)
     : null;
   const activeBusy = activeApp ? (busyAppIds[activeApp.id] ?? false) : false;
+  const [donationOpen, setDonationOpen] = useState(false);
+  const activeManifest = activeApp?.activeSnapshot.manifest;
+
+  const hasDonation = !!activeManifest?.donation?.address;
 
   useEffect(() => {
     setApprovalExpanded(false);
@@ -189,6 +195,7 @@ export function AppsWorkspace() {
     <div className='flex h-full min-h-0 w-full flex-col overflow-hidden'>
       <AppTaskBar
         tabs={tabs}
+        activeAppId={activeApp?.id ?? null}
         onOpenApps={() => {
           navigate('/apps');
         }}
@@ -205,6 +212,8 @@ export function AppsWorkspace() {
           });
         }}
         onReorderTabs={setTabOrder}
+        activeAppHasDonation={hasDonation}
+        onOpenDonation={() => setDonationOpen((v) => !v)}
       />
 
       {activeApp &&
@@ -220,6 +229,30 @@ export function AppsWorkspace() {
           }}
           onApprove={approveCurrentApproval}
           onReject={rejectCurrentApproval}
+        />
+      ) : null}
+      {donationOpen && activeApp && activeManifest?.donation ? (
+        <AppDonationStrip
+          appName={activeApp.name}
+          authorName={activeManifest.author?.name}
+          authorAvatarSrc={
+            activeManifest.author?.avatar
+              ? `sage-app://${activeApp.originId}/${activeManifest.author.avatar}`
+              : null
+          }
+          donationAddress={activeManifest.donation.address}
+          onSend={(amountMojos) => {
+            if (!activeManifest.donation) {
+              return;
+            }
+            void commands.sendXch({
+              address: activeManifest?.donation.address,
+              amount: amountMojos,
+              fee: '0',
+              memos: [],
+              auto_submit: false,
+            });
+          }}
         />
       ) : null}
 

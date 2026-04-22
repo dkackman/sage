@@ -18,6 +18,8 @@ fn sample_manifest() -> SageAppPackageManifest {
         files: vec![sample_manifest_file("dist/index.html", 123)],
         entry: Some("dist/index.html".to_string()),
         icon: Some("dist/icon.png".to_string()),
+        author: None,
+        donation: None,
     }
 }
 

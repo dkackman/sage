@@ -138,6 +138,8 @@ pub struct SageAppPackageManifest {
     pub files: Vec<SageAppManifestFile>,
     pub entry: Option<String>,
     pub icon: Option<String>,
+    pub author: Option<SageAppAuthor>,
+    pub donation: Option<SageAppDonation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -343,6 +345,23 @@ struct RawSageAppPackageManifest {
 
     #[serde(default)]
     icon: Option<String>,
+
+    #[serde(default)]
+    author: Option<SageAppAuthor>,
+
+    #[serde(default)]
+    donation: Option<SageAppDonation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+pub struct SageAppAuthor {
+    pub name: String,
+    pub avatar: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+pub struct SageAppDonation {
+    pub address: String,
 }
 
 impl<'de> Deserialize<'de> for SageRequestedPermissions {
@@ -400,6 +419,8 @@ impl<'de> Deserialize<'de> for SageAppPackageManifest {
             files: raw.files,
             entry: raw.entry,
             icon: raw.icon,
+            author: raw.author,
+            donation: raw.donation,
         })
     }
 }

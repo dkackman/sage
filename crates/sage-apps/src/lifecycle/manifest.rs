@@ -52,6 +52,18 @@ pub fn validate_sha256_hex(value: &str) -> AnyResult<()> {
     Ok(())
 }
 
+fn validate_donation(address: &str) -> AnyResult<()> {
+    if address.trim().is_empty() {
+        return Err(anyhow!("donation address cannot be empty"));
+    }
+
+    if !address.starts_with("xch") && !address.starts_with("txch") {
+        return Err(anyhow!("invalid donation address format"));
+    }
+
+    Ok(())
+}
+
 pub fn validate_manifest_files(files: &[SageAppManifestFile]) -> AnyResult<u64> {
     if files.is_empty() {
         return Err(anyhow!("manifest files cannot be empty"));
@@ -104,5 +116,15 @@ pub fn validate_package_manifest(
     }
 
     normalize_and_validate_requested_permissions(&manifest.permissions)?;
+    if let Some(donation) = &manifest.donation {
+        validate_donation(&donation.address)?;
+    }
+
+    if let Some(author) = &manifest.author {
+        if author.name.trim().is_empty() {
+            return Err(anyhow!("author name cannot be empty"));
+        }
+    }
+
     validate_manifest_files(&manifest.files)
 }

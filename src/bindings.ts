@@ -359,6 +359,9 @@ async getLogs() : Promise<LogFile[]> {
 async isAssetOwned(req: IsAssetOwned) : Promise<IsAssetOwnedResponse> {
     return await TAURI_INVOKE("is_asset_owned", { req });
 },
+async getXchUsdPrice(req: GetXchUsdPrice) : Promise<GetXchUsdPriceResponse> {
+    return await TAURI_INVOKE("get_xch_usd_price", { req });
+},
 async appsCreateInlineRuntime(args: CreateInlineRuntimeArgs) : Promise<SageAppRuntimeRecord> {
     return await TAURI_INVOKE("apps_create_inline_runtime", { args });
 },
@@ -1666,6 +1669,8 @@ export type GetVersionResponse = {
  * Semantic version string
  */
 version: string }
+export type GetXchUsdPrice = Record<string, never>
+export type GetXchUsdPriceResponse = { usd: number }
 export type Id = 
 /**
  * The XCH asset
@@ -2235,10 +2240,12 @@ export type RustBridgeInvokeResult = { kind: "immediate"; response: RustBridgeRe
 export type RustBridgeRequest = { channel: string; bridgeVersion: string | null; id: string; method: string; paramsJson: string | null }
 export type RustBridgeResponse = RustBridgeSuccessResponse | RustBridgeErrorResponse
 export type RustBridgeSuccessResponse = { channel: string; bridgeVersion: string; id: string; ok: boolean; resultJson: string }
+export type SageAppAuthor = { name: string; avatar: string | null }
 export type SageAppCapabilityDefinitionView = { key: string; label: string; description: string; flags: SageAppCapabilityFlagsView; requestableByApp: boolean; sharedWithApp: boolean }
 export type SageAppCapabilityFlagsView = { externallyObservable: boolean; accessesSensitiveSecret: boolean; persistentStorage: boolean }
+export type SageAppDonation = { address: string }
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
-export type SageAppPackageManifest = { name: string; version: string; permissions: SageRequestedPermissions; files: SageAppManifestFile[]; entry: string | null; icon: string | null }
+export type SageAppPackageManifest = { name: string; version: string; permissions: SageRequestedPermissions; files: SageAppManifestFile[]; entry: string | null; icon: string | null; author: SageAppAuthor | null; donation: SageAppDonation | null }
 export type SageAppRuntimeRecord = { runtimeId: string; appId: string; appName: string; entrySrc: string; webviewLabel: string; hostWindowLabel: string; mode: string; state: string; startedAt: number; lastActiveAt: number; visible: boolean; internal: boolean; activeBatchCount: number; activeSocketCount: number; inFlightRequestCount: number }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageAppsError = { kind: ErrorKind; reason: string }

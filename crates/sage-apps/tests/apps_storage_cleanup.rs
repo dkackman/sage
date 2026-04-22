@@ -50,6 +50,8 @@ fn sample_app(storage: InstalledSageAppStorage) -> InstalledSageApp {
                 files: vec![sample_manifest_file("index.html", 1)],
                 entry: Some("index.html".into()),
                 icon: Some("icon.png".into()),
+                author: None,
+                donation: None,
             },
         },
         pending_update: None,

@@ -12,10 +12,13 @@ export interface AppTaskBarTab {
 
 interface Props {
   tabs: AppTaskBarTab[];
+  activeAppId: string | null;
+  activeAppHasDonation: boolean;
   onOpenApps: () => void;
   onSelectApp: (appId: string) => void;
   onCloseApp: (appId: string) => void;
   onReorderTabs: (nextAppIds: string[]) => void;
+  onOpenDonation: () => void;
 }
 
 interface DragState {
@@ -50,10 +53,12 @@ function clamp(value: number, min: number, max: number): number {
 
 export function AppTaskBar({
   tabs,
+  activeAppHasDonation,
   onOpenApps,
   onSelectApp,
   onCloseApp,
   onReorderTabs,
+  onOpenDonation,
 }: Props) {
   const tabsViewportRef = useRef<HTMLDivElement | null>(null);
   const tabsStripRef = useRef<HTMLDivElement | null>(null);
@@ -395,6 +400,15 @@ export function AppTaskBar({
             : null}
         </div>
       </div>
+      {activeAppHasDonation && (
+        <Button
+          variant='default'
+          className='h-9 shrink-0 px-3 bg-amber-500 hover:bg-amber-600 text-black'
+          onClick={onOpenDonation}
+        >
+          Support developer
+        </Button>
+      )}
     </div>
   );
 }

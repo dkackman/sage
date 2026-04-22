@@ -170,6 +170,8 @@ mod tests {
                     }],
                     entry: Some("index.html".into()),
                     icon: Some("icon.png".into()),
+                    author: None,
+                    donation: None,
                 },
             },
             pending_update: None,

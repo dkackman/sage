@@ -6,15 +6,7 @@ use std::{
 use anyhow::{Context, Result as AnyResult};
 use serde::{Deserialize, Serialize};
 
-use crate::types::{
-    CorruptedInstalledSageApp, InstalledSageApp, InstalledSageAppCapabilityFlags,
-    InstalledSageAppPendingUpdate, InstalledSageAppSnapshot, InstalledSageAppSource,
-    InstalledSageAppStorage, ListedSageApp, PendingStorageCleanupEntry,
-    SageAppManifestFile, SageAppPackageManifest, SageGrantedPermissions,
-    SageNetworkPermissionTarget, SageRequestedCapabilities,
-    SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist,
-    SageRequestedPermissions,
-};
+use crate::types::{CorruptedInstalledSageApp, InstalledSageApp, InstalledSageAppCapabilityFlags, InstalledSageAppPendingUpdate, InstalledSageAppSnapshot, InstalledSageAppSource, InstalledSageAppStorage, ListedSageApp, PendingStorageCleanupEntry, SageAppAuthor, SageAppDonation, SageAppManifestFile, SageAppPackageManifest, SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedCapabilities, SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist, SageRequestedPermissions};
 
 const INSTALLED_METADATA_FILE: &str = ".sage-installed.json";
 const PENDING_STORAGE_CLEANUP_FILE: &str = ".sage-pending-storage-cleanup.json";
@@ -65,6 +57,8 @@ struct PersistedSageAppPackageManifest {
     files: Vec<SageAppManifestFile>,
     entry: Option<String>,
     icon: Option<String>,
+    author: Option<SageAppAuthor>,
+    donation: Option<SageAppDonation>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -234,6 +228,8 @@ fn to_persisted_manifest(
         files: value.files.clone(),
         entry: value.entry.clone(),
         icon: value.icon.clone(),
+        author: value.author.clone(),
+        donation: value.donation.clone(),
     }
 }
 
@@ -247,6 +243,8 @@ fn from_persisted_manifest(
         files: value.files,
         entry: value.entry,
         icon: value.icon,
+        author: value.author,
+        donation: value.donation,
     })
 }
 
@@ -584,6 +582,8 @@ mod tests {
                     }],
                     entry: Some("index.html".into()),
                     icon: Some("icon.png".into()),
+                    author: None,
+                    donation: None,
                 },
             },
             pending_update: None,

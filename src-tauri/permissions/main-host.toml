@@ -139,5 +139,6 @@ commands.allow = [
     "apply_app_update",
     "apps_update_permissions",
     "apps_mark_storage_may_contain_secrets",
-    "apps_get_capability_registry"
+    "apps_get_capability_registry",
+    "get_xch_usd_price"
 ]

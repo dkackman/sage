@@ -143,6 +143,7 @@ pub fn run() {
             commands::download_cni_offercode,
             commands::get_logs,
             commands::is_asset_owned,
+            commands::get_xch_usd_price,
             apps::runtime::apps_create_inline_runtime,
             apps::runtime::apps_assert_bridge_origin,
             apps::runtime::apps_clear_runtime_browsing_data,
