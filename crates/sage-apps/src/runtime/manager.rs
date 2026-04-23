@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, Emitter, Manager, State};
-
+use crate::bridge::methods::system::RuntimeManagerRuntimesChangedEvent;
 use crate::state::AppsHostState;
 
 use super::cleanup::close_runtime_internal_with_reason;
@@ -71,6 +71,40 @@ pub(crate) async fn list_runtimes_internal(
     Ok(records)
 }
 
+pub(crate) async fn emit_runtime_manager_runtimes_changed(
+    app: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+) {
+    let Ok(runtimes) = list_runtimes_internal(apps_state).await else {
+        return;
+    };
+
+    let system_runtime_webview_labels = {
+        let by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
+
+        by_runtime_id
+            .values()
+            .filter(|record| !record.internal && record.runtime_kind == super::records::SageAppRuntimeKind::System)
+            .map(|record| record.webview_label.clone())
+            .collect::<Vec<_>>()
+    };
+
+    let event = RuntimeManagerRuntimesChangedEvent::new(
+        "sage-system-bridge".to_string(),
+        runtimes,
+    );
+
+    let Some(window) = app.get_window("main") else {
+        return;
+    };
+
+    for webview_label in system_runtime_webview_labels {
+        if let Some(webview) = window.get_webview(&webview_label) {
+            let _ = webview.emit("sage-system-bridge:event", event.clone());
+        }
+    }
+}
+
 async fn emit_route_request(
     app: &AppHandle,
     app_id: &str,
@@ -122,6 +156,7 @@ pub(crate) async fn focus_runtime_internal(
     record.last_active_at = now_ms()?;
 
     write_runtime_record(apps_state, record.clone()).await?;
+    emit_runtime_manager_runtimes_changed(app, apps_state).await;
     Ok(record)
 }
 
@@ -161,6 +196,7 @@ pub(crate) async fn kill_runtime_internal(
     let _ = get_runtime_record_by_app_id(apps_state, app_id).await?;
 
     close_runtime_internal_with_reason(app, apps_state, app_id, reason).await?;
+    emit_runtime_manager_runtimes_changed(app, apps_state).await;
 
     Ok(SystemKillRuntimeResult {
         ok: true,

@@ -2,11 +2,13 @@ pub mod focus_runtime;
 pub mod hide_runtime;
 pub mod kill_runtime;
 pub mod list_runtimes;
+pub mod events;
 
 pub use focus_runtime::SystemFocusRuntime;
 pub use hide_runtime::SystemHideRuntime;
 pub use kill_runtime::SystemKillRuntime;
 pub use list_runtimes::SystemListRuntimes;
+pub use events::RuntimeManagerRuntimesChangedEvent;
 
 pub use crate::runtime::{RuntimeTargetParams, SystemKillRuntimeResult};
 

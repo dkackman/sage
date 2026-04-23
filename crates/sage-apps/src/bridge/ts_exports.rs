@@ -2,6 +2,7 @@ use specta::TypeCollection;
 use specta_typescript::{BigIntExportBehavior, Typescript};
 use sage_api::TransactionResponse;
 use crate::bridge::methods::system::runtime_manager::RuntimeTargetParams;
+use crate::bridge::methods::system::RuntimeManagerRuntimesChangedEvent;
 use crate::bridge::methods::user::app::get_info::{AppGetInfoResult, SageNetworkPermissionInfo};
 use crate::bridge::methods::user::app::{GrantedCapabilitiesChangeEvent, GrantedNetworkWhitelistChangeEvent};
 use crate::bridge::methods::user::app::request_capability_grant::{RequestCapabilityGrantParams, RequestCapabilityGrantResult};
@@ -17,6 +18,7 @@ pub fn export_system_bridge_typescript() -> Result<String, String> {
     types.register::<RuntimeTargetParams>();
     types.register::<SageAppRuntimeRecord>();
     types.register::<SystemKillRuntimeResult>();
+    types.register::<RuntimeManagerRuntimesChangedEvent>();
 
     Typescript::default()
         .bigint(BigIntExportBehavior::Number)

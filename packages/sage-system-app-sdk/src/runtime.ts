@@ -5,6 +5,7 @@ import type {
   SageSystemClient,
   SageSystemBridgeVersion,
   SystemKillRuntimeResult,
+  RuntimeManagerRuntimesChangedEvent,
 } from './types';
 import { createBridgeRuntimeCore } from '@sage-app/sdk';
 
@@ -33,6 +34,16 @@ type SageSystemWindow = Window &
 
 function getSageWindow(): SageSystemWindow {
   return window as SageSystemWindow;
+}
+
+function isRuntimeManagerRuntimesChangedEvent(
+  value: unknown,
+): value is RuntimeManagerRuntimesChangedEvent {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    (value as { type?: unknown }).type === 'runtimeManager.runtimesChanged'
+  );
 }
 
 export function initSageSystemRuntimeBridge(): boolean {
@@ -114,6 +125,31 @@ export function initSageSystemRuntimeBridge(): boolean {
       );
     });
 
+  webview
+    .listen(
+      `${SAGE_SYSTEM_BRIDGE_CHANNEL}:event`,
+      (event: SageSystemListenEvent) => {
+        const data = event.payload;
+
+        if (!isRuntimeManagerRuntimesChangedEvent(data)) {
+          return;
+        }
+
+        window.dispatchEvent(
+          new CustomEvent<RuntimeManagerRuntimesChangedEvent>(
+            'runtimeManager:runtimesChanged',
+            { detail: data },
+          ),
+        );
+      },
+    )
+    .catch((error: unknown) => {
+      console.error(
+        `Failed to subscribe to ${SAGE_SYSTEM_BRIDGE_CHANNEL}:event:`,
+        error,
+      );
+    });
+
   w.__SAGE_SYSTEM__ = {
     runtimeManager: {
       async listRuntimes() {
@@ -141,6 +177,29 @@ export function initSageSystemRuntimeBridge(): boolean {
           'runtimeManager.killRuntime',
           input,
         );
+      },
+
+      onRuntimesChanged(handler) {
+        const listener = (event: Event) => {
+          const custom =
+            event as CustomEvent<RuntimeManagerRuntimesChangedEvent>;
+
+          handler(custom.detail);
+        };
+
+        window.addEventListener(
+          'runtimeManager:runtimesChanged',
+
+          listener as EventListener,
+        );
+
+        return () => {
+          window.removeEventListener(
+            'runtimeManager:runtimesChanged',
+
+            listener as EventListener,
+          );
+        };
       },
     },
   };

@@ -8,7 +8,7 @@ use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, State, WebviewUrl}
 
 #[cfg(target_os = "windows")]
 use std::path::PathBuf;
-
+use crate::runtime::emit_runtime_manager_runtimes_changed;
 use crate::sandbox;
 use crate::state::AppsHostState;
 use crate::types::InstalledSageAppStorage;
@@ -310,6 +310,8 @@ pub async fn apps_create_inline_runtime(
             let _ = webview.hide();
         }
     }
+
+    emit_runtime_manager_runtimes_changed(&app, &apps_state).await;
 
     Ok(record)
 }

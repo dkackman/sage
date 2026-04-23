@@ -1,6 +1,7 @@
 export * from './generated-types';
 
 import type {
+  RuntimeManagerRuntimesChangedEvent,
   RuntimeTargetParams,
   SageAppRuntimeRecord,
   SystemKillRuntimeResult,
@@ -8,14 +9,6 @@ import type {
 
 export type SageSystemBridgeChannel = 'sage-system-bridge';
 export type SageSystemBridgeVersion = 'v1';
-
-export type SageSystemBridgeRequest = {
-  channel: SageSystemBridgeChannel;
-  bridgeVersion?: SageSystemBridgeVersion;
-  id: string;
-  method: string;
-  params?: unknown;
-};
 
 export type SageSystemBridgeSuccessResponse = {
   channel: SageSystemBridgeChannel;
@@ -45,6 +38,9 @@ export type SageSystemRuntimeManagerClient = {
   focusRuntime(input: RuntimeTargetParams): Promise<SageAppRuntimeRecord>;
   hideRuntime(input: RuntimeTargetParams): Promise<SageAppRuntimeRecord>;
   killRuntime(input: RuntimeTargetParams): Promise<SystemKillRuntimeResult>;
+  onRuntimesChanged(
+    handler: (event: RuntimeManagerRuntimesChangedEvent) => void,
+  ): () => void;
 };
 
 export type SageSystemClient = {

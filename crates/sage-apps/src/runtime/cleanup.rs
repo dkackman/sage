@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::state::AppsHostState;
 use crate::types::{InstalledSageAppStorage, PendingStorageCleanupTarget};
 
-use super::apps_create_inline_runtime;
+use super::{apps_create_inline_runtime, emit_runtime_manager_runtimes_changed};
 use super::inline::CreateInlineRuntimeArgs;
 use super::resolve::{resolve_app, runtime_kind_for_app};
 use super::records::{inline_label_for, SageLifecycleBeforeStopDetail};
@@ -237,6 +237,7 @@ pub(crate) async fn close_runtime_internal_with_reason(
         let mut listeners = apps_state.runtime.before_stop_listeners_by_app_id.lock().await;
         listeners.remove(app_id);
     }
+    emit_runtime_manager_runtimes_changed(app, apps_state).await;
 
     Ok(())
 }
