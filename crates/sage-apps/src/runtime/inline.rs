@@ -40,6 +40,42 @@ fn parse_data_store_id(identifier_hex: &str) -> Result<[u8; 16], String> {
     Ok(out)
 }
 
+fn fallback_debug_slot(app_id: &str) -> usize {
+    app_id
+        .bytes()
+        .fold(0usize, |acc, b| acc.wrapping_mul(31).wrapping_add(b as usize))
+        % 12
+}
+
+fn debug_layout_for_app(app_id: &str) -> (f64, f64, f64, f64) {
+    let slot = match app_id {
+        "__sage_test_storage_isolation_persistent" => 0,
+        "__sage_test_storage_isolation_incognito" => 1,
+        "__sage_test_persistence_persistent" => 2,
+        "__sage_test_persistence_incognito" => 3,
+        "__sage_test_storage_clear_persistent" => 4,
+        "__sage_test_network_allow_a" => 5,
+        "__sage_test_network_allow_b" => 6,
+        _ => fallback_debug_slot(app_id),
+    };
+
+    let cols = 3usize;
+    let cell_w = 360.0;
+    let cell_h = 100.0;
+    let margin_x = 24.0;
+    let margin_y = 24.0;
+    let origin_x = 40.0;
+    let origin_y = 40.0;
+
+    let col = slot % cols;
+    let row = slot / cols;
+
+    let x = origin_x + col as f64 * (cell_w + margin_x);
+    let y = origin_y + row as f64 * (cell_h + margin_y);
+
+    (x, y, cell_w, cell_h)
+}
+
 #[derive(Debug, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateInlineRuntimeArgs {
@@ -132,10 +168,11 @@ pub async fn apps_create_inline_runtime(
     }
 
     let debug = args.debug_layout;
-    let x = if debug { 80.0 } else { 0.0 };
-    let y = if debug { 80.0 } else { 0.0 };
-    let width = if debug { 200.0 } else { 1.0 };
-    let height = if debug { 200.0 } else { 1.0 };
+    let (x, y, width, height) = if debug {
+        debug_layout_for_app(resolved.id())
+    } else {
+        (0.0, 0.0, 1.0, 1.0)
+    };
 
     host_window
         .add_child(

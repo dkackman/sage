@@ -38,6 +38,9 @@ pub async fn start_test_app(
     path: Option<String>,
 ) -> Result<(), String> {
     let mut query_map = HashMap::new();
+
+    query_map.insert("appId".to_string(), app_id.to_string());
+
     for (k, v) in query {
         query_map.insert((*k).to_string(), v.clone());
     }
@@ -65,6 +68,7 @@ pub async fn run_clear_cycle_phase_runtime(
     let mut query = BTreeMap::new();
     query.insert("runId".to_string(), run_id.to_string());
     query.insert("phase".to_string(), phase_string);
+    query.insert("appId".to_string(), app_id.to_string());
 
     runtime::start_internal_runtime_for_sandbox(
         app,

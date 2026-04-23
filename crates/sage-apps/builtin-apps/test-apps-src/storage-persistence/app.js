@@ -1,8 +1,17 @@
 import './bridge.js';
 import { createSageClient } from './sdk.js';
 
+const log = (...args) => window.__SAGE_TEST__?.log?.(...args);
+
 (async () => {
+  log('start', window.location.href);
+
   const sage = await createSageClient();
+  log('createSageClient ok');
+
+  const ping = await sage.app.bridgePing();
+  log('bridgePing ok', ping);
+
   const params = new URLSearchParams(window.location.search);
   const runId = params.get('runId');
   const phase = params.get('phase');
@@ -119,23 +128,27 @@ import { createSageClient } from './sdk.js';
   }
 
   async function reportWrite(data) {
-    await sage.app.bridgeSend({
+    log('bridgeSend persistence_write start', data);
+    const result = await sage.app.bridgeSend({
       kind: 'sandbox_report',
       report: {
         type: 'persistence_write',
         data,
       },
     });
+    log('bridgeSend persistence_write ok', result);
   }
 
   async function reportRead(data) {
-    await sage.app.bridgeSend({
+    log('bridgeSend persistence_read start', data);
+    const result = await sage.app.bridgeSend({
       kind: 'sandbox_report',
       report: {
         type: 'persistence_read',
         data,
       },
     });
+    log('bridgeSend persistence_read ok', result);
   }
 
   if (phase === 'write') {
@@ -148,13 +161,17 @@ import { createSageClient } from './sdk.js';
         localStorage.setItem(LOCAL_STORAGE_KEY, 'present');
         localStorageWrote =
           localStorage.getItem(LOCAL_STORAGE_KEY) === 'present';
+        log('localStorageWrote', localStorageWrote);
       } catch {
         localStorageWrote = false;
+        log('localStorage write failed');
       }
 
       indexedDbWrote = await writeIndexedDbValue();
+      log('indexedDbWrote', indexedDbWrote);
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
+      log('write phase error', error);
     }
 
     await reportWrite({
@@ -175,13 +192,17 @@ import { createSageClient } from './sdk.js';
     try {
       localStoragePresent =
         localStorage.getItem(LOCAL_STORAGE_KEY) === 'present';
+      log('localStoragePresent', localStoragePresent);
     } catch {
       localStoragePresent = false;
+      log('localStorage read failed');
     }
 
     indexedDbPresent = await readIndexedDbValue();
+    log('indexedDbPresent', indexedDbPresent);
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
+    log('read phase error', error);
   }
 
   await reportRead({
@@ -191,38 +212,57 @@ import { createSageClient } from './sdk.js';
     error,
   });
 })().catch(async (err) => {
+  log('fatal', err instanceof Error ? err.message : String(err));
+
   try {
     const sage = await createSageClient();
     const params = new URLSearchParams(window.location.search);
     const phase = params.get('phase');
 
     if (phase === 'write') {
-      await sage.app.bridgeSend({
+      const payload = {
+        runId: params.get('runId'),
+        localStorageWrote: false,
+        indexedDbWrote: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+
+      log('fallback bridgeSend persistence_write start', payload);
+
+      const result = await sage.app.bridgeSend({
         kind: 'sandbox_report',
         report: {
           type: 'persistence_write',
-          data: {
-            runId: params.get('runId'),
-            localStorageWrote: false,
-            indexedDbWrote: false,
-            error: err instanceof Error ? err.message : String(err),
-          },
+          data: payload,
         },
       });
+
+      log('fallback bridgeSend persistence_write ok', result);
       return;
     }
 
-    await sage.app.bridgeSend({
+    const payload = {
+      runId: params.get('runId'),
+      localStoragePresent: false,
+      indexedDbPresent: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+
+    log('fallback bridgeSend persistence_read start', payload);
+
+    const result = await sage.app.bridgeSend({
       kind: 'sandbox_report',
       report: {
         type: 'persistence_read',
-        data: {
-          runId: params.get('runId'),
-          localStoragePresent: false,
-          indexedDbPresent: false,
-          error: err instanceof Error ? err.message : String(err),
-        },
+        data: payload,
       },
     });
-  } catch {}
+
+    log('fallback bridgeSend persistence_read ok', result);
+  } catch (fallbackErr) {
+    log(
+      'fallback failed',
+      fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+    );
+  }
 });

@@ -1,8 +1,17 @@
 import './bridge.js';
 import { createSageClient } from './sdk.js';
 
+const log = (...args) => window.__SAGE_TEST__?.log?.(...args);
+
 (async () => {
+  log('start', window.location.href);
+
   const sage = await createSageClient();
+  log('createSageClient ok');
+
+  const ping = await sage.app.bridgePing();
+  log('bridgePing ok', ping);
+
   const params = new URLSearchParams(window.location.search);
   const runId = params.get('runId');
 
@@ -65,13 +74,15 @@ import { createSageClient } from './sdk.js';
   }
 
   async function report(data) {
-    await sage.app.bridgeSend({
+    log('bridgeSend isolation start', data);
+    const result = await sage.app.bridgeSend({
       kind: 'sandbox_report',
       report: {
         type: 'isolation',
         data,
       },
     });
+    log('bridgeSend isolation ok', result);
   }
 
   let localStorageVisible = false;
@@ -82,13 +93,17 @@ import { createSageClient } from './sdk.js';
     try {
       const value = localStorage.getItem(LOCAL_STORAGE_KEY);
       localStorageVisible = typeof value === 'string' && value.length > 0;
+      log('localStorageVisible', localStorageVisible);
     } catch {
       localStorageVisible = false;
+      log('localStorage read failed');
     }
 
     indexedDbVisible = await readIndexedDbProbe();
+    log('indexedDbVisible', indexedDbVisible);
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
+    log('probe error', error);
   }
 
   await report({
@@ -98,21 +113,34 @@ import { createSageClient } from './sdk.js';
     error,
   });
 })().catch(async (err) => {
+  log('fatal', err instanceof Error ? err.message : String(err));
+
   try {
     const sage = await createSageClient();
     const params = new URLSearchParams(window.location.search);
 
-    await sage.app.bridgeSend({
+    const payload = {
+      runId: params.get('runId'),
+      localStorageVisible: false,
+      indexedDbVisible: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+
+    log('fallback bridgeSend isolation start', payload);
+
+    const result = await sage.app.bridgeSend({
       kind: 'sandbox_report',
       report: {
         type: 'isolation',
-        data: {
-          runId: params.get('runId'),
-          localStorageVisible: false,
-          indexedDbVisible: false,
-          error: err instanceof Error ? err.message : String(err),
-        },
+        data: payload,
       },
     });
-  } catch {}
+
+    log('fallback bridgeSend isolation ok', result);
+  } catch (fallbackErr) {
+    log(
+      'fallback failed',
+      fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+    );
+  }
 });

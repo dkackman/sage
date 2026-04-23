@@ -1,6 +1,8 @@
 import './bridge.js';
 import { createSageClient } from './sdk.js';
 
+const log = (...args) => window.__SAGE_TEST__?.log?.(...args);
+
 const STORE_NAME = 'probe_store';
 const DB_KEY = 'probe_key';
 
@@ -114,17 +116,26 @@ async function readIndexedDbValue(dbName) {
 }
 
 async function report(sage, data) {
-  await sage.app.bridgeSend({
+  log('bridgeSend clear_cycle start', data);
+  const result = await sage.app.bridgeSend({
     kind: 'sandbox_report',
     report: {
       type: 'clear_cycle',
       data,
     },
   });
+  log('bridgeSend clear_cycle ok', result);
 }
 
 (async () => {
+  log('start', window.location.href);
+
   const sage = await createSageClient();
+  log('createSageClient ok');
+
+  const ping = await sage.app.bridgePing();
+  log('bridgePing ok', ping);
+
   const params = new URLSearchParams(window.location.search);
   const runId = params.get('runId');
   const phase = params.get('phase');
@@ -151,22 +162,28 @@ async function report(sage, data) {
     if (phase === 'write') {
       try {
         localStorage.setItem(localStorageKey, 'present');
+        log('localStorage write attempted', localStorageKey);
       } catch {
-        //
+        log('localStorage write failed', localStorageKey);
       }
 
-      await writeIndexedDbValue(dbName);
+      const wrote = await writeIndexedDbValue(dbName);
+      log('indexedDb write result', wrote, dbName);
     }
 
     try {
       localStoragePresent = localStorage.getItem(localStorageKey) === 'present';
+      log('localStoragePresent', localStoragePresent);
     } catch {
       localStoragePresent = false;
+      log('localStorage read failed');
     }
 
     indexedDbPresent = await readIndexedDbValue(dbName);
+    log('indexedDbPresent', indexedDbPresent);
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
+    log('probe error', error);
   }
 
   await report(sage, {
@@ -177,6 +194,8 @@ async function report(sage, data) {
     error,
   });
 })().catch(async (err) => {
+  log('fatal', err instanceof Error ? err.message : String(err));
+
   try {
     const sage = await createSageClient();
     const params = new URLSearchParams(window.location.search);
@@ -188,7 +207,10 @@ async function report(sage, data) {
       indexedDbPresent: false,
       error: err instanceof Error ? err.message : String(err),
     });
-  } catch {
-    //
+  } catch (fallbackErr) {
+    log(
+      'fallback failed',
+      fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+    );
   }
 });
