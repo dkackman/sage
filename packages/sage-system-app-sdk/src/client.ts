@@ -1,12 +1,13 @@
 import type { SageSystemClient } from './types';
+import { initSageSystemRuntimeBridge } from './runtime';
+
+type SageSystemGlobal = typeof globalThis & {
+  __TAURI__?: unknown;
+  __SAGE_SYSTEM__?: SageSystemClient;
+};
 
 export function isSageSystemRuntimeAvailable(): boolean {
-  const w = window as Window &
-    typeof globalThis & {
-      __TAURI__?: unknown;
-    };
-
-  return !!w.__TAURI__;
+  return !!(globalThis as SageSystemGlobal).__TAURI__;
 }
 
 function getClientFromWindow(): SageSystemClient | undefined {
@@ -14,12 +15,7 @@ function getClientFromWindow(): SageSystemClient | undefined {
     return undefined;
   }
 
-  return (
-    window as Window &
-      typeof globalThis & {
-        __SAGE_SYSTEM__?: SageSystemClient;
-      }
-  ).__SAGE_SYSTEM__;
+  return (window as SageSystemGlobal).__SAGE_SYSTEM__;
 }
 
 export function isSageSystemBridgeInitialized(): boolean {
@@ -30,24 +26,22 @@ export function hasSageSystemBridge(): boolean {
   return !!getClientFromWindow();
 }
 
-function getClientOrThrow(): SageSystemClient {
-  const client = getClientFromWindow();
+export async function getSageSystemClient(): Promise<SageSystemClient> {
+  let client = getClientFromWindow();
+
+  if (client) {
+    return client;
+  }
+
+  initSageSystemRuntimeBridge();
+
+  client = getClientFromWindow();
 
   if (!client) {
-    throw new Error(
-      'Sage system bridge is unavailable. Did you call initSageSystemRuntimeBridge() in app startup?',
-    );
+    throw new Error('Sage system bridge is unavailable in this runtime.');
   }
 
   return client;
-}
-
-export async function createSageSystemClient(): Promise<SageSystemClient> {
-  return getClientOrThrow();
-}
-
-export function getSageSystemClientSync(): SageSystemClient {
-  return getClientOrThrow();
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -55,22 +49,12 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 export function formatSageError(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-
-  if (typeof err === 'string') {
-    return err;
-  }
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
 
   if (isObject(err)) {
-    if (typeof err.message === 'string') {
-      return err.message;
-    }
-
-    if (typeof err.reason === 'string') {
-      return err.reason;
-    }
+    if (typeof err.message === 'string') return err.message;
+    if (typeof err.reason === 'string') return err.reason;
 
     try {
       return JSON.stringify(err, null, 2);

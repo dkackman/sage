@@ -1,13 +1,13 @@
 import './bridge.js';
-import { createSageClient } from './sdk.js';
+import { getSageClient } from './sdk.js';
 
 const log = (...args) => window.__SAGE_TEST__?.log?.(...args);
 
 (async () => {
   log('start', window.location.href);
 
-  const sage = await createSageClient();
-  log('createSageClient ok');
+  const sage = await getSageClient();
+  log('getSageClient ok');
 
   const ping = await sage.app.bridgePing();
   log('bridgePing ok', ping);
@@ -82,7 +82,7 @@ const log = (...args) => window.__SAGE_TEST__?.log?.(...args);
   log('fatal', err instanceof Error ? err.message : String(err));
 
   try {
-    const sage = await createSageClient();
+    const sage = await getSageClient();
     const params = new URLSearchParams(window.location.search);
 
     const payload = {

@@ -3,9 +3,8 @@ export { initSageRuntimeBridge, SAGE_BRIDGE_VERSION } from './runtime';
 export {
   isSageRuntimeAvailable,
   isSageBridgeInitialized,
-  createSageClient,
   formatSageError,
-  getSageClientSync,
+  getSageClient,
   hasSageBridge,
 } from './client';
 

@@ -1,13 +1,12 @@
 import { initSageRuntimeBridge } from './runtime';
 import type { SageClient } from './types';
 
-export function isSageRuntimeAvailable(): boolean {
-  const w = window as Window &
-    typeof globalThis & {
-      __TAURI__?: unknown;
-    };
+type SageGlobal = typeof globalThis & {
+  __TAURI__?: unknown;
+};
 
-  return !!w.__TAURI__;
+export function isSageRuntimeAvailable(): boolean {
+  return !!(globalThis as SageGlobal).__TAURI__;
 }
 
 function getClientFromWindow(): SageClient | undefined {
@@ -26,32 +25,22 @@ export function hasSageBridge(): boolean {
   return !!getClientFromWindow();
 }
 
-function getClientOrThrow(): SageClient {
-  const client = getClientFromWindow();
+export async function getSageClient(): Promise<SageClient> {
+  let client = getClientFromWindow();
+
+  if (client) {
+    return client;
+  }
+
+  initSageRuntimeBridge();
+
+  client = getClientFromWindow();
 
   if (!client) {
-    throw new Error(
-      'Sage bridge is unavailable. Did you call initSageRuntimeBridge() in app startup?',
-    );
+    throw new Error('Sage bridge is unavailable in this runtime.');
   }
 
   return client;
-}
-
-export async function createSageClient(): Promise<SageClient> {
-  if (!getClientFromWindow()) {
-    initSageRuntimeBridge();
-  }
-
-  return getClientOrThrow();
-}
-
-export function getSageClientSync(): SageClient {
-  if (!getClientFromWindow()) {
-    initSageRuntimeBridge();
-  }
-
-  return getClientOrThrow();
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -59,22 +48,12 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 export function formatSageError(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-
-  if (typeof err === 'string') {
-    return err;
-  }
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
 
   if (isObject(err)) {
-    if (typeof err.message === 'string') {
-      return err.message;
-    }
-
-    if (typeof err.reason === 'string') {
-      return err.reason;
-    }
+    if (typeof err.message === 'string') return err.message;
+    if (typeof err.reason === 'string') return err.reason;
 
     try {
       return JSON.stringify(err, null, 2);

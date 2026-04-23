@@ -4,6 +4,7 @@ import {
   hideRuntime,
   killRuntime,
   listRuntimes,
+  onRuntimesChanged,
   type RuntimeRecord,
 } from './taskManagerApi';
 
@@ -30,7 +31,23 @@ export function App() {
   }
 
   useEffect(() => {
+    let disposed = false;
+
     void refresh();
+
+    const unsubscribe = onRuntimesChanged((event) => {
+      if (disposed) {
+        return;
+      }
+
+      setRuntimes(event.runtimes);
+      setLoading(false);
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
   }, []);
 
   const sorted = useMemo(

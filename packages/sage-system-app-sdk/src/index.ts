@@ -7,9 +7,8 @@ export {
 export {
   isSageSystemRuntimeAvailable,
   isSageSystemBridgeInitialized,
-  createSageSystemClient,
   formatSageError,
-  getSageSystemClientSync,
+  getSageSystemClient,
   hasSageSystemBridge,
 } from './client';
 
