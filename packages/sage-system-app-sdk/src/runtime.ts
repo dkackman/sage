@@ -47,7 +47,7 @@ export function initSageSystemRuntimeBridge(): boolean {
   }
 
   const core = createBridgeRuntimeCore({
-    channel: 'sage-system-bridge',
+    channel: SAGE_SYSTEM_BRIDGE_CHANNEL,
     version: SAGE_SYSTEM_BRIDGE_VERSION,
     invokeCommand: 'apps_invoke_system_bridge',
     requestIdPrefix: 'sage-system',
@@ -117,26 +117,28 @@ export function initSageSystemRuntimeBridge(): boolean {
   w.__SAGE_SYSTEM__ = {
     runtimeManager: {
       async listRuntimes() {
-        return await callHost<SageAppRuntimeRecord[]>('system.listRuntimes');
+        return await callHost<SageAppRuntimeRecord[]>(
+          'runtimeManager.listRuntimes',
+        );
       },
 
       async focusRuntime(input: RuntimeTargetParams) {
         return await callHost<SageAppRuntimeRecord>(
-          'system.focusRuntime',
+          'runtimeManager.focusRuntime',
           input,
         );
       },
 
       async hideRuntime(input: RuntimeTargetParams) {
         return await callHost<SageAppRuntimeRecord>(
-          'system.hideRuntime',
+          'runtimeManager.hideRuntime',
           input,
         );
       },
 
       async killRuntime(input: RuntimeTargetParams) {
         return await callHost<SystemKillRuntimeResult>(
-          'system.killRuntime',
+          'runtimeManager.killRuntime',
           input,
         );
       },

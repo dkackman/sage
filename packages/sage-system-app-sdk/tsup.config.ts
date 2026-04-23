@@ -10,6 +10,7 @@ export default defineConfig([
     splitting: false,
     outDir: 'dist',
     clean: true,
+    noExternal: ['@sage-app/sdk'],
   },
   {
     entry: {
@@ -20,5 +21,6 @@ export default defineConfig([
     splitting: false,
     outDir: 'dist',
     clean: false,
+    noExternal: ['@sage-app/sdk'],
   },
 ]);

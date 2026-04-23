@@ -279,6 +279,9 @@ importers:
 
   crates/sage-apps/builtin-apps/system-apps-src:
     dependencies:
+      '@sage-system-app/sdk':
+        specifier: workspace:*
+        version: link:../../../../packages/sage-system-app-sdk
       '@tauri-apps/api':
         specifier: ^2.10.1
         version: 2.10.1
