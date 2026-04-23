@@ -24,7 +24,7 @@ function renderApprovalDetails(currentApproval: PendingApprovalItem) {
         <div className='rounded-md border p-3 text-xs'>
           Grant capability:{' '}
           <span className='font-mono'>
-            {currentApproval.request.capability}
+            {currentApproval.request.params.capability}
           </span>
         </div>
       );
@@ -34,8 +34,8 @@ function renderApprovalDetails(currentApproval: PendingApprovalItem) {
         <div className='rounded-md border p-3 text-xs'>
           Grant network access:{' '}
           <span className='font-mono'>
-            {currentApproval.request.entry.scheme}://
-            {currentApproval.request.entry.host}
+            {currentApproval.request.params.entry.scheme}://
+            {currentApproval.request.params.entry.host}
           </span>
         </div>
       );

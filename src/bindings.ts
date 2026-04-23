@@ -427,6 +427,18 @@ async appsGetCapabilityRegistry() : Promise<SageAppCapabilityDefinitionView[]> {
 },
 async getBuiltinSystemApp(appId: string) : Promise<SageApp | null> {
     return await TAURI_INVOKE("get_builtin_system_app", { appId });
+},
+async appsListRuntimes() : Promise<SageAppRuntimeRecord[]> {
+    return await TAURI_INVOKE("apps_list_runtimes");
+},
+async appsFocusRuntime(params: RuntimeTargetParams) : Promise<SageAppRuntimeRecord> {
+    return await TAURI_INVOKE("apps_focus_runtime", { params });
+},
+async appsHideRuntime(params: RuntimeTargetParams) : Promise<SageAppRuntimeRecord> {
+    return await TAURI_INVOKE("apps_hide_runtime", { params });
+},
+async appsKillRuntime(params: RuntimeTargetParams) : Promise<SystemKillRuntimeResult> {
+    return await TAURI_INVOKE("apps_kill_runtime", { params });
 }
 }
 
@@ -2232,6 +2244,7 @@ export type ResyncCatResponse = Record<string, never>
  * Response from resynchronizing the wallet
  */
 export type ResyncResponse = Record<string, never>
+export type RuntimeTargetParams = { appId: string }
 export type RustBridgeErrorPayload = { code: string; message: string }
 export type RustBridgeErrorResponse = { channel: string; bridgeVersion: string; id: string; ok: boolean; error: RustBridgeErrorPayload }
 export type RustBridgeInvokeResult = { kind: "immediate"; response: RustBridgeResponse } | { kind: "pending" }
@@ -2607,6 +2620,7 @@ spend_bundle: SpendBundleJson }
 export type SubmitTransactionResponse = Record<string, never>
 export type SyncEvent = { type: "start"; ip: string } | { type: "stop" } | { type: "subscribed" } | { type: "derivation" } | { type: "coin_state" } | { type: "transaction_failed"; transaction_id: string; error: string | null } | { type: "puzzle_batch_synced" } | { type: "cat_info" } | { type: "did_info" } | { type: "nft_data" }
 export type SystemAppPresentation = "Taskbar" | "Modal"
+export type SystemKillRuntimeResult = { ok: boolean; appId: string }
 export type SystemSageApp = { common: SageAppCommon; presentation: SystemAppPresentation }
 /**
  * Accept an offer

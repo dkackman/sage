@@ -163,7 +163,7 @@ export function AppsWorkspace() {
         appId: currentApproval.request.app.common.id,
         appName: currentApproval.request.app.common.name,
         requestId: currentApproval.request.requestId,
-        capability: currentApproval.request.capability,
+        capability: currentApproval.request.params.capability,
       };
     }
 
@@ -174,8 +174,8 @@ export function AppsWorkspace() {
         appName: currentApproval.request.app.common.name,
         requestId: currentApproval.request.requestId,
         entry: {
-          scheme: currentApproval.request.entry.scheme,
-          host: currentApproval.request.entry.host,
+          scheme: currentApproval.request.params.entry.scheme,
+          host: currentApproval.request.params.entry.host,
         },
       };
     }

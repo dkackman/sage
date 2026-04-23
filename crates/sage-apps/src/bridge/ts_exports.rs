@@ -1,7 +1,6 @@
 use specta::TypeCollection;
 use specta_typescript::{BigIntExportBehavior, Typescript};
 use sage_api::TransactionResponse;
-use crate::bridge::methods::system::kill_runtime::SystemKillRuntimeResult;
 use crate::bridge::methods::system::runtime_manager::RuntimeTargetParams;
 use crate::bridge::methods::user::app::get_info::{AppGetInfoResult, SageNetworkPermissionInfo};
 use crate::bridge::methods::user::app::{GrantedCapabilitiesChangeEvent, GrantedNetworkWhitelistChangeEvent};
@@ -10,7 +9,7 @@ use crate::bridge::methods::user::app::request_network_whitelist_grant::{Request
 use crate::bridge::methods::user::bridge::ping::BridgePingResult;
 use crate::bridge::methods::user::bridge::send::BridgeSendResult;
 use crate::bridge::methods::user::wallet::send_xch::WalletSendXchParams;
-use crate::runtime::{ReadyToStopParams, RuntimeAckResult, SageAppRuntimeRecord, SageLifecycleBeforeStopDetail, SetBeforeStopListenerParams};
+use crate::runtime::{ReadyToStopParams, RuntimeAckResult, SageAppRuntimeRecord, SageLifecycleBeforeStopDetail, SetBeforeStopListenerParams, SystemKillRuntimeResult};
 
 pub fn export_system_bridge_typescript() -> Result<String, String> {
     let mut types = TypeCollection::default();

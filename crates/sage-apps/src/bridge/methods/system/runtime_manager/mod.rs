@@ -3,24 +3,21 @@ pub mod hide_runtime;
 pub mod kill_runtime;
 pub mod list_runtimes;
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use serde::Deserialize;
-use specta::Type;
 pub use focus_runtime::SystemFocusRuntime;
 pub use hide_runtime::SystemHideRuntime;
 pub use kill_runtime::SystemKillRuntime;
 pub use list_runtimes::SystemListRuntimes;
 
+pub use crate::runtime::{RuntimeTargetParams, SystemKillRuntimeResult};
+
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde::Deserialize;
+use specta::Type;
+
 use crate::bridge::methods::BridgeTools;
 use crate::bridge::{failure, RustBridgeRequest, RustBridgeResponse};
 use crate::runtime::SageAppRuntimeRecord;
-
-#[derive(Debug, Clone, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimeTargetParams {
-    app_id: String,
-}
 
 fn now_ms() -> Result<i64, String> {
     Ok(SystemTime::now()

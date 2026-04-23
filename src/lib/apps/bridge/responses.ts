@@ -1,8 +1,7 @@
 import type {
-  SageBridgeErrorResponse,
   SageBridgeSuccessResponse,
   SageBridgeVersion,
-} from './types';
+} from '@sage-app/sdk';
 
 const BRIDGE_VERSION: SageBridgeVersion = 'v1';
 
@@ -16,22 +15,5 @@ export function success(
     id,
     ok: true,
     result,
-  };
-}
-
-export function failure(
-  id: string,
-  code: string,
-  message: string,
-): SageBridgeErrorResponse {
-  return {
-    channel: 'sage-bridge',
-    bridgeVersion: BRIDGE_VERSION,
-    id,
-    ok: false,
-    error: {
-      code,
-      message,
-    },
   };
 }

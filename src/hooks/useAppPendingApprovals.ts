@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { BridgeApprovalRequest } from '@/lib/apps/bridge';
+import { BridgeApprovalRequest } from '@/lib/apps/bridge/types.ts';
 
 const APPROVAL_TIMEOUT_MS = 30_000;
 

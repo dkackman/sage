@@ -166,6 +166,10 @@ pub fn run() {
             apps::sandbox::get_builtin_test_app,
             apps::permissions::apps_get_capability_registry,
             apps::system_apps::get_builtin_system_app,
+            apps::runtime::manager::apps_list_runtimes,
+            apps::runtime::manager::apps_focus_runtime,
+            apps::runtime::manager::apps_hide_runtime,
+            apps::runtime::manager::apps_kill_runtime,
         ])
         .events(collect_events![SyncEvent]);
 

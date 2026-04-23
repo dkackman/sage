@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { BridgeApprovalRequest } from '@/lib/apps/bridge';
+import { BridgeApprovalRequest } from '@/lib/apps/bridge/types.ts';
 
 interface Args {
   requestApproval: (
@@ -59,6 +59,7 @@ function toBridgeApprovalRequest(
     const parsed = parseJsonOrNull(payload.paramsJson) as {
       capability?: string;
     } | null;
+
     if (!parsed?.capability) {
       return null;
     }
@@ -68,7 +69,9 @@ function toBridgeApprovalRequest(
       app: payload.app,
       sourceLabel: payload.sourceLabel,
       requestId: payload.requestId,
-      capability: parsed.capability,
+      params: {
+        capability: parsed.capability,
+      },
     };
   }
 
@@ -86,9 +89,11 @@ function toBridgeApprovalRequest(
       app: payload.app,
       sourceLabel: payload.sourceLabel,
       requestId: payload.requestId,
-      entry: {
-        scheme: parsed.entry.scheme,
-        host: parsed.entry.host,
+      params: {
+        entry: {
+          scheme: parsed.entry.scheme,
+          host: parsed.entry.host,
+        },
       },
     };
   }

@@ -1,131 +1,152 @@
+import { Webview } from '@tauri-apps/api/webview';
 import {
   commands,
-  type SageApp,
+  type CreateInlineRuntimeArgs,
   type SageAppRuntimeRecord,
   type SystemSageApp,
   type UserSageApp,
+  type SageApp,
+  type RuntimeTargetParams,
 } from '@/bindings';
 
+export type { SageAppRuntimeRecord };
+
+type RuntimeListener = (records: SageAppRuntimeRecord[]) => void;
 type AppLike = SageApp | UserSageApp | SystemSageApp;
 
-function isBuiltinTestApp(app: AppLike): boolean {
-  return app.common.id.startsWith('__sage_test_');
-}
+const listeners = new Set<RuntimeListener>();
+let cachedRuntimes: SageAppRuntimeRecord[] = [];
+let pollTimer: number | null = null;
+let polling = false;
 
-function shouldDebugTestAppWindows(app: AppLike): boolean {
-  return (
-    import.meta.env.DEV &&
-    import.meta.env.VITE_SAGE_DEBUG_TEST_APPS === '1' &&
-    isBuiltinTestApp(app)
-  );
-}
-
-export function shouldUseIncognito(app: AppLike): boolean {
-  const hasPersistentStorage =
-    app.common.grantedPermissions.capabilities.includes('persistent_storage');
-
-  if (!hasPersistentStorage) {
-    return true;
+async function refreshRuntimes(): Promise<SageAppRuntimeRecord[]> {
+  if (polling) {
+    return cachedRuntimes;
   }
 
-  if (app.common.capabilityFlags.storageMayContainSecrets) {
-    return true;
-  }
+  polling = true;
+  try {
+    const next = await commands.appsListRuntimes();
+    cachedRuntimes = next;
 
-  return app.common.capabilityFlags.hasSecretAccess;
+    for (const listener of listeners) {
+      listener(next);
+    }
+
+    return next;
+  } catch (err) {
+    console.error('Failed to refresh app runtimes:', err);
+    return cachedRuntimes;
+  } finally {
+    polling = false;
+  }
 }
 
-function buildSystemBridgeRequest(method: string, params?: unknown) {
-  return {
-    channel: 'sage-system-bridge' as const,
-    bridgeVersion: 'v1' as const,
-    id: `sage-system-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    method,
-    paramsJson: params === undefined ? null : JSON.stringify(params),
+function ensurePolling() {
+  if (pollTimer != null) {
+    return;
+  }
+
+  void refreshRuntimes();
+
+  pollTimer = window.setInterval(() => {
+    void refreshRuntimes();
+  }, 1000);
+}
+
+function maybeStopPolling() {
+  if (listeners.size > 0) {
+    return;
+  }
+
+  if (pollTimer != null) {
+    window.clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+function runtimeTarget(appId: string): RuntimeTargetParams {
+  return { appId };
+}
+
+export function subscribeAppRuntimes(listener: RuntimeListener): () => void {
+  listeners.add(listener);
+  listener(cachedRuntimes);
+  ensurePolling();
+
+  return () => {
+    listeners.delete(listener);
+    maybeStopPolling();
   };
 }
 
-async function invokeSystemBridge<T>(
-  method: string,
-  params?: unknown,
-): Promise<T> {
-  const result = await commands.appsInvokeSystemBridge(
-    buildSystemBridgeRequest(method, params),
-  );
-
-  if (result.kind === 'pending') {
-    throw new Error(
-      `System bridge method ${method} unexpectedly returned pending`,
-    );
-  }
-
-  const response = result.response;
-
-  if ('error' in response) {
-    throw new Error(response.error.message);
-  }
-
-  return JSON.parse(response.resultJson) as T;
+export function listAppRuntimes(): SageAppRuntimeRecord[] {
+  return cachedRuntimes;
 }
 
-export async function createInlineRuntime(
-  app: AppLike,
-  options?: {
-    visible?: boolean;
-    internal?: boolean;
-    query?: Record<string, string>;
-    path?: string;
-  },
-): Promise<SageAppRuntimeRecord> {
-  const isIncognito = shouldUseIncognito(app);
+export async function getRuntimeWebview(
+  appId: string,
+): Promise<Webview | null> {
+  const runtime =
+    cachedRuntimes.find((item) => item.appId === appId) ??
+    (await refreshRuntimes()).find((item) => item.appId === appId);
 
-  if (!isIncognito && app.common.capabilityFlags.hasSecretAccess) {
-    await commands.appsMarkStorageMayContainSecrets(app.common.id);
+  if (!runtime) {
+    return null;
   }
 
-  return await commands.appsCreateInlineRuntime({
-    appId: app.common.id,
-    visible: options?.visible ?? true,
-    internal: options?.internal ?? false,
-    debugLayout: shouldDebugTestAppWindows(app),
-    query: options?.query ?? {},
-    path: options?.path ?? null,
-  });
+  return await Webview.getByLabel(runtime.webviewLabel).catch(() => null);
+}
+
+export async function markRuntimeVisible(
+  appId: string,
+  visible: boolean,
+): Promise<void> {
+  if (visible) {
+    await commands.appsFocusRuntime(runtimeTarget(appId));
+  } else {
+    await commands.appsHideRuntime(runtimeTarget(appId));
+  }
+
+  await refreshRuntimes();
+}
+
+export async function focusRuntime(appId: string): Promise<void> {
+  await commands.appsFocusRuntime(runtimeTarget(appId));
+  await refreshRuntimes();
+}
+
+export async function hideRuntime(appId: string): Promise<void> {
+  await commands.appsHideRuntime(runtimeTarget(appId));
+  await refreshRuntimes();
+}
+
+export async function killRuntime(appId: string): Promise<void> {
+  await commands.appsKillRuntime(runtimeTarget(appId));
+  await refreshRuntimes();
+}
+
+export async function closeAppRuntime(
+  appId: string,
+  options?: { timeoutMs?: number },
+): Promise<void> {
+  void options;
+  await killRuntime(appId);
 }
 
 export async function ensureInlineRuntime(
   app: AppLike,
-  options?: { visible?: boolean },
 ): Promise<SageAppRuntimeRecord> {
-  return await createInlineRuntime(app, {
-    visible: options?.visible ?? true,
+  const args: CreateInlineRuntimeArgs = {
+    appId: app.common.id,
+    visible: true,
     internal: false,
-  });
-}
+    debugLayout: false,
+    path: null,
+    query: {},
+  };
 
-export async function listAppRuntimes(): Promise<SageAppRuntimeRecord[]> {
-  return await invokeSystemBridge<SageAppRuntimeRecord[]>(
-    'system.listRuntimes',
-  );
-}
-
-export async function focusRuntime(
-  appId: string,
-): Promise<SageAppRuntimeRecord> {
-  return await invokeSystemBridge<SageAppRuntimeRecord>('system.focusRuntime', {
-    appId,
-  });
-}
-
-export async function killRuntime(
-  appId: string,
-): Promise<{ ok: boolean; appId: string }> {
-  return await invokeSystemBridge<{ ok: boolean; appId: string }>(
-    'system.killRuntime',
-    { appId },
-  );
-}
-
-export async function closeAppRuntime(appId: string): Promise<void> {
-  await killRuntime(appId);
+  const created = await commands.appsCreateInlineRuntime(args);
+  await refreshRuntimes();
+  return created;
 }
