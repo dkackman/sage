@@ -9,12 +9,13 @@ import {
 } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
+  type AppLaunchGateResult,
   commands,
   type ListedSageApp,
   type SageAppUrlPreview,
   type SageGrantedPermissions,
   type SandboxStateView,
-  SystemSageApp,
+  type SystemSageApp,
   type UserSageApp,
 } from '@/bindings';
 import { useAppPendingApprovals } from '@/hooks/useAppPendingApprovals';
@@ -38,6 +39,7 @@ interface AppsContextValue {
   updateAvailability: Record<string, SageAppUrlPreview | null>;
   bridgeHostReady: boolean;
   sandboxState: SandboxStateView | null;
+  launchGatesByAppId: Record<string, AppLaunchGateResult>;
 
   currentApproval: PendingApprovalItem | null;
   queuedApprovalCount: number;
@@ -46,8 +48,12 @@ interface AppsContextValue {
   rejectCurrentApproval: () => void;
 
   getApp: (appId: string) => UserSageApp | undefined;
+  getListedApp: (appId: string) => InstalledEntry | undefined;
+  getLaunchGate: (appId: string) => AppLaunchGateResult | null;
+
   refresh: () => Promise<void>;
   refreshInstalledApps: () => Promise<void>;
+  refreshLaunchGates: (listed?: ListedSageApp[]) => Promise<void>;
   setBusy: (appId: string, busy: boolean) => void;
   setUpdateAvailability: (
     updater:
@@ -66,7 +72,6 @@ interface AppsContextValue {
     grantedPermissions: SageGrantedPermissions,
   ) => Promise<UserSageApp>;
   uninstallApp: (appId: string) => Promise<void>;
-  getListedApp: (appId: string) => InstalledEntry | undefined;
   checkForUpdate: (appId: string) => Promise<SageAppUrlPreview | null>;
   performAppUpdate: (
     appId: string,
@@ -80,19 +85,30 @@ interface AppsContextValue {
 const AppsContext = createContext<AppsContextValue | null>(null);
 
 function formatError(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-
-  if (typeof err === 'string') {
-    return err;
-  }
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
 
   try {
     return JSON.stringify(err, null, 2);
   } catch {
     return String(err);
   }
+}
+
+function isLaunchGateEntry(
+  entry: readonly [string, AppLaunchGateResult] | null,
+): entry is readonly [string, AppLaunchGateResult] {
+  return entry !== null;
+}
+
+function isInstalledEntry(entry: ListedSageApp): entry is InstalledEntry {
+  return entry.kind === 'user' || entry.kind === 'system';
+}
+
+function isUserListedApp(
+  entry: ListedSageApp,
+): entry is { kind: 'user' } & UserSageApp {
+  return entry.kind === 'user';
 }
 
 export function AppsProvider({ children }: { children: ReactNode }) {
@@ -106,6 +122,9 @@ export function AppsProvider({ children }: { children: ReactNode }) {
   const [sandboxState, setSandboxState] = useState<SandboxStateView | null>(
     null,
   );
+  const [launchGatesByAppId, setLaunchGatesByAppId] = useState<
+    Record<string, AppLaunchGateResult>
+  >({});
 
   const {
     currentApproval,
@@ -116,16 +135,29 @@ export function AppsProvider({ children }: { children: ReactNode }) {
     rejectCurrentApproval,
   } = useAppPendingApprovals();
 
-  const { isReady: bridgeHostReady } = useBridgeHost({
-    requestApproval,
-  });
+  const { isReady: bridgeHostReady } = useBridgeHost({ requestApproval });
 
-  const getListedApp = useCallback(
-    (appId: string): InstalledEntry | undefined => {
-      return apps.find(
-        (item): item is InstalledEntry =>
-          (item.kind === 'user' || item.kind === 'system') &&
-          item.common.id === appId,
+  const refreshLaunchGates = useCallback(
+    async (listed: ListedSageApp[] = apps) => {
+      const entries = await Promise.all(
+        listed.filter(isInstalledEntry).map(async (app) => {
+          try {
+            return [
+              app.common.id,
+              await commands.appsGetAppLaunchGate(app.common.id),
+            ] as const;
+          } catch (err) {
+            console.error(
+              `Failed to refresh launch gate for ${app.common.id}:`,
+              err,
+            );
+            return null;
+          }
+        }),
+      );
+
+      setLaunchGatesByAppId(
+        Object.fromEntries(entries.filter(isLaunchGateEntry)),
       );
     },
     [apps],
@@ -143,6 +175,27 @@ export function AppsProvider({ children }: { children: ReactNode }) {
 
       setApps(listed);
       setSandboxState(sandbox);
+
+      const entries = await Promise.all(
+        listed.filter(isInstalledEntry).map(async (app) => {
+          try {
+            return [
+              app.common.id,
+              await commands.appsGetAppLaunchGate(app.common.id),
+            ] as const;
+          } catch (err) {
+            console.error(
+              `Failed to refresh launch gate for ${app.common.id}:`,
+              err,
+            );
+            return null;
+          }
+        }),
+      );
+
+      setLaunchGatesByAppId(
+        Object.fromEntries(entries.filter(isLaunchGateEntry)),
+      );
     } catch (err) {
       setError(formatError(err));
     } finally {
@@ -163,11 +216,10 @@ export function AppsProvider({ children }: { children: ReactNode }) {
         unsubscribe = await listen<SandboxStateView>(
           'apps:sandbox-state-updated',
           (event) => {
-            if (isCancelled) {
-              return;
-            }
+            if (isCancelled) return;
 
             setSandboxState(event.payload);
+            void refreshLaunchGates();
           },
         );
       } catch (err) {
@@ -181,18 +233,14 @@ export function AppsProvider({ children }: { children: ReactNode }) {
 
     return () => {
       isCancelled = true;
-      if (unsubscribe) {
-        void unsubscribe();
-      }
+      if (unsubscribe) void unsubscribe();
     };
-  }, []);
+  }, [refreshLaunchGates]);
 
   const currentSandboxRunId = sandboxState?.currentRun?.runId ?? null;
 
   useEffect(() => {
-    if (!currentSandboxRunId) {
-      return;
-    }
+    if (!currentSandboxRunId) return;
 
     let isCancelled = false;
 
@@ -201,6 +249,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
         const next = await commands.appsGetSandboxState();
         if (!isCancelled) {
           setSandboxState(next);
+          void refreshLaunchGates();
         }
       } catch (err) {
         if (!isCancelled) {
@@ -219,15 +268,25 @@ export function AppsProvider({ children }: { children: ReactNode }) {
       isCancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [currentSandboxRunId]);
+  }, [currentSandboxRunId, refreshLaunchGates]);
 
   const refresh = refreshInstalledApps;
 
-  function isUserListedApp(
-    entry: ListedSageApp,
-  ): entry is { kind: 'user' } & UserSageApp {
-    return entry.kind === 'user';
-  }
+  const getListedApp = useCallback(
+    (appId: string): InstalledEntry | undefined => {
+      return apps.find(
+        (item): item is InstalledEntry =>
+          isInstalledEntry(item) && item.common.id === appId,
+      );
+    },
+    [apps],
+  );
+
+  const getLaunchGate = useCallback(
+    (appId: string): AppLaunchGateResult | null =>
+      launchGatesByAppId[appId] ?? null,
+    [launchGatesByAppId],
+  );
 
   const getApp = useCallback(
     (appId: string): UserSageApp | undefined => {
@@ -240,10 +299,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
   );
 
   const setBusy = useCallback((appId: string, busy: boolean) => {
-    setBusyAppIds((prev) => ({
-      ...prev,
-      [appId]: busy,
-    }));
+    setBusyAppIds((prev) => ({ ...prev, [appId]: busy }));
   }, []);
 
   const setUpdateAvailabilityState = useCallback(
@@ -291,12 +347,17 @@ export function AppsProvider({ children }: { children: ReactNode }) {
       try {
         await commands.uninstallApp(appId);
 
-        setUpdateAvailability((prev) => {
-          const next = { ...prev };
-          return Object.fromEntries(
-            Object.entries(next).filter(([key]) => key !== appId),
-          );
-        });
+        setUpdateAvailability((prev) =>
+          Object.fromEntries(
+            Object.entries(prev).filter(([key]) => key !== appId),
+          ),
+        );
+
+        setLaunchGatesByAppId((prev) =>
+          Object.fromEntries(
+            Object.entries(prev).filter(([key]) => key !== appId),
+          ),
+        );
 
         await refreshInstalledApps();
       } finally {
@@ -309,10 +370,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
   const checkForUpdate = useCallback(async (appId: string) => {
     const preview = await commands.checkAppUpdate(appId);
 
-    setUpdateAvailability((prev) => ({
-      ...prev,
-      [appId]: preview,
-    }));
+    setUpdateAvailability((prev) => ({ ...prev, [appId]: preview }));
 
     return preview;
   }, []);
@@ -345,10 +403,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        setUpdateAvailability((prev) => ({
-          ...prev,
-          [appId]: null,
-        }));
+        setUpdateAvailability((prev) => ({ ...prev, [appId]: null }));
 
         await refreshInstalledApps();
         return installed;
@@ -370,8 +425,9 @@ export function AppsProvider({ children }: { children: ReactNode }) {
   const rerunSandboxTests = useCallback(async () => {
     const next = await commands.appsRerunSandboxTests();
     setSandboxState(next);
+    await refreshLaunchGates();
     return next;
-  }, []);
+  }, [refreshLaunchGates]);
 
   const value = useMemo<AppsContextValue>(
     () => ({
@@ -382,6 +438,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
       updateAvailability,
       bridgeHostReady,
       sandboxState,
+      launchGatesByAppId,
 
       currentApproval,
       queuedApprovalCount,
@@ -390,15 +447,18 @@ export function AppsProvider({ children }: { children: ReactNode }) {
       rejectCurrentApproval,
 
       getApp,
+      getListedApp,
+      getLaunchGate,
+
       refresh,
       refreshInstalledApps,
+      refreshLaunchGates,
       setBusy,
       setUpdateAvailability: setUpdateAvailabilityState,
 
       installApp,
       installUrlApp,
       uninstallApp,
-      getListedApp,
       checkForUpdate,
       performAppUpdate,
       clearAppStorage,
@@ -412,20 +472,23 @@ export function AppsProvider({ children }: { children: ReactNode }) {
       updateAvailability,
       bridgeHostReady,
       sandboxState,
+      launchGatesByAppId,
       currentApproval,
       queuedApprovalCount,
       currentApprovalSecondsLeft,
       approveCurrentApproval,
       rejectCurrentApproval,
       getApp,
+      getListedApp,
+      getLaunchGate,
       refresh,
       refreshInstalledApps,
+      refreshLaunchGates,
       setBusy,
       setUpdateAvailabilityState,
       installApp,
       installUrlApp,
       uninstallApp,
-      getListedApp,
       checkForUpdate,
       performAppUpdate,
       clearAppStorage,

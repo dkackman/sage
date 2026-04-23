@@ -3,6 +3,7 @@ import { InstallAppForm } from '@/components/apps/InstallAppForm';
 import { CorruptedAppCard } from '@/components/apps/CorruptedAppCard';
 import { AppsLaunchpadContextMenu } from '@/components/apps/AppsLaunchpadContextMenu';
 import { Button } from '@/components/ui/button';
+import { formatSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
 import {
   Dialog,
   DialogContent,
@@ -166,6 +167,7 @@ export function Apps() {
     busyAppIds,
     sandboxState,
     rerunSandboxTests,
+    getLaunchGate,
   } = useApps();
 
   const liveSandboxState = getLiveSandboxState(sandboxState);
@@ -707,7 +709,17 @@ export function Apps() {
                 <AppTile
                   key={app.common.id}
                   app={app}
-                  sandboxState={sandboxState}
+                  launchDecision={
+                    app.kind === 'system'
+                      ? {
+                          allowed: true,
+                          title: 'System app',
+                          description: 'System apps are managed by Sage.',
+                        }
+                      : formatSandboxLaunchDecision(
+                          getLaunchGate(app.common.id),
+                        )
+                  }
                   onOpen={() => {
                     navigate(`/apps/${app.common.id}`);
                   }}

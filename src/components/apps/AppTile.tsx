@@ -1,33 +1,30 @@
-import type { SageApp, SandboxStateView } from '@/bindings';
-import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
+import type { SageApp } from '@/bindings';
+import type { SandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
 
 interface Props {
   app: SageApp;
-  sandboxState: SandboxStateView | null;
+  launchDecision: SandboxLaunchDecision;
   onOpen: () => void;
   onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
-export function AppTile({ app, sandboxState, onOpen, onContextMenu }: Props) {
-  const iconSrc = `sage-app://${app.common.originId}/${app.common.iconFile}`;
-  const decision = getSandboxLaunchDecision({
-    app,
-    sandboxState,
-  });
+export function AppTile({ app, launchDecision, onOpen, onContextMenu }: Props) {
+  const iconSrc =
+    app.kind === 'system'
+      ? `sage-system-app://${app.common.originId}/${app.common.iconFile}`
+      : `sage-app://${app.common.originId}/${app.common.iconFile}`;
 
   const isChecking =
-    !decision.allowed && decision.title === 'Sandbox tests are still running';
+    !launchDecision.allowed &&
+    launchDecision.title === 'Sandbox tests are still running';
 
-  const isBlocked = !decision.allowed && !isChecking;
+  const isBlocked = !launchDecision.allowed && !isChecking;
 
   return (
     <button
       type='button'
       onClick={() => {
-        if (!decision.allowed) {
-          return;
-        }
-
+        if (!launchDecision.allowed) return;
         onOpen();
       }}
       onContextMenu={onContextMenu}
@@ -54,14 +51,13 @@ export function AppTile({ app, sandboxState, onOpen, onContextMenu }: Props) {
 
       <div className='min-w-0 w-full'>
         <div className='truncate text-sm font-medium'>{app.common.name}</div>
-
         <div className='truncate text-xs text-muted-foreground'>
           v{app.common.version}
         </div>
 
-        {!decision.allowed && !isChecking ? (
+        {isBlocked ? (
           <div className='relative z-20 mt-1 text-xs text-amber-600'>
-            {decision.title}
+            {launchDecision.title}
           </div>
         ) : null}
       </div>

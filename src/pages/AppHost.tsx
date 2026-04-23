@@ -3,7 +3,7 @@ import { useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApps } from '@/contexts/AppsContext';
 import { useAppEmbeddedRuntime } from '@/hooks/useAppEmbeddedRuntime.ts';
-import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
+import { formatSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
 
 function AppNotFound() {
   return (
@@ -36,16 +36,13 @@ function AppBlocked({
 export function AppHost() {
   const { appId = '' } = useParams();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { getListedApp, loading, sandboxState } = useApps();
+  const { getListedApp, getLaunchGate, loading } = useApps();
 
   const app = getListedApp(appId);
 
   const userLaunchDecision =
     app?.kind === 'user'
-      ? getSandboxLaunchDecision({
-          app,
-          sandboxState,
-        })
+      ? formatSandboxLaunchDecision(getLaunchGate(app.common.id))
       : null;
 
   const routeableSystemApp =
@@ -57,7 +54,7 @@ export function AppHost() {
       ? routeableSystemApp
       : !!userLaunchDecision?.allowed);
 
-  useAppEmbeddedRuntime({
+  const { attaching, attachError } = useAppEmbeddedRuntime({
     app: shouldMountRuntime ? app : null,
     containerRef,
   });
@@ -100,6 +97,17 @@ export function AppHost() {
 
   return (
     <div className='flex h-full min-h-0 w-full flex-col overflow-hidden'>
+      {attachError ? (
+        <AppBlocked title='Failed to launch app' description={attachError} />
+      ) : attaching ? (
+        <div className='mx-auto w-full max-w-4xl p-4 md:p-6'>
+          <Alert>
+            <AlertTitle>Starting app...</AlertTitle>
+            <AlertDescription>Please wait.</AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
+
       <div className='flex-1 min-h-0'>
         <div
           ref={containerRef}

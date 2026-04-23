@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { platform } from '@tauri-apps/plugin-os';
 import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
 import {
@@ -16,12 +16,26 @@ async function getMacWindowedTopInsetPx(): Promise<number> {
   return isMac && !isMaximized ? 30 : 0;
 }
 
+function formatError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+
+  try {
+    return JSON.stringify(err, null, 2);
+  } catch {
+    return String(err);
+  }
+}
+
 interface Args {
   app: SageApp | null | undefined;
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [attaching, setAttaching] = useState(false);
+
   const syncBounds = useCallback(
     async (appId: string) => {
       const webview = await getRuntimeWebview(appId);
@@ -31,14 +45,12 @@ export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
         return;
       }
 
+      const inset = await getMacWindowedTopInsetPx();
       const rect = container.getBoundingClientRect();
       const width = Math.max(1, Math.round(rect.width));
-      const height = Math.max(
-        1,
-        Math.round(rect.height - (await getMacWindowedTopInsetPx())),
-      );
+      const height = Math.max(1, Math.round(rect.height - inset));
       const x = Math.round(rect.left);
-      const y = Math.round(rect.top + (await getMacWindowedTopInsetPx()));
+      const y = Math.round(rect.top + inset);
 
       await webview.setPosition(new LogicalPosition(x, y));
       await webview.setSize(new LogicalSize(width, height));
@@ -50,7 +62,7 @@ export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
     (appId: string) => {
       requestAnimationFrame(() => {
         void syncBounds(appId).catch((err) => {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = formatError(err);
 
           if (message.includes('webview not found')) {
             return;
@@ -64,27 +76,44 @@ export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
   );
 
   useEffect(() => {
+    setAttachError(null);
+
     if (!app || !containerRef.current) {
+      setAttaching(false);
       return;
     }
 
     const installedApp = app;
 
     let disposed = false;
+    let runtimeCreated = false;
     let resizeObserver: ResizeObserver | null = null;
     let removeWindowResize: (() => void) | null = null;
     let delayedSyncTimers: number[] = [];
 
     const clearDelayedSyncTimers = () => {
-      delayedSyncTimers.forEach((id) => {
-        window.clearTimeout(id);
-      });
+      delayedSyncTimers.forEach((id) => window.clearTimeout(id));
       delayedSyncTimers = [];
     };
 
     const mount = async () => {
+      setAttaching(true);
+
       await ensureInlineRuntime(installedApp);
+      runtimeCreated = true;
+
+      if (disposed) {
+        return;
+      }
+
       await markRuntimeVisible(installedApp.common.id, true);
+
+      if (disposed) {
+        return;
+      }
+
+      setAttachError(null);
+      setAttaching(false);
 
       scheduleSyncBounds(installedApp.common.id);
 
@@ -122,12 +151,26 @@ export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
     };
 
     void mount().catch((err) => {
+      if (disposed) {
+        return;
+      }
+
+      const message = formatError(err);
+      setAttachError(message);
+      setAttaching(false);
       console.error('Failed to attach app runtime:', err);
     });
 
     return () => {
       disposed = true;
-      void markRuntimeVisible(installedApp.common.id, false);
+      setAttaching(false);
+
+      if (runtimeCreated) {
+        void markRuntimeVisible(installedApp.common.id, false).catch(() => {
+          //
+        });
+      }
+
       resizeObserver?.disconnect();
       removeWindowResize?.();
       clearDelayedSyncTimers();
@@ -135,6 +178,8 @@ export function useAppEmbeddedRuntime({ app, containerRef }: Args) {
   }, [app, containerRef, scheduleSyncBounds]);
 
   return {
+    attaching,
+    attachError,
     scheduleSyncBounds,
   };
 }

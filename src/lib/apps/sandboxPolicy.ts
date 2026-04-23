@@ -1,15 +1,5 @@
-import type {
-  SandboxStateView,
-  SageApp,
-  SystemSageApp,
-  UserSageApp,
-} from '@/bindings';
-import {
-  evaluateAppLaunchGate,
-  getEffectiveSandboxState,
-} from '@/lib/apps/sandbox';
-
-type AppLike = SageApp | UserSageApp | SystemSageApp;
+import type { AppLaunchGateResult } from '@/bindings';
+import { formatCapabilityLabel } from '@/lib/apps/sandbox';
 
 export interface SandboxLaunchDecision {
   allowed: boolean;
@@ -17,15 +7,10 @@ export interface SandboxLaunchDecision {
   description: string;
 }
 
-export function getSandboxLaunchDecision(args: {
-  app: AppLike;
-  sandboxState: SandboxStateView | null | undefined;
-}): SandboxLaunchDecision {
-  const { app, sandboxState } = args;
-
-  const effectiveSandboxState = getEffectiveSandboxState(sandboxState);
-
-  if (!effectiveSandboxState) {
+export function formatSandboxLaunchDecision(
+  gate: AppLaunchGateResult | null | undefined,
+): SandboxLaunchDecision {
+  if (!gate) {
     return {
       allowed: false,
       title: 'Sandbox tests are still running',
@@ -33,8 +18,6 @@ export function getSandboxLaunchDecision(args: {
         'Apps are allowed to launch only when all required sandbox capabilities have passed.',
     };
   }
-
-  const gate = evaluateAppLaunchGate(app, effectiveSandboxState);
 
   if (gate.allowed) {
     return {
@@ -44,13 +27,15 @@ export function getSandboxLaunchDecision(args: {
     };
   }
 
-  if (gate.kind === 'running') {
+  if (gate.kind === 'sandboxPending') {
     return {
       allowed: false,
       title: 'Sandbox tests are still running',
       description:
-        gate.message ||
-        'Apps are allowed to launch only when all required sandbox capabilities have passed.',
+        gate.message ??
+        (gate.capability
+          ? `Sandbox tests are still running for ${formatCapabilityLabel(gate.capability)}.`
+          : 'Apps are allowed to launch only when all required sandbox capabilities have passed.'),
     };
   }
 
@@ -58,7 +43,9 @@ export function getSandboxLaunchDecision(args: {
     allowed: false,
     title: 'Sandbox test failed',
     description:
-      gate.message ||
-      'This app cannot be launched because a required sandbox capability failed.',
+      gate.message ??
+      (gate.capability
+        ? `Sandbox test failed for ${formatCapabilityLabel(gate.capability)}.`
+        : 'This app cannot be launched because a required sandbox capability failed.'),
   };
 }

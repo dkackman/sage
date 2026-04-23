@@ -29,6 +29,33 @@ fn app_requires_sandbox_gate(app: &SageApp) -> bool {
     !app.id().starts_with("__sage_test_")
 }
 
+fn app_has_capability(app: &SageApp, capability: &str) -> bool {
+    app.granted_permissions()
+        .capabilities
+        .iter()
+        .any(|cap| cap == capability)
+}
+
+fn app_uses_persistent_storage(app: &SageApp) -> bool {
+    app_has_capability(app, "persistent_storage")
+}
+
+fn required_capabilities_for_app(app: &SageApp) -> Vec<SandboxCapability> {
+    let mut caps = vec![
+        SandboxCapability::StorageIsolationFromSage,
+        SandboxCapability::NetworkAllowlistEnforced,
+    ];
+
+    if app_uses_persistent_storage(app) {
+        caps.push(SandboxCapability::StoragePersistenceNormal);
+        caps.push(SandboxCapability::StorageClearCycle);
+    } else {
+        caps.push(SandboxCapability::StorageNonPersistenceIncognito);
+    }
+
+    caps
+}
+
 pub fn evaluate_app_launch_gate(
     app: &SageApp,
     effective: &SandboxState,
@@ -42,13 +69,7 @@ pub fn evaluate_app_launch_gate(
         };
     }
 
-    let critical_caps = [
-        SandboxCapability::StorageIsolationFromSage,
-        SandboxCapability::StorageClearCycle,
-        SandboxCapability::NetworkAllowlistEnforced,
-    ];
-
-    for capability in critical_caps {
+    for capability in required_capabilities_for_app(app) {
         match capability_status(effective, capability) {
             SandboxCapabilityStatus::Passed => {}
             SandboxCapabilityStatus::Pending | SandboxCapabilityStatus::Running => {
