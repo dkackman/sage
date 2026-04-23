@@ -1,0 +1,5 @@
+{
+  "name": "task-manager-system-app",
+  "private": true,
+  "type": "module"
+}
