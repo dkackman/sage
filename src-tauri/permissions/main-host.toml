@@ -120,6 +120,7 @@ commands.allow = [
     "download_cni_offercode",
     "get_logs",
     "is_asset_owned",
+    "get_xch_usd_price",
     "apps_create_inline_runtime",
     "apps_clear_runtime_browsing_data",
     "apps_resolve_bridge_approval",
@@ -139,5 +140,8 @@ commands.allow = [
     "apps_update_permissions",
     "apps_mark_storage_may_contain_secrets",
     "apps_get_capability_registry",
-    "get_xch_usd_price"
+    "apps_list_runtimes",
+    "apps_focus_runtime",
+    "apps_hide_runtime",
+    "apps_kill_runtime",
 ]
