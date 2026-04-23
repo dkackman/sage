@@ -40,6 +40,10 @@ fn app_uses_persistent_storage(app: &SageApp) -> bool {
     app_has_capability(app, "persistent_storage")
 }
 
+fn app_has_secret_access(app: &SageApp) -> bool {
+    app.capability_flags().has_secret_access
+}
+
 fn required_capabilities_for_app(app: &SageApp) -> Vec<SandboxCapability> {
     let mut caps = vec![
         SandboxCapability::StorageIsolationFromSage,
@@ -48,7 +52,10 @@ fn required_capabilities_for_app(app: &SageApp) -> Vec<SandboxCapability> {
 
     if app_uses_persistent_storage(app) {
         caps.push(SandboxCapability::StoragePersistenceNormal);
-        caps.push(SandboxCapability::StorageClearCycle);
+
+        if app_has_secret_access(app) {
+            caps.push(SandboxCapability::StorageClearCycle);
+        }
     } else {
         caps.push(SandboxCapability::StorageNonPersistenceIncognito);
     }

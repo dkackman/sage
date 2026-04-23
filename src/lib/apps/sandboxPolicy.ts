@@ -39,13 +39,19 @@ export function formatSandboxLaunchDecision(
     };
   }
 
+  const capabilityLabel = gate.capability
+    ? formatCapabilityLabel(gate.capability)
+    : null;
+
   return {
     allowed: false,
-    title: 'Sandbox test failed',
+    title: capabilityLabel
+      ? `${capabilityLabel} failed`
+      : 'Sandbox test failed',
     description:
       gate.message ??
-      (gate.capability
-        ? `Sandbox test failed for ${formatCapabilityLabel(gate.capability)}.`
+      (capabilityLabel
+        ? `This app cannot be launched because ${capabilityLabel} failed.`
         : 'This app cannot be launched because a required sandbox capability failed.'),
   };
 }
