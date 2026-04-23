@@ -174,7 +174,7 @@ export function initSageRuntimeBridge(): boolean {
         if (isGrantedCapabilitiesChangeEvent(data)) {
           window.dispatchEvent(
             new CustomEvent<GrantedCapabilitiesChangeEvent>(
-              'sage:granted-capabilities-change',
+              'app:granted-capabilities-change',
               { detail: data },
             ),
           );
@@ -184,7 +184,7 @@ export function initSageRuntimeBridge(): boolean {
         if (isGrantedNetworkWhitelistChangeEvent(data)) {
           window.dispatchEvent(
             new CustomEvent<GrantedNetworkWhitelistChangeEvent>(
-              'sage:granted-network-whitelist-change',
+              'app:granted-network-whitelist-change',
               { detail: data },
             ),
           );
