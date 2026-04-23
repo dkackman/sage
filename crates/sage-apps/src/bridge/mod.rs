@@ -347,13 +347,13 @@ async fn apps_invoke_bridge_internal(
         let approval_id = Uuid::new_v4().to_string();
 
         {
-            let bridge_state = app.state::<BridgeState>();
-            let mut pending = bridge_state.pending_approvals.lock().await;
+            let apps_state = app.state::<AppsHostState>();
+            let mut pending = apps_state.bridge.pending_approvals.lock().await;
             pending.insert(
                 approval_id.clone(),
                 PendingBridgeApproval {
                     app: app_model.clone(),
-                    source_label: source_label.clone(),
+                    source_label: source_label.to_string(),
                     request: request.clone(),
                 },
             );
