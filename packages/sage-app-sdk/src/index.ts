@@ -9,27 +9,4 @@ export {
   hasSageBridge,
 } from './client';
 
-export type {
-  Amount,
-  SageAppInfo,
-  SageBridgeErrorResponse,
-  SageBridgeRequest,
-  SageBridgeResponse,
-  SageBridgeRuntimeEvent,
-  SageBridgeSendPayload,
-  SageBridgeSuccessResponse,
-  SageBridgeVersion,
-  SageClient,
-  SageRequestedPermissions,
-  SageRequestedNetworkWhitelistEntry,
-  SageLifecycleBeforeStopDetail,
-  SageNetworkPermission,
-  SageGrantedCapabilitiesChangeEvent,
-  SageGrantedNetworkWhitelistChangeEvent,
-  SageRequestCapabilityGrantInput,
-  SageRequestCapabilityGrantResult,
-  SageRequestNetworkWhitelistGrantInput,
-  SageRequestNetworkWhitelistGrantResult,
-  SageWalletSendXchRequest,
-  TransactionResponse,
-} from './types';
+export type * from './generated-types';

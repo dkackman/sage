@@ -1,48 +1,28 @@
+import {
+  AppGetInfoResult,
+  BridgePingResult,
+  BridgeSendResult,
+  GrantedCapabilitiesChangeEvent,
+  GrantedNetworkWhitelistChangeEvent,
+  ReadyToStopParams,
+  RequestCapabilityGrantParams,
+  RequestCapabilityGrantResult,
+  RequestNetworkWhitelistGrantParams,
+  RequestNetworkWhitelistGrantResult,
+  RuntimeAckResult,
+  SageLifecycleBeforeStopDetail,
+  SetBeforeStopListenerParams,
+  TransactionResponse,
+  WalletSendXchParams,
+} from './generated-types';
+
+export * from './generated-types';
+
 export type SageBridgeVersion = 'v1';
 
-export type SageNetworkPermission = {
-  scheme: string;
-  host: string;
-  required: boolean;
-};
-
-export type SageRequestedPermissions = {
-  network?: SageRequestedNetworkPermissions;
-  capabilities?: SageRequestedCapabilities;
-};
-
-export type SageNetworkWhitelistEntry = {
-  scheme: string;
-  host: string;
-  required?: boolean;
-};
-
-export type SageRequestedCapabilities = {
-  required?: string[];
-  optional?: string[];
-};
-
-export type SageRequestedNetworkPermissions = {
-  whitelist?: SageRequestedNetworkWhitelist;
-};
-
-export type SageRequestedNetworkWhitelist = {
-  required?: SageRequestedNetworkWhitelistEntry[];
-  optional?: SageRequestedNetworkWhitelistEntry[];
-};
-
-export type SageRequestedNetworkWhitelistEntry = {
-  scheme: string;
-  host: string;
-};
-
-export type SageAppInfo = {
-  id: string;
-  name: string;
-  version: string;
-  requestedPermissions: SageRequestedPermissions;
-  capabilities: string[];
-  network: SageNetworkPermission[];
+export type SageBridgeSendPayload = {
+  kind: string;
+  [key: string]: unknown;
 };
 
 export type SageBridgeRequest = {
@@ -76,155 +56,52 @@ export type SageBridgeResponse =
   | SageBridgeSuccessResponse
   | SageBridgeErrorResponse;
 
-export type SageGrantedCapabilitiesChangeEvent = {
-  channel: 'sage-bridge';
-  type: 'grantedCapabilitiesChange';
-  removedGrantedCapabilities: string[];
-  addedGrantedCapabilities: string[];
-  fullGrantedCapabilities: string[];
-};
-
-export type SageGrantedNetworkWhitelistChangeEvent = {
-  channel: 'sage-bridge';
-  type: 'grantedNetworkWhitelistChange';
-  removedGrantedNetworkWhitelist: SageRequestedNetworkWhitelistEntry[];
-  addedGrantedNetworkWhitelist: SageRequestedNetworkWhitelistEntry[];
-  fullGrantedNetworkWhitelist: SageRequestedNetworkWhitelistEntry[];
-};
-
 export type SageBridgeRuntimeEvent =
-  | SageGrantedCapabilitiesChangeEvent
-  | SageGrantedNetworkWhitelistChangeEvent;
-
-export type SageBridgeSendPayload = {
-  kind: string;
-  [key: string]: unknown;
-};
-
-export type SageLifecycleBeforeStopDetail = {
-  reason?: string;
-  appId?: string;
-  runtimeId?: string;
-};
-
-export type AssetKind = 'token' | 'nft' | 'did' | 'option';
-export type Amount = string | number;
-
-export type Asset = {
-  asset_id: string | null;
-  name: string | null;
-  ticker: string | null;
-  precision: number;
-  icon_url: string | null;
-  description: string | null;
-  is_sensitive_content: boolean;
-  is_visible: boolean;
-  revocation_address: string | null;
-  kind: AssetKind;
-};
-
-export type TransactionInput = {
-  coin_id: string;
-  amount: Amount;
-  address: string;
-  asset: Asset | null;
-  outputs: TransactionOutput[];
-};
-
-export type TransactionOutput = {
-  coin_id: string;
-  amount: Amount;
-  address: string;
-  receiving: boolean;
-  burning: boolean;
-};
-
-export type TransactionSummary = {
-  fee: Amount;
-  inputs: TransactionInput[];
-};
-
-export type CoinJson = {
-  parent_coin_info: string;
-  puzzle_hash: string;
-  amount: Amount;
-};
-
-export type CoinSpendJson = {
-  coin: CoinJson;
-  puzzle_reveal: string;
-  solution: string;
-};
-
-export type TransactionResponse = {
-  summary: TransactionSummary;
-  coin_spends: CoinSpendJson[];
-};
-
-export type SageWalletSendXchRequest = {
-  address: string;
-  amount: Amount;
-  fee: Amount;
-  memos?: string[];
-  clawback?: number | null;
-  auto_submit?: boolean;
-};
-
-export type SageRequestCapabilityGrantInput = {
-  capability: string;
-};
-
-export type SageRequestCapabilityGrantResult = {
-  granted: boolean;
-  alreadyGranted?: boolean;
-  capability: string;
-  fullGrantedCapabilities: string[];
-};
-
-export type SageRequestNetworkWhitelistGrantInput = {
-  entry: SageRequestedNetworkWhitelistEntry;
-};
-
-export type SageRequestNetworkWhitelistGrantResult = {
-  granted: boolean;
-  alreadyGranted?: boolean;
-  entry: SageRequestedNetworkWhitelistEntry;
-  fullGrantedNetworkWhitelist: SageRequestedNetworkWhitelistEntry[];
-};
+  | GrantedCapabilitiesChangeEvent
+  | GrantedNetworkWhitelistChangeEvent;
 
 export type SageWalletClient = {
-  sendXch(input: SageWalletSendXchRequest): Promise<TransactionResponse>;
+  sendXch(input: WalletSendXchParams): Promise<TransactionResponse>;
+};
+
+export type SageAppLifecycleClient = {
+  onBeforeStop(
+    handler: (
+      detail: Omit<SageLifecycleBeforeStopDetail, 'requestId'>,
+    ) => void | Promise<void>,
+  ): () => void;
 };
 
 export type SageAppClient = {
-  bridgePing(): Promise<unknown>;
-  bridgeSend(input: SageBridgeSendPayload): Promise<unknown>;
-  getInfo(): Promise<SageAppInfo>;
+  bridgePing(): Promise<BridgePingResult>;
+  bridgeSend(input: SageBridgeSendPayload): Promise<BridgeSendResult>;
+  getInfo(): Promise<AppGetInfoResult>;
   getCapabilities(): Promise<string[]>;
   requestCapabilityGrant(
-    input: SageRequestCapabilityGrantInput,
-  ): Promise<SageRequestCapabilityGrantResult>;
+    input: RequestCapabilityGrantParams,
+  ): Promise<RequestCapabilityGrantResult>;
   requestNetworkWhitelistGrant(
-    input: SageRequestNetworkWhitelistGrantInput,
-  ): Promise<SageRequestNetworkWhitelistGrantResult>;
+    input: RequestNetworkWhitelistGrantParams,
+  ): Promise<RequestNetworkWhitelistGrantResult>;
   onGrantedCapabilitiesChange(
-    handler: (event: SageGrantedCapabilitiesChangeEvent) => void,
+    handler: (event: GrantedCapabilitiesChangeEvent) => void,
   ): () => void;
   onGrantedNetworkWhitelistChange(
-    handler: (event: SageGrantedNetworkWhitelistChangeEvent) => void,
+    handler: (event: GrantedNetworkWhitelistChangeEvent) => void,
   ): () => void;
-};
-
-export type SageLifecycleClient = {
-  onBeforeStop(
-    handler: (detail: SageLifecycleBeforeStopDetail) => void,
-  ): () => void;
+  lifecycle: SageAppLifecycleClient;
 };
 
 export type SageClient = {
-  initialAppInfo: SageAppInfo;
+  initialAppInfo: AppGetInfoResult;
   app: SageAppClient;
-  lifecycle: SageLifecycleClient;
   wallet: SageWalletClient;
+};
+
+export type {
+  RuntimeAckResult,
+  ReadyToStopParams,
+  SetBeforeStopListenerParams,
+  SageLifecycleBeforeStopDetail,
 };
 

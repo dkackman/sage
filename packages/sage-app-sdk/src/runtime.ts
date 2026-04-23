@@ -1,21 +1,27 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type {
-  SageAppInfo,
+  AppGetInfoResult,
+  BridgePingResult,
+  BridgeSendResult,
+  GrantedCapabilitiesChangeEvent,
+  GrantedNetworkWhitelistChangeEvent,
+  ReadyToStopParams,
+  RequestCapabilityGrantParams,
+  RequestCapabilityGrantResult,
+  RequestNetworkWhitelistGrantParams,
+  RequestNetworkWhitelistGrantResult,
+  RuntimeAckResult,
   SageBridgeRequest,
   SageBridgeResponse,
   SageBridgeRuntimeEvent,
   SageBridgeSendPayload,
   SageBridgeVersion,
   SageClient,
-  SageGrantedCapabilitiesChangeEvent,
-  SageGrantedNetworkWhitelistChangeEvent,
-  SageRequestCapabilityGrantInput,
-  SageRequestCapabilityGrantResult,
-  SageRequestNetworkWhitelistGrantInput,
-  SageRequestNetworkWhitelistGrantResult,
-  SageWalletSendXchRequest,
+  SageLifecycleBeforeStopDetail,
+  SetBeforeStopListenerParams,
   TransactionResponse,
+  WalletSendXchParams,
 } from './types';
 
 export const SAGE_BRIDGE_VERSION: SageBridgeVersion = 'v1';
@@ -37,7 +43,7 @@ type SageWebviewHandle = {
 type SageWindow = Window &
   typeof globalThis & {
     __SAGE__?: SageClient;
-    __SAGE_APP_INFO__?: SageAppInfo;
+    __SAGE_APP_INFO__?: AppGetInfoResult;
     __SAGE_RUNTIME_BRIDGE_INITIALIZED__?: boolean;
   };
 
@@ -76,11 +82,13 @@ type RustBridgeInvokeResult =
       kind: 'pending';
     };
 
+type BeforeStopPublicDetail = Omit<SageLifecycleBeforeStopDetail, 'requestId'>;
+
 function getSageWindow(): SageWindow {
   return window as SageWindow;
 }
 
-function buildFallbackAppInfo(): SageAppInfo {
+function buildFallbackAppInfo(): AppGetInfoResult {
   return {
     id: 'unknown',
     name: 'Unknown App',
@@ -162,6 +170,26 @@ function isBridgeRuntimeEvent(value: unknown): value is SageBridgeRuntimeEvent {
   );
 }
 
+function isGrantedCapabilitiesChangeEvent(
+  value: unknown,
+): value is GrantedCapabilitiesChangeEvent {
+  return (
+    isObject(value) &&
+    value.channel === 'sage-bridge' &&
+    value.type === 'grantedCapabilitiesChange'
+  );
+}
+
+function isGrantedNetworkWhitelistChangeEvent(
+  value: unknown,
+): value is GrantedNetworkWhitelistChangeEvent {
+  return (
+    isObject(value) &&
+    value.channel === 'sage-bridge' &&
+    value.type === 'grantedNetworkWhitelistChange'
+  );
+}
+
 export function initSageRuntimeBridge(): boolean {
   const w = getSageWindow();
 
@@ -182,95 +210,10 @@ export function initSageRuntimeBridge(): boolean {
   w.__SAGE_RUNTIME_BRIDGE_INITIALIZED__ = true;
 
   const pendingRequests = new Map<string, PendingBridgeRequest>();
-
-  webview
-    .listen('sage-bridge:event', (event: SageListenEvent) => {
-      const data = event.payload;
-
-      if (!isBridgeRuntimeEvent(data)) {
-        return;
-      }
-
-      try {
-        if (data.type === 'grantedCapabilitiesChange') {
-          window.dispatchEvent(
-            new CustomEvent<SageGrantedCapabilitiesChangeEvent>(
-              'sage:granted-capabilities-change',
-              { detail: data },
-            ),
-          );
-          return;
-        }
-
-        if (data.type === 'grantedNetworkWhitelistChange') {
-          window.dispatchEvent(
-            new CustomEvent<SageGrantedNetworkWhitelistChangeEvent>(
-              'sage:granted-network-whitelist-change',
-              { detail: data },
-            ),
-          );
-        }
-      } catch (error: unknown) {
-        console.error('Failed to dispatch Sage bridge runtime event:', error);
-      }
-    })
-    .catch((error: unknown) => {
-      console.error('Failed to subscribe to sage-bridge:event:', error);
-    });
-
-  webview
-    .listen(
-      'sage-bridge:response',
-      (event: SageListenEvent<SageBridgeResponse>) => {
-        const data = event.payload;
-
-        if (
-          !data ||
-          data.channel !== 'sage-bridge' ||
-          data.bridgeVersion !== SAGE_BRIDGE_VERSION
-        ) {
-          return;
-        }
-
-        const pending = pendingRequests.get(data.id);
-        if (!pending) {
-          return;
-        }
-
-        pendingRequests.delete(data.id);
-        window.clearTimeout(pending.timeoutId);
-
-        if (data.ok) {
-          pending.resolve(data.result as unknown);
-        } else {
-          pending.reject(
-            new Error(data.error?.message || 'Unknown Sage bridge error'),
-          );
-        }
-      },
-    )
-    .catch((error: unknown) => {
-      console.error('Failed to subscribe to sage-bridge:response:', error);
-    });
-
-  webview
-    .listen('sage-lifecycle:before-stop', (event: SageListenEvent) => {
-      try {
-        window.dispatchEvent(
-          new CustomEvent('sage:lifecycle:before-stop', {
-            detail: event.payload,
-          }),
-        );
-      } catch (error: unknown) {
-        console.error('Failed to dispatch before-stop lifecycle event', error);
-      }
-    })
-    .catch((error: unknown) => {
-      console.error(
-        'Failed to subscribe to sage-lifecycle:before-stop:',
-        error,
-      );
-    });
+  const beforeStopHandlers = new Set<
+    (detail: BeforeStopPublicDetail) => void | Promise<void>
+  >();
+  let beforeStopRegistered = false;
 
   function rejectAllPending(reason: string) {
     for (const [id, pending] of pendingRequests.entries()) {
@@ -279,10 +222,6 @@ export function initSageRuntimeBridge(): boolean {
       pendingRequests.delete(id);
     }
   }
-
-  window.addEventListener('sage:lifecycle:before-stop', () => {
-    rejectAllPending('Sage runtime is stopping');
-  });
 
   async function callHost<T>(method: string, params?: unknown): Promise<T> {
     const id = `sage-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -356,36 +295,160 @@ export function initSageRuntimeBridge(): boolean {
     });
   }
 
+  async function syncBeforeStopRegistration() {
+    const shouldBeRegistered = beforeStopHandlers.size > 0;
+    if (beforeStopRegistered === shouldBeRegistered) {
+      return;
+    }
+
+    beforeStopRegistered = shouldBeRegistered;
+
+    try {
+      await callHost<RuntimeAckResult>('app.lifecycle.setBeforeStopListener', {
+        active: shouldBeRegistered,
+      } satisfies SetBeforeStopListenerParams);
+    } catch (error) {
+      console.error('Failed to sync before-stop listener registration:', error);
+    }
+  }
+
+  webview
+    .listen('sage-bridge:event', (event: SageListenEvent) => {
+      const data = event.payload;
+
+      if (!isBridgeRuntimeEvent(data)) {
+        return;
+      }
+
+      try {
+        if (isGrantedCapabilitiesChangeEvent(data)) {
+          window.dispatchEvent(
+            new CustomEvent<GrantedCapabilitiesChangeEvent>(
+              'sage:granted-capabilities-change',
+              { detail: data },
+            ),
+          );
+          return;
+        }
+
+        if (isGrantedNetworkWhitelistChangeEvent(data)) {
+          window.dispatchEvent(
+            new CustomEvent<GrantedNetworkWhitelistChangeEvent>(
+              'sage:granted-network-whitelist-change',
+              { detail: data },
+            ),
+          );
+        }
+      } catch (error: unknown) {
+        console.error('Failed to dispatch Sage bridge runtime event:', error);
+      }
+    })
+    .catch((error: unknown) => {
+      console.error('Failed to subscribe to sage-bridge:event:', error);
+    });
+
+  webview
+    .listen(
+      'sage-bridge:response',
+      (event: SageListenEvent<SageBridgeResponse>) => {
+        const data = event.payload;
+
+        if (
+          !data ||
+          data.channel !== 'sage-bridge' ||
+          data.bridgeVersion !== SAGE_BRIDGE_VERSION
+        ) {
+          return;
+        }
+
+        const pending = pendingRequests.get(data.id);
+        if (!pending) {
+          return;
+        }
+
+        pendingRequests.delete(data.id);
+        window.clearTimeout(pending.timeoutId);
+
+        if (data.ok) {
+          pending.resolve(data.result as unknown);
+        } else {
+          pending.reject(
+            new Error(data.error?.message || 'Unknown Sage bridge error'),
+          );
+        }
+      },
+    )
+    .catch((error: unknown) => {
+      console.error('Failed to subscribe to sage-bridge:response:', error);
+    });
+
+  webview
+    .listen<SageLifecycleBeforeStopDetail>(
+      'sage-lifecycle:before-stop',
+      (event: SageListenEvent<SageLifecycleBeforeStopDetail>) => {
+        const detail = event.payload;
+        rejectAllPending('Sage runtime is stopping');
+
+        if (!detail?.requestId || beforeStopHandlers.size === 0) {
+          return;
+        }
+
+        const publicDetail: BeforeStopPublicDetail = {
+          reason: detail.reason,
+          appId: detail.appId,
+          runtimeId: detail.runtimeId,
+        };
+
+        const handlers = Array.from(beforeStopHandlers);
+
+        void Promise.allSettled(
+          handlers.map((handler) => Promise.resolve(handler(publicDetail))),
+        ).finally(() => {
+          void callHost<RuntimeAckResult>('app.lifecycle.readyToStop', {
+            requestId: detail.requestId,
+          } satisfies ReadyToStopParams).catch((error: unknown) => {
+            console.error('Failed to acknowledge before-stop:', error);
+          });
+        });
+      },
+    )
+    .catch((error: unknown) => {
+      console.error(
+        'Failed to subscribe to sage-lifecycle:before-stop:',
+        error,
+      );
+    });
+
   w.__SAGE__ = {
     initialAppInfo: w.__SAGE_APP_INFO__ ?? buildFallbackAppInfo(),
     app: {
       async bridgePing() {
-        return await callHost<unknown>('bridge.ping');
+        return await callHost<BridgePingResult>('bridge.ping');
       },
 
       async bridgeSend(input: SageBridgeSendPayload) {
-        return await callHost<unknown>('bridge.send', input);
+        return await callHost<BridgeSendResult>('bridge.send', input);
       },
 
       async getInfo() {
-        return await callHost<SageAppInfo>('app.getInfo');
+        return await callHost<AppGetInfoResult>('app.getInfo');
       },
 
       async getCapabilities() {
         return await callHost<string[]>('sage.getCapabilities');
       },
 
-      async requestCapabilityGrant(input: SageRequestCapabilityGrantInput) {
-        return await callHost<SageRequestCapabilityGrantResult>(
+      async requestCapabilityGrant(input: RequestCapabilityGrantParams) {
+        return await callHost<RequestCapabilityGrantResult>(
           'sage.requestCapabilityGrant',
           input,
         );
       },
 
       async requestNetworkWhitelistGrant(
-        input: SageRequestNetworkWhitelistGrantInput,
+        input: RequestNetworkWhitelistGrantParams,
       ) {
-        return await callHost<SageRequestNetworkWhitelistGrantResult>(
+        return await callHost<RequestNetworkWhitelistGrantResult>(
           'sage.requestNetworkWhitelistGrant',
           input,
         );
@@ -393,8 +456,7 @@ export function initSageRuntimeBridge(): boolean {
 
       onGrantedCapabilitiesChange(handler) {
         const listener = (event: Event) => {
-          const custom =
-            event as CustomEvent<SageGrantedCapabilitiesChangeEvent>;
+          const custom = event as CustomEvent<GrantedCapabilitiesChangeEvent>;
           handler(custom.detail);
         };
 
@@ -414,7 +476,7 @@ export function initSageRuntimeBridge(): boolean {
       onGrantedNetworkWhitelistChange(handler) {
         const listener = (event: Event) => {
           const custom =
-            event as CustomEvent<SageGrantedNetworkWhitelistChangeEvent>;
+            event as CustomEvent<GrantedNetworkWhitelistChangeEvent>;
           handler(custom.detail);
         };
 
@@ -430,37 +492,22 @@ export function initSageRuntimeBridge(): boolean {
           );
         };
       },
-    },
 
-    lifecycle: {
-      onBeforeStop(handler) {
-        const listener = (event: Event) => {
-          const custom = event as CustomEvent;
-          handler(
-            (custom.detail ?? {}) as {
-              reason?: string;
-              appId?: string;
-              runtimeId?: string;
-            },
-          );
-        };
+      lifecycle: {
+        onBeforeStop(handler) {
+          beforeStopHandlers.add(handler);
+          void syncBeforeStopRegistration();
 
-        window.addEventListener(
-          'sage:lifecycle:before-stop',
-          listener as EventListener,
-        );
-
-        return () => {
-          window.removeEventListener(
-            'sage:lifecycle:before-stop',
-            listener as EventListener,
-          );
-        };
+          return () => {
+            beforeStopHandlers.delete(handler);
+            void syncBeforeStopRegistration();
+          };
+        },
       },
     },
 
     wallet: {
-      async sendXch(input: SageWalletSendXchRequest) {
+      async sendXch(input: WalletSendXchParams) {
         return await callHost<TransactionResponse>('wallet.sendXch', input);
       },
     },

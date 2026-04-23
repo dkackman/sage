@@ -1,6 +1,10 @@
 use std::collections::BTreeMap;
+use std::time::Duration;
 
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
+use tokio::sync::oneshot;
+use tokio::time::timeout;
+use uuid::Uuid;
 
 use crate::state::AppsHostState;
 use crate::types::{InstalledSageAppStorage, PendingStorageCleanupTarget};
@@ -8,12 +12,14 @@ use crate::types::{InstalledSageAppStorage, PendingStorageCleanupTarget};
 use super::apps_create_inline_runtime;
 use super::inline::CreateInlineRuntimeArgs;
 use super::resolve::{resolve_app, runtime_kind_for_app};
-use super::records::inline_label_for;
+use super::records::{inline_label_for, SageLifecycleBeforeStopDetail};
 
 #[cfg(target_os = "windows")]
 fn data_directory_for(directory_name: &str) -> std::path::PathBuf {
     std::path::PathBuf::from("profiles").join(directory_name)
 }
+
+const BEFORE_STOP_TIMEOUT_MS: u64 = 5_000;
 
 fn debug_test_apps_enabled() -> bool {
     cfg!(debug_assertions)
@@ -131,10 +137,63 @@ pub async fn apps_clear_runtime_browsing_data(
     clear_app_storage_by_target(&app, &target).await
 }
 
-pub(crate) async fn close_runtime_internal(
+async fn wait_for_before_stop_ack(
+    app: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+    record: &super::records::SageAppRuntimeRecord,
+    reason: &str,
+) -> Result<(), String> {
+    let has_listener = {
+        let listeners = apps_state.runtime.before_stop_listeners_by_app_id.lock().await;
+        listeners.contains(&record.app_id)
+    };
+
+    if !has_listener {
+        return Ok(());
+    }
+
+    let host_window = match app.get_window("main") {
+        Some(window) => window,
+        None => return Ok(()),
+    };
+
+    let webview = match host_window.get_webview(&record.webview_label) {
+        Some(webview) => webview,
+        None => return Ok(()),
+    };
+
+    let request_id = Uuid::new_v4().to_string();
+    let (tx, rx) = oneshot::channel();
+
+    {
+        let mut pending = apps_state.runtime.pending_stop_ready.lock().await;
+        pending.insert(request_id.clone(), tx);
+    }
+
+    let detail = SageLifecycleBeforeStopDetail {
+        request_id: request_id.clone(),
+        reason: Some(reason.to_string()),
+        app_id: Some(record.app_id.clone()),
+        runtime_id: Some(record.runtime_id.clone()),
+    };
+
+    let _ = webview.emit("sage-lifecycle:before-stop", detail);
+
+    let _ = timeout(Duration::from_millis(BEFORE_STOP_TIMEOUT_MS), rx).await;
+
+    {
+        let mut pending = apps_state.runtime.pending_stop_ready.lock().await;
+        pending.remove(&request_id);
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn close_runtime_internal_with_reason(
     app: &AppHandle,
     apps_state: &State<'_, AppsHostState>,
     app_id: &str,
+    reason: &str,
 ) -> Result<(), String> {
     let runtime_id = {
         let runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
@@ -156,6 +215,8 @@ pub(crate) async fn close_runtime_internal(
         return Ok(());
     };
 
+    let _ = wait_for_before_stop_ack(app, apps_state, &record, reason).await;
+
     if let Some(host_window) = app.get_window("main") {
         if let Some(webview) = host_window.get_webview(&record.webview_label) {
             let _ = webview.close();
@@ -172,7 +233,20 @@ pub(crate) async fn close_runtime_internal(
         runtime_by_app_id.remove(app_id);
     }
 
+    {
+        let mut listeners = apps_state.runtime.before_stop_listeners_by_app_id.lock().await;
+        listeners.remove(app_id);
+    }
+
     Ok(())
+}
+
+pub(crate) async fn close_runtime_internal(
+    app: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+    app_id: &str,
+) -> Result<(), String> {
+    close_runtime_internal_with_reason(app, apps_state, app_id, "host_close").await
 }
 
 pub(crate) async fn clear_runtime_browsing_data_internal(

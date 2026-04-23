@@ -1,8 +1,10 @@
-pub mod system;
+pub mod app;
+pub mod bridge;
 pub mod wallet;
 
-pub use system::{
-    AppGetInfo, BridgePing, BridgeSend, SageGetCapabilities,
-    SageRequestCapabilityGrant, SageRequestNetworkWhitelistGrant,
+pub use app::{
+    AppGetInfo, SageAppLifecycleReadyToStop, SageAppLifecycleSetBeforeStopListener,
+    SageGetCapabilities, SageRequestCapabilityGrant, SageRequestNetworkWhitelistGrant,
 };
+pub use bridge::{BridgePing, BridgeSend};
 pub use wallet::WalletSendXch;

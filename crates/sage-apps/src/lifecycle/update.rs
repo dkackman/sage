@@ -6,7 +6,12 @@ use std::{
 
 use anyhow::Result as AnyResult;
 use tauri::{State, command};
+use tauri::AppHandle;
 
+use crate::bridge::{
+    emit_granted_capabilities_change_for_app,
+    emit_granted_network_whitelist_change_for_app,
+};
 use crate::host::{AppState, Result};
 use crate::lifecycle::{
     download_url_snapshot, manifest_entry_file, manifest_icon_file,
@@ -298,6 +303,38 @@ pub fn grant_requested_network_whitelist_entry_internal(
     Ok(GrantNetworkWhitelistOutcome::Granted { entry, change })
 }
 
+pub fn update_app_permissions_with_change_internal(
+    base_path: &Path,
+    app_id: &str,
+    granted_permissions: SageGrantedPermissions,
+    clear_storage_taint: bool,
+) -> AnyResult<(
+    UserSageApp,
+    GrantedCapabilitiesChange,
+    GrantedNetworkWhitelistChange,
+)> {
+    let previous = read_installed_app_by_id(base_path, app_id)?;
+
+    let updated = update_app_permissions_internal(
+        base_path,
+        app_id,
+        granted_permissions,
+        clear_storage_taint,
+    )?;
+
+    let capability_change = diff_capabilities(
+        &previous.common.granted_permissions.capabilities,
+        &updated.common.granted_permissions.capabilities,
+    );
+
+    let network_change = diff_network_whitelist(
+        &previous.common.granted_permissions.network.whitelist,
+        &updated.common.granted_permissions.network.whitelist,
+    );
+
+    Ok((updated, capability_change, network_change))
+}
+
 #[command]
 #[specta::specta]
 pub async fn check_app_update(
@@ -470,6 +507,7 @@ pub async fn apply_app_update(
 #[command]
 #[specta::specta]
 pub async fn apps_update_permissions(
+    app: AppHandle,
     state: State<'_, AppState>,
     app_id: String,
     granted_permissions: SageGrantedPermissions,
@@ -480,14 +518,36 @@ pub async fn apps_update_permissions(
         state.path.clone()
     };
 
-    update_app_permissions_internal(
-        &base_path,
-        &app_id,
-        granted_permissions,
-        clear_storage_taint,
-    )
-        .map(|_| ())
-        .map_err(|err| io::Error::other(format!("failed to update app permissions: {err}")).into())
+    let (_updated, capability_change, network_change) =
+        update_app_permissions_with_change_internal(
+            &base_path,
+            &app_id,
+            granted_permissions,
+            clear_storage_taint,
+        )
+            .map_err(|err| io::Error::other(format!("failed to update app permissions: {err}")))?;
+
+    if !capability_change.added.is_empty() || !capability_change.removed.is_empty() {
+        let _ = emit_granted_capabilities_change_for_app(
+            &app,
+            &app_id,
+            "sage-bridge",
+            capability_change,
+        )
+            .await;
+    }
+
+    if !network_change.added.is_empty() || !network_change.removed.is_empty() {
+        let _ = emit_granted_network_whitelist_change_for_app(
+            &app,
+            &app_id,
+            "sage-bridge",
+            network_change,
+        )
+            .await;
+    }
+
+    Ok(())
 }
 
 #[command]

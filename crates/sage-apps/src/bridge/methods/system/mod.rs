@@ -1,3 +1,3 @@
-// System-bridge-only methods will live here.
-// Keep this module separate so user and system registries never share
-// method registration by accident.
+pub mod runtime_manager;
+
+pub use runtime_manager::*;

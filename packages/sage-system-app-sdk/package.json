@@ -1,13 +1,10 @@
 {
-  "name": "@sage-app/sdk",
+  "name": "@sage-system-app/sdk",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": {
-    "sage-app": "./cli/finalize-manifest.mjs"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -18,8 +15,7 @@
     }
   },
   "files": [
-    "dist",
-    "cli"
+    "dist"
   ],
   "scripts": {
     "generate:types": "node ./scripts/export-types.mjs",

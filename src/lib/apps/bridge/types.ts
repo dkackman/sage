@@ -30,10 +30,9 @@ export type SageBridgeMethod =
   | 'bridge.ping'
   | 'bridge.send'
   | 'app.getInfo'
-  | 'sage.getCapabilities'
-  | 'sage.requestCapabilityGrant'
-  | 'sage.requestNetworkWhitelistGrant'
-  | 'sage.requestNetwortWhitelistGrant'
+  | 'app.getCapabilities'
+  | 'app.requestCapabilityGrant'
+  | 'app.requestNetworkWhitelistGrant'
   | 'wallet.sendXch';
 
 export type BridgeApprovalRequest =
@@ -70,10 +69,9 @@ export function isKnownSageBridgeMethod(
     method === 'bridge.ping' ||
     method === 'bridge.send' ||
     method === 'app.getInfo' ||
-    method === 'sage.getCapabilities' ||
-    method === 'sage.requestCapabilityGrant' ||
-    method === 'sage.requestNetworkWhitelistGrant' ||
-    method === 'sage.requestNetwortWhitelistGrant' ||
+    method === 'app.getCapabilities' ||
+    method === 'app.requestCapabilityGrant' ||
+    method === 'app.requestNetworkWhitelistGrant' ||
     method === 'wallet.sendXch'
   );
 }

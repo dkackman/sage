@@ -1,9 +1,6 @@
 use std::collections::HashMap;
-
-use super::methods::user::{
-    AppGetInfo, BridgePing, BridgeSend, SageGetCapabilities,
-    SageRequestCapabilityGrant, SageRequestNetworkWhitelistGrant, WalletSendXch,
-};
+use crate::bridge::methods::user::app::SageRequestNetworkWhitelistGrant;
+use super::methods::user::{AppGetInfo, BridgePing, BridgeSend, SageAppLifecycleReadyToStop, SageAppLifecycleSetBeforeStopListener, SageGetCapabilities, SageRequestCapabilityGrant, WalletSendXch};
 use super::methods::BridgeMethod;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,18 +36,22 @@ fn build_user_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
     methods.insert("bridge.ping", Box::new(BridgePing));
     methods.insert("bridge.send", Box::new(BridgeSend));
     methods.insert("app.getInfo", Box::new(AppGetInfo));
-    methods.insert("sage.getCapabilities", Box::new(SageGetCapabilities));
+    methods.insert("app.getCapabilities", Box::new(SageGetCapabilities));
     methods.insert(
-        "sage.requestCapabilityGrant",
+        "app.requestCapabilityGrant",
         Box::new(SageRequestCapabilityGrant),
     );
     methods.insert(
-        "sage.requestNetworkWhitelistGrant",
+        "app.requestNetworkWhitelistGrant",
         Box::new(SageRequestNetworkWhitelistGrant),
     );
     methods.insert(
-        "sage.requestNetwortWhitelistGrant",
-        Box::new(SageRequestNetworkWhitelistGrant),
+        "app.lifecycle.setBeforeStopListener",
+        Box::new(SageAppLifecycleSetBeforeStopListener),
+    );
+    methods.insert(
+        "app.lifecycle.readyToStop",
+        Box::new(SageAppLifecycleReadyToStop),
     );
     methods.insert("wallet.sendXch", Box::new(WalletSendXch));
 
@@ -60,8 +61,10 @@ fn build_user_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
 fn build_system_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
     let mut methods = build_user_methods();
 
-    // Register system-only methods here later, for example:
-    // methods.insert("system.taskManager.list", Box::new(SystemTaskManagerList));
+    methods.insert("runtimeManager.listRuntimes", Box::new(super::methods::system::runtime_manager::SystemListRuntimes));
+    methods.insert("runtimeManager.focusRuntime", Box::new(super::methods::system::runtime_manager::SystemFocusRuntime));
+    methods.insert("runtimeManager.killRuntime", Box::new(super::methods::system::runtime_manager::SystemKillRuntime));
+    methods.insert("runtimeManager.hideRuntime", Box::new(super::methods::system::runtime_manager::SystemHideRuntime));
 
     methods
 }

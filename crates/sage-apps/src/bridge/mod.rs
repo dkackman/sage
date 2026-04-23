@@ -14,6 +14,7 @@ use crate::runtime::records::SageAppRuntimeKind;
 pub mod methods;
 pub mod registry;
 pub mod types;
+pub mod ts_exports;
 
 use methods::{BridgeContext, BridgeTools};
 use registry::BridgeRegistry;
@@ -22,6 +23,10 @@ pub use types::{
     RustBridgeErrorPayload, RustBridgeErrorResponse, RustBridgeInvokeResult,
     RustBridgeRequest, RustBridgeResponse, RustBridgeSuccessResponse,
 };
+use crate::bridge::methods::user::app::{
+    GrantedCapabilitiesChangeEvent, GrantedNetworkWhitelistChangeEvent,
+};
+use crate::lifecycle::{GrantedCapabilitiesChange, GrantedNetworkWhitelistChange};
 
 #[derive(Debug, Clone)]
 struct PendingBridgeApproval {
@@ -463,4 +468,59 @@ pub async fn apps_resolve_bridge_approval(
 
     emit_bridge_response_to_source(&app, &pending.source_label, runtime_kind, &response)?;
     Ok(())
+}
+
+pub(crate) async fn emit_bridge_event_to_app_id(
+    app: &AppHandle,
+    app_id: &str,
+    payload: Value,
+) -> Result<(), String> {
+    let apps_state = app.state::<AppsHostState>();
+
+    let runtime_id = {
+        let runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
+        runtime_by_app_id.get(app_id).cloned()
+    };
+
+    let Some(runtime_id) = runtime_id else {
+        return Ok(());
+    };
+
+    let record = {
+        let by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
+        by_runtime_id.get(&runtime_id).cloned()
+    };
+
+    let Some(record) = record else {
+        return Ok(());
+    };
+
+    emit_bridge_event_to_source(app, &record.webview_label, record.runtime_kind, payload)
+}
+
+pub(crate) async fn emit_granted_capabilities_change_for_app(
+    app: &AppHandle,
+    app_id: &str,
+    channel: &str,
+    change: GrantedCapabilitiesChange,
+) -> Result<(), String> {
+    let event = GrantedCapabilitiesChangeEvent::from_change(channel.to_string(), change);
+    let payload = serde_json::to_value(event)
+        .map_err(|err| format!("failed to encode granted capabilities change event: {err}"))?;
+
+    emit_bridge_event_to_app_id(app, app_id, payload).await
+}
+
+pub(crate) async fn emit_granted_network_whitelist_change_for_app(
+    app: &AppHandle,
+    app_id: &str,
+    channel: &str,
+    change: GrantedNetworkWhitelistChange,
+) -> Result<(), String> {
+    let event = GrantedNetworkWhitelistChangeEvent::from_change(channel.to_string(), change);
+    let payload = serde_json::to_value(event).map_err(|err| {
+        format!("failed to encode granted network whitelist change event: {err}")
+    })?;
+
+    emit_bridge_event_to_app_id(app, app_id, payload).await
 }
