@@ -1,5 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type {
   AppGetInfoResult,
   BridgePingResult,
@@ -12,7 +10,6 @@ import type {
   RequestNetworkWhitelistGrantParams,
   RequestNetworkWhitelistGrantResult,
   RuntimeAckResult,
-  SageBridgeRequest,
   SageBridgeResponse,
   SageBridgeRuntimeEvent,
   SageBridgeSendPayload,
@@ -23,6 +20,7 @@ import type {
   TransactionResponse,
   WalletSendXchParams,
 } from './types';
+import { createBridgeRuntimeCore } from './bridge-runtime-core';
 
 export const SAGE_BRIDGE_VERSION: SageBridgeVersion = 'v1';
 
@@ -46,41 +44,6 @@ type SageWindow = Window &
     __SAGE_APP_INFO__?: AppGetInfoResult;
     __SAGE_RUNTIME_BRIDGE_INITIALIZED__?: boolean;
   };
-
-type PendingBridgeRequest = {
-  resolve: (value: unknown) => void;
-  reject: (reason?: unknown) => void;
-  timeoutId: number;
-  method: string;
-};
-
-type RustBridgeResponse =
-  | {
-      channel: string;
-      bridgeVersion: string;
-      id: string;
-      ok: true;
-      resultJson: string;
-    }
-  | {
-      channel: string;
-      bridgeVersion: string;
-      id: string;
-      ok: false;
-      error: {
-        code: string;
-        message: string;
-      };
-    };
-
-type RustBridgeInvokeResult =
-  | {
-      kind: 'immediate';
-      response: RustBridgeResponse;
-    }
-  | {
-      kind: 'pending';
-    };
 
 type BeforeStopPublicDetail = Omit<SageLifecycleBeforeStopDetail, 'requestId'>;
 
@@ -110,49 +73,8 @@ function buildFallbackAppInfo(): AppGetInfoResult {
   };
 }
 
-function tryGetCurrentWebview(): SageWebviewHandle | null {
-  try {
-    return getCurrentWebview() as SageWebviewHandle;
-  } catch {
-    return null;
-  }
-}
-
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
-}
-
-function parseJsonOrNull(value: string | null | undefined): unknown {
-  if (value == null) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(value);
-  } catch (err) {
-    console.error('Failed to parse JSON payload from Rust bridge:', err, value);
-    return null;
-  }
-}
-
-function toSdkBridgeResponse(response: RustBridgeResponse): SageBridgeResponse {
-  if ('resultJson' in response) {
-    return {
-      channel: 'sage-bridge',
-      bridgeVersion: 'v1',
-      id: response.id,
-      ok: true,
-      result: parseJsonOrNull(response.resultJson),
-    };
-  }
-
-  return {
-    channel: 'sage-bridge',
-    bridgeVersion: 'v1',
-    id: response.id,
-    ok: false,
-    error: response.error,
-  };
 }
 
 function isBridgeRuntimeEvent(value: unknown): value is SageBridgeRuntimeEvent {
@@ -201,99 +123,27 @@ export function initSageRuntimeBridge(): boolean {
     return true;
   }
 
-  const maybeWebview = tryGetCurrentWebview();
-  if (!maybeWebview) {
+  const core = createBridgeRuntimeCore({
+    channel: 'sage-bridge',
+    version: SAGE_BRIDGE_VERSION,
+    invokeCommand: 'apps_invoke_bridge',
+    requestIdPrefix: 'sage',
+  });
+
+  if (!core) {
     return false;
   }
 
-  const webview: SageWebviewHandle = maybeWebview;
+  const webview = core.webview as SageWebviewHandle;
+  const callHost = core.callHost;
+  const rejectAllPending = core.rejectAllPending;
+
   w.__SAGE_RUNTIME_BRIDGE_INITIALIZED__ = true;
 
-  const pendingRequests = new Map<string, PendingBridgeRequest>();
   const beforeStopHandlers = new Set<
     (detail: BeforeStopPublicDetail) => void | Promise<void>
   >();
   let beforeStopRegistered = false;
-
-  function rejectAllPending(reason: string) {
-    for (const [id, pending] of pendingRequests.entries()) {
-      window.clearTimeout(pending.timeoutId);
-      pending.reject(new Error(reason));
-      pendingRequests.delete(id);
-    }
-  }
-
-  async function callHost<T>(method: string, params?: unknown): Promise<T> {
-    const id = `sage-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    return await new Promise<T>((resolve, reject) => {
-      const timeoutId = window.setTimeout(() => {
-        const pending = pendingRequests.get(id);
-        if (!pending) {
-          return;
-        }
-
-        pendingRequests.delete(id);
-        reject(new Error(`Sage bridge timeout for ${method}`));
-      }, 30000);
-
-      pendingRequests.set(id, {
-        resolve: (value) => resolve(value as T),
-        reject,
-        timeoutId,
-        method,
-      });
-
-      void (async () => {
-        try {
-          const request: SageBridgeRequest = {
-            channel: 'sage-bridge',
-            bridgeVersion: SAGE_BRIDGE_VERSION,
-            id,
-            method,
-            params,
-          };
-
-          const result = await invoke<RustBridgeInvokeResult>(
-            'apps_invoke_bridge',
-            {
-              request: {
-                channel: request.channel,
-                bridgeVersion: request.bridgeVersion ?? null,
-                id: request.id,
-                method: request.method,
-                paramsJson:
-                  request.params === undefined
-                    ? null
-                    : JSON.stringify(request.params),
-              },
-            },
-          );
-
-          if (result.kind === 'immediate') {
-            const response = toSdkBridgeResponse(result.response);
-            pendingRequests.delete(id);
-            window.clearTimeout(timeoutId);
-
-            if (response.ok) {
-              resolve(response.result as T);
-            } else {
-              reject(new Error(response.error.message));
-            }
-          }
-        } catch (error: unknown) {
-          const pending = pendingRequests.get(id);
-          if (!pending) {
-            return;
-          }
-
-          pendingRequests.delete(id);
-          window.clearTimeout(timeoutId);
-          reject(error instanceof Error ? error : new Error(String(error)));
-        }
-      })();
-    });
-  }
 
   async function syncBeforeStopRegistration() {
     const shouldBeRegistered = beforeStopHandlers.size > 0;
@@ -348,7 +198,7 @@ export function initSageRuntimeBridge(): boolean {
     });
 
   webview
-    .listen(
+    .listen<SageBridgeResponse>(
       'sage-bridge:response',
       (event: SageListenEvent<SageBridgeResponse>) => {
         const data = event.payload;
@@ -361,12 +211,12 @@ export function initSageRuntimeBridge(): boolean {
           return;
         }
 
-        const pending = pendingRequests.get(data.id);
+        const pending = core.pendingRequests.get(data.id);
         if (!pending) {
           return;
         }
 
-        pendingRequests.delete(data.id);
+        core.pendingRequests.delete(data.id);
         window.clearTimeout(pending.timeoutId);
 
         if (data.ok) {
@@ -435,12 +285,12 @@ export function initSageRuntimeBridge(): boolean {
       },
 
       async getCapabilities() {
-        return await callHost<string[]>('sage.getCapabilities');
+        return await callHost<string[]>('app.getCapabilities');
       },
 
       async requestCapabilityGrant(input: RequestCapabilityGrantParams) {
         return await callHost<RequestCapabilityGrantResult>(
-          'sage.requestCapabilityGrant',
+          'app.requestCapabilityGrant',
           input,
         );
       },
@@ -449,7 +299,7 @@ export function initSageRuntimeBridge(): boolean {
         input: RequestNetworkWhitelistGrantParams,
       ) {
         return await callHost<RequestNetworkWhitelistGrantResult>(
-          'sage.requestNetworkWhitelistGrant',
+          'app.requestNetworkWhitelistGrant',
           input,
         );
       },
@@ -461,13 +311,13 @@ export function initSageRuntimeBridge(): boolean {
         };
 
         window.addEventListener(
-          'sage:granted-capabilities-change',
+          'app:granted-capabilities-change',
           listener as EventListener,
         );
 
         return () => {
           window.removeEventListener(
-            'sage:granted-capabilities-change',
+            'app:granted-capabilities-change',
             listener as EventListener,
           );
         };
@@ -481,13 +331,13 @@ export function initSageRuntimeBridge(): boolean {
         };
 
         window.addEventListener(
-          'sage:granted-network-whitelist-change',
+          'app:granted-network-whitelist-change',
           listener as EventListener,
         );
 
         return () => {
           window.removeEventListener(
-            'sage:granted-network-whitelist-change',
+            'app:granted-network-whitelist-change',
             listener as EventListener,
           );
         };

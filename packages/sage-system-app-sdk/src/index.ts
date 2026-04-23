@@ -13,4 +13,4 @@ export {
   hasSageSystemBridge,
 } from './client';
 
-export type * from './types';
+export * from './types';

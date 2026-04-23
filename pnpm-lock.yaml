@@ -315,6 +315,10 @@ importers:
         version: 5.9.3
 
   packages/sage-system-app-sdk:
+    dependencies:
+      '@sage-app/sdk':
+        specifier: workspace:*
+        version: link:../sage-app-sdk
     devDependencies:
       tsup:
         specifier: ^8.5.1

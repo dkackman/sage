@@ -15,6 +15,10 @@
     },
     "./runtime-bridge.js": {
       "import": "./dist/runtime-bridge.js"
+    },
+    "./bridge-runtime-core": {
+      "types": "./dist/bridge-runtime-core.d.ts",
+      "import": "./dist/bridge-runtime-core.js"
     }
   },
   "files": [

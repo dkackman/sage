@@ -1,3 +1,3 @@
-import { initSageRuntimeBridge } from './runtime';
+import { initSageSystemRuntimeBridge } from './runtime';
 
-initSageRuntimeBridge();
+initSageSystemRuntimeBridge();
