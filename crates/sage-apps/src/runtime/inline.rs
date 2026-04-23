@@ -87,6 +87,82 @@ pub struct CreateInlineRuntimeArgs {
     pub query: BTreeMap<String, String>,
 }
 
+fn now_ms() -> Result<i64, String> {
+    Ok(SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("system clock error: {e}"))?
+        .as_millis() as i64)
+}
+
+async fn reuse_existing_inline_runtime(
+    apps_state: &State<'_, AppsHostState>,
+    webview: &tauri::Webview,
+    runtime_id: String,
+    app_id: String,
+    app_name: String,
+    entry_src: String,
+    webview_label: String,
+    runtime_kind: super::records::SageAppRuntimeKind,
+    visible: bool,
+    internal: bool,
+) -> Result<SageAppRuntimeRecord, String> {
+    let now = now_ms()?;
+
+    if visible {
+        webview
+            .show()
+            .map_err(|e| format!("failed to show existing child webview: {e}"))?;
+    } else {
+        webview
+            .hide()
+            .map_err(|e| format!("failed to hide existing child webview: {e}"))?;
+    }
+
+    let mut record = {
+        let by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
+        by_runtime_id.get(&runtime_id).cloned()
+    }
+        .unwrap_or_else(|| SageAppRuntimeRecord {
+            runtime_id: runtime_id.clone(),
+            app_id: app_id.clone(),
+            app_name,
+            entry_src,
+            webview_label: webview_label.clone(),
+            host_window_label: "main".into(),
+            runtime_kind,
+            mode: "inline".into(),
+            state: "hidden".into(),
+            started_at: now,
+            last_active_at: now,
+            visible: false,
+            internal,
+            active_batch_count: 0,
+            active_socket_count: 0,
+            in_flight_request_count: 0,
+        });
+
+    record.visible = visible;
+    record.state = if visible {
+        "running".into()
+    } else {
+        "hidden".into()
+    };
+    record.last_active_at = now;
+    record.internal = internal;
+
+    {
+        let mut by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
+        by_runtime_id.insert(runtime_id.clone(), record.clone());
+    }
+
+    {
+        let mut runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
+        runtime_by_app_id.insert(app_id, runtime_id);
+    }
+
+    Ok(record)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn apps_create_inline_runtime(
@@ -129,7 +205,19 @@ pub async fn apps_create_inline_runtime(
     let entry_src = build_entry_src(&resolved, args.path.clone(), args.query.clone());
 
     if let Some(existing) = host_window.get_webview(&webview_label) {
-        let _ = existing.close();
+        return reuse_existing_inline_runtime(
+            &apps_state,
+            &existing,
+            runtime_id,
+            resolved.id().to_string(),
+            resolved.name().to_string(),
+            entry_src,
+            webview_label,
+            runtime_kind,
+            args.visible,
+            args.internal,
+        )
+            .await;
     }
 
     let origin_id_for_nav = resolved.origin_id().to_string();
@@ -182,10 +270,7 @@ pub async fn apps_create_inline_runtime(
         )
         .map_err(|e| format!("failed to create child webview: {e}"))?;
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| format!("system clock error: {e}"))?
-        .as_millis() as i64;
+    let now = now_ms()?;
 
     let record = SageAppRuntimeRecord {
         runtime_id: runtime_id.clone(),
