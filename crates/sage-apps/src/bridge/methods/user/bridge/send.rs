@@ -12,8 +12,8 @@ pub struct BridgeSend;
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSendRequest {
     pub kind: String,
-    #[serde(default)]
-    pub payload: serde_json::Value,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
