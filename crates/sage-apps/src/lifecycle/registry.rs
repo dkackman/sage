@@ -6,15 +6,8 @@ use std::{
 use anyhow::{Context, Result as AnyResult};
 use serde::{Deserialize, Serialize};
 
-use crate::types::{
-    CorruptedInstalledSageApp, ListedSageApp, PendingStorageCleanupEntry,
-    RetiredAppOriginEntry, SageAppAuthor, SageAppCommon, SageAppDonation,
-    SageAppManifestFile, SageAppPackageManifest, SageAppSnapshot,
-    SageAppCapabilityFlags, SageGrantedPermissions, SageNetworkPermissionTarget,
-    SageRequestedCapabilities, SageRequestedNetworkPermissions,
-    SageRequestedNetworkWhitelist, SageRequestedPermissions, UserSageApp,
-    UserSageAppPendingUpdate, UserSageAppSource, InstalledSageAppStorage,
-};
+use crate::types::{CorruptedInstalledSageApp, ListedSageApp, PendingStorageCleanupEntry, RetiredAppOriginEntry, SageAppAuthor, SageAppCommon, SageAppDonation, SageAppManifestFile, SageAppPackageManifest, SageAppSnapshot, SageAppCapabilityFlags, SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedCapabilities, SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist, SageRequestedPermissions, UserSageApp, UserSageAppPendingUpdate, UserSageAppSource, InstalledSageAppStorage, SageApp};
+use crate::system_apps::list_builtin_system_apps;
 
 const INSTALLED_METADATA_FILE: &str = ".sage-installed.json";
 const PENDING_STORAGE_CLEANUP_FILE: &str = ".sage-pending-storage-cleanup.json";
@@ -423,6 +416,11 @@ pub fn list_installed_apps_internal(root: &Path) -> AnyResult<Vec<ListedSageApp>
                 app_dir: path.to_string_lossy().to_string(),
                 error: err.to_string(),
             })),
+        }
+    }
+    for app in list_builtin_system_apps()? {
+        if let SageApp::System(app) = app {
+            apps.push(ListedSageApp::System(app));
         }
     }
 

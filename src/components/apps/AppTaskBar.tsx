@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 export interface AppTaskBarTab {
   appId: string;
+  runtimeKind: 'user' | 'system';
   name: string;
   iconSrc: string | null;
   isActive: boolean;

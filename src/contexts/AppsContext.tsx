@@ -14,6 +14,7 @@ import {
   type SageAppUrlPreview,
   type SageGrantedPermissions,
   type SandboxStateView,
+  SystemSageApp,
   type UserSageApp,
 } from '@/bindings';
 import { useAppPendingApprovals } from '@/hooks/useAppPendingApprovals';
@@ -24,6 +25,10 @@ interface PerformAppUpdateOptions {
   restartIfRunning?: boolean;
   visibleAfterRestart?: boolean;
 }
+
+type UserInstalledEntry = { kind: 'user' } & UserSageApp;
+type SystemInstalledEntry = { kind: 'system' } & SystemSageApp;
+type InstalledEntry = UserInstalledEntry | SystemInstalledEntry;
 
 interface AppsContextValue {
   apps: ListedSageApp[];
@@ -61,6 +66,7 @@ interface AppsContextValue {
     grantedPermissions: SageGrantedPermissions,
   ) => Promise<UserSageApp>;
   uninstallApp: (appId: string) => Promise<void>;
+  getListedApp: (appId: string) => InstalledEntry | undefined;
   checkForUpdate: (appId: string) => Promise<SageAppUrlPreview | null>;
   performAppUpdate: (
     appId: string,
@@ -113,6 +119,17 @@ export function AppsProvider({ children }: { children: ReactNode }) {
   const { isReady: bridgeHostReady } = useBridgeHost({
     requestApproval,
   });
+
+  const getListedApp = useCallback(
+    (appId: string): InstalledEntry | undefined => {
+      return apps.find(
+        (item): item is InstalledEntry =>
+          (item.kind === 'user' || item.kind === 'system') &&
+          item.common.id === appId,
+      );
+    },
+    [apps],
+  );
 
   const refreshInstalledApps = useCallback(async () => {
     setLoading(true);
@@ -381,6 +398,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
       installApp,
       installUrlApp,
       uninstallApp,
+      getListedApp,
       checkForUpdate,
       performAppUpdate,
       clearAppStorage,
@@ -407,6 +425,7 @@ export function AppsProvider({ children }: { children: ReactNode }) {
       installApp,
       installUrlApp,
       uninstallApp,
+      getListedApp,
       checkForUpdate,
       performAppUpdate,
       clearAppStorage,

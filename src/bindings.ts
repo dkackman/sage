@@ -424,6 +424,9 @@ async getBuiltinTestApp(appId: string) : Promise<SageApp | null> {
 },
 async appsGetCapabilityRegistry() : Promise<SageAppCapabilityDefinitionView[]> {
     return await TAURI_INVOKE("apps_get_capability_registry");
+},
+async getBuiltinSystemApp(appId: string) : Promise<SageApp | null> {
+    return await TAURI_INVOKE("get_builtin_system_app", { appId });
 }
 }
 

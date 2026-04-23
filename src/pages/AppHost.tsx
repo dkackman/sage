@@ -4,7 +4,6 @@ import { useParams } from 'react-router-dom';
 import { useApps } from '@/contexts/AppsContext';
 import { useAppEmbeddedRuntime } from '@/hooks/useAppEmbeddedRuntime.ts';
 import { getSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
-import { asUserApp } from '@/lib/apps/types.ts';
 
 function AppNotFound() {
   return (
@@ -20,18 +19,19 @@ function AppNotFound() {
 export function AppHost() {
   const { appId = '' } = useParams();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { getApp, loading, sandboxState } = useApps();
+  const { getListedApp, loading, sandboxState } = useApps();
 
-  const app = getApp(appId);
-  const launchDecision = app
-    ? getSandboxLaunchDecision({
-        app,
-        sandboxState,
-      })
-    : null;
+  const app = getListedApp(appId);
+  const userLaunchDecision =
+    app?.kind === 'user'
+      ? getSandboxLaunchDecision({
+          app,
+          sandboxState,
+        })
+      : null;
 
   useAppEmbeddedRuntime({
-    app: app && launchDecision?.allowed ? asUserApp(app) : null,
+    app: app ?? null,
     containerRef,
   });
 
@@ -50,15 +50,15 @@ export function AppHost() {
     return <AppNotFound />;
   }
 
-  if (!launchDecision?.allowed) {
+  if (app.kind === 'user' && !userLaunchDecision?.allowed) {
     return (
       <div className='mx-auto w-full max-w-4xl p-4 md:p-6'>
         <Alert>
           <AlertTitle>
-            {launchDecision?.title ?? 'App launch blocked'}
+            {userLaunchDecision?.title ?? 'App launch blocked'}
           </AlertTitle>
           <AlertDescription>
-            {launchDecision?.description ??
+            {userLaunchDecision?.description ??
               'This app cannot be launched until required sandbox checks pass.'}
           </AlertDescription>
         </Alert>

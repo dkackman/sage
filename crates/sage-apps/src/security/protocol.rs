@@ -10,10 +10,8 @@ use crate::{
         builtin_test_app_spec,
     },
     security::build_app_csp,
+    system_apps::{build_builtin_system_app, builtin_system_app_dir, builtin_system_app_spec},
     types::SageApp,
-    system_apps::{
-        build_builtin_system_app, builtin_system_app_dir, builtin_system_app_spec,
-    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,6 +118,10 @@ fn handle_builtin_system_app_request(
 
     let request_path = request.uri().path();
     let csp = build_app_csp(&app);
+
+    if request_path.starts_with("/__sage/runtime-apps/") {
+        return serve_runtime_app_asset(request_path, &csp);
+    }
 
     let app_dir = builtin_system_app_dir(app_id)?
         .ok_or_else(|| anyhow!("missing builtin system app dir for {}", app_id))?;

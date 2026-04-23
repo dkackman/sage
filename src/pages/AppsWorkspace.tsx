@@ -31,6 +31,7 @@ export function AppsWorkspace() {
 
   const {
     getApp,
+    getListedApp,
     updateAvailability,
     busyAppIds,
     performAppUpdate,
@@ -90,19 +91,24 @@ export function AppsWorkspace() {
           return null;
         }
 
-        const installedApp = getApp(runtime.appId);
+        const installedApp = getListedApp(runtime.appId);
+
+        const iconSrc = installedApp
+          ? installedApp.kind === 'system'
+            ? `sage-system-app://${installedApp.common.originId}/${installedApp.common.iconFile}`
+            : `sage-app://${installedApp.common.originId}/${installedApp.common.iconFile}`
+          : null;
 
         return {
           appId: runtime.appId,
+          runtimeKind: runtime.runtimeKind,
           name: installedApp?.common.name ?? runtime.appName,
-          iconSrc: installedApp
-            ? `sage-app://${installedApp.common.originId}/${installedApp.common.iconFile}`
-            : null,
-          isActive: runtime.appId === activeApp?.common.id,
+          iconSrc,
+          isActive: runtime.appId === appId,
         };
       })
       .filter((tab): tab is AppTaskBarTab => tab !== null);
-  }, [runtimes, tabOrder, getApp, activeApp?.common.id]);
+  }, [runtimes, tabOrder, getListedApp, appId]);
 
   const approvalStripData = useMemo<PendingApproval>(() => {
     if (!currentApproval) {
