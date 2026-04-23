@@ -1,7 +1,7 @@
 import './bridge.js';
 import { createSageClient } from './sdk.js';
 
-const log = (...args) => window.__SAGE_TEST__?.log?.(...args);
+const log = (...args) => console.log('[storage-clear-probe]', ...args);
 
 const STORE_NAME = 'probe_store';
 const DB_KEY = 'probe_key';
