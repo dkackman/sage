@@ -10,7 +10,24 @@ function AppNotFound() {
     <div className='mx-auto w-full max-w-4xl p-4 md:p-6'>
       <Alert>
         <AlertTitle>App not found</AlertTitle>
-        <AlertDescription>This app is not installed.</AlertDescription>
+        <AlertDescription>This app does not exist.</AlertDescription>
+      </Alert>
+    </div>
+  );
+}
+
+function AppBlocked({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className='mx-auto w-full max-w-4xl p-4 md:p-6'>
+      <Alert>
+        <AlertTitle>{title}</AlertTitle>
+        <AlertDescription>{description}</AlertDescription>
       </Alert>
     </div>
   );
@@ -22,6 +39,7 @@ export function AppHost() {
   const { getListedApp, loading, sandboxState } = useApps();
 
   const app = getListedApp(appId);
+
   const userLaunchDecision =
     app?.kind === 'user'
       ? getSandboxLaunchDecision({
@@ -30,8 +48,17 @@ export function AppHost() {
         })
       : null;
 
+  const routeableSystemApp =
+    app?.kind === 'system' && app.presentation === 'Taskbar';
+
+  const shouldMountRuntime =
+    !!app &&
+    (app.kind === 'system'
+      ? routeableSystemApp
+      : !!userLaunchDecision?.allowed);
+
   useAppEmbeddedRuntime({
-    app: app ?? null,
+    app: shouldMountRuntime ? app : null,
     containerRef,
   });
 
@@ -50,19 +77,24 @@ export function AppHost() {
     return <AppNotFound />;
   }
 
+  if (app.kind === 'system' && app.presentation !== 'Taskbar') {
+    return (
+      <AppBlocked
+        title='System app is not routeable'
+        description='This system app is opened contextually by Sage and is not available through direct navigation.'
+      />
+    );
+  }
+
   if (app.kind === 'user' && !userLaunchDecision?.allowed) {
     return (
-      <div className='mx-auto w-full max-w-4xl p-4 md:p-6'>
-        <Alert>
-          <AlertTitle>
-            {userLaunchDecision?.title ?? 'App launch blocked'}
-          </AlertTitle>
-          <AlertDescription>
-            {userLaunchDecision?.description ??
-              'This app cannot be launched until required sandbox checks pass.'}
-          </AlertDescription>
-        </Alert>
-      </div>
+      <AppBlocked
+        title={userLaunchDecision?.title ?? 'App launch blocked'}
+        description={
+          userLaunchDecision?.description ??
+          'This app cannot be launched until required sandbox checks pass.'
+        }
+      />
     );
   }
 

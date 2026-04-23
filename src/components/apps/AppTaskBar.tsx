@@ -16,8 +16,8 @@ interface Props {
   activeAppId: string | null;
   activeAppHasDonation: boolean;
   onOpenApps: () => void;
-  onSelectApp: (appId: string) => void;
-  onCloseApp: (appId: string) => void;
+  onSelectApp: (tab: AppTaskBarTab) => void;
+  onCloseApp: (tab: AppTaskBarTab) => void;
   onReorderTabs: (nextAppIds: string[]) => void;
   onOpenDonation: () => void;
 }
@@ -31,7 +31,7 @@ interface DragState {
 
 const MAX_TAB_WIDTH_PX = 200;
 const MIN_TAB_WIDTH_PX = 80;
-const TAB_GAP_PX = 4; // tailwind gap-1
+const TAB_GAP_PX = 4;
 
 function reorderIds(
   ids: string[],
@@ -72,10 +72,10 @@ export function AppTaskBar({
   const activeOrder = previewOrder ?? baseOrder;
 
   const tabsById = useMemo(() => {
-    return new Map(tabs.map((tab) => [tab.appId, tab]));
+    return new Map(tabs.map((tab) => [tab.appId, tab] as const));
   }, [tabs]);
 
-  const orderedTabs = useMemo(() => {
+  const orderedTabs = useMemo<AppTaskBarTab[]>(() => {
     return activeOrder
       .map((appId) => tabsById.get(appId))
       .filter((tab): tab is AppTaskBarTab => tab != null);
@@ -269,7 +269,7 @@ export function AppTaskBar({
                   type='button'
                   onClick={() => {
                     if (!dragState && !tab.isActive) {
-                      onSelectApp(tab.appId);
+                      onSelectApp(tab);
                     }
                   }}
                   onPointerDown={(event) => {
@@ -277,7 +277,7 @@ export function AppTaskBar({
                       return;
                     }
 
-                    onSelectApp(tab.appId);
+                    onSelectApp(tab);
 
                     const viewportEl = tabsViewportRef.current;
                     if (!viewportEl) {
@@ -341,7 +341,7 @@ export function AppTaskBar({
                       className='h-6 w-6'
                       onClick={(event) => {
                         event.stopPropagation();
-                        onCloseApp(tab.appId);
+                        onCloseApp(tab);
                       }}
                     >
                       <X className='h-3.5 w-3.5' />
@@ -401,10 +401,11 @@ export function AppTaskBar({
             : null}
         </div>
       </div>
+
       {activeAppHasDonation && (
         <Button
           variant='default'
-          className='h-9 shrink-0 px-3 bg-amber-500 hover:bg-amber-600 text-black'
+          className='h-9 shrink-0 bg-amber-500 px-3 text-black hover:bg-amber-600'
           onClick={onOpenDonation}
         >
           Support developer

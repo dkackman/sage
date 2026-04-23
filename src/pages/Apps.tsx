@@ -176,7 +176,15 @@ export function Apps() {
     return new Set(runtimes.map((runtime) => runtime.appId));
   }, [runtimes]);
 
-  const installedApps = useMemo(() => apps.filter(isInstalledEntry), [apps]);
+  const installedApps = useMemo(
+    () =>
+      apps.filter(
+        (entry): entry is InstalledEntry =>
+          isInstalledEntry(entry) &&
+          (entry.kind === 'user' || entry.presentation === 'Taskbar'),
+      ),
+    [apps],
+  );
 
   const corruptedApps = useMemo(() => apps.filter(isCorruptedEntry), [apps]);
 
@@ -578,7 +586,7 @@ export function Apps() {
                 'running'
               }
               onTaskManager={() => {
-                navigate('/apps/task-manager');
+                navigate('/system-apps/task-manager');
               }}
               onRerunSandboxTests={() => {
                 void rerunSandboxTests();

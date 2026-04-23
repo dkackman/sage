@@ -12,6 +12,7 @@ import { useApps } from '@/contexts/AppsContext.tsx';
 import { useAppRuntimes } from '@/hooks/useAppRuntimes';
 import { focusRuntime, killRuntime } from '@/lib/apps/runtimeRegistry';
 import { formatAppError } from '@/lib/apps/formatAppError';
+import { routeForApp } from '@/lib/apps/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
 import {
@@ -52,7 +53,21 @@ export function AppsWorkspace() {
 
   useEffect(() => {
     setTabOrder((prev) => {
-      const runtimeIds = runtimes.map((runtime) => runtime.appId);
+      const runtimeIds = runtimes
+        .filter((runtime) => {
+          const installedApp = getListedApp(runtime.appId);
+          if (!installedApp) {
+            return false;
+          }
+
+          if (installedApp.kind === 'user') {
+            return true;
+          }
+
+          return installedApp.presentation === 'Taskbar';
+        })
+        .map((runtime) => runtime.appId);
+
       const kept = prev.filter((runtimeAppId) =>
         runtimeIds.includes(runtimeAppId),
       );
@@ -61,7 +76,7 @@ export function AppsWorkspace() {
       );
       return [...kept, ...added];
     });
-  }, [runtimes]);
+  }, [runtimes, getListedApp]);
 
   const activeApp: UserSageApp | null = appId ? (getApp(appId) ?? null) : null;
   const activeUpdatePreview: SageAppUrlPreview | null = activeApp
@@ -81,33 +96,44 @@ export function AppsWorkspace() {
 
   const tabs = useMemo<AppTaskBarTab[]>(() => {
     const runtimeByAppId = new Map(
-      runtimes.map((runtime) => [runtime.appId, runtime]),
+      runtimes.map((runtime) => [runtime.appId, runtime] as const),
     );
 
-    return tabOrder
-      .map((runtimeAppId) => {
-        const runtime = runtimeByAppId.get(runtimeAppId);
-        if (!runtime) {
-          return null;
-        }
+    const out: AppTaskBarTab[] = [];
 
-        const installedApp = getListedApp(runtime.appId);
+    for (const runtimeAppId of tabOrder) {
+      const runtime = runtimeByAppId.get(runtimeAppId);
+      if (!runtime) {
+        continue;
+      }
 
-        const iconSrc = installedApp
-          ? installedApp.kind === 'system'
-            ? `sage-system-app://${installedApp.common.originId}/${installedApp.common.iconFile}`
-            : `sage-app://${installedApp.common.originId}/${installedApp.common.iconFile}`
-          : null;
+      const installedApp = getListedApp(runtime.appId);
+      if (!installedApp) {
+        continue;
+      }
 
-        return {
-          appId: runtime.appId,
-          runtimeKind: runtime.runtimeKind,
-          name: installedApp?.common.name ?? runtime.appName,
-          iconSrc,
-          isActive: runtime.appId === appId,
-        };
-      })
-      .filter((tab): tab is AppTaskBarTab => tab !== null);
+      if (
+        installedApp.kind === 'system' &&
+        installedApp.presentation !== 'Taskbar'
+      ) {
+        continue;
+      }
+
+      const iconSrc =
+        installedApp.kind === 'system'
+          ? `sage-system-app://${installedApp.common.originId}/${installedApp.common.iconFile}`
+          : `sage-app://${installedApp.common.originId}/${installedApp.common.iconFile}`;
+
+      out.push({
+        appId: runtime.appId,
+        runtimeKind: installedApp.kind,
+        name: installedApp.common.name ?? runtime.appName,
+        iconSrc,
+        isActive: runtime.appId === appId,
+      });
+    }
+
+    return out;
   }, [runtimes, tabOrder, getListedApp, appId]);
 
   const approvalStripData = useMemo<PendingApproval>(() => {
@@ -204,18 +230,28 @@ export function AppsWorkspace() {
     <div className='flex h-full min-h-0 w-full flex-col overflow-hidden'>
       <AppTaskBar
         tabs={tabs}
-        activeAppId={activeApp?.common.id ?? null}
+        activeAppId={appId ?? null}
         onOpenApps={() => {
           navigate('/apps');
         }}
-        onSelectApp={(targetAppId) => {
-          void focusRuntime(targetAppId).then(() => {
-            navigate(`/apps/${targetAppId}`);
+        onSelectApp={(tab) => {
+          const targetApp = getListedApp(tab.appId);
+          if (!targetApp) {
+            return;
+          }
+
+          const nextRoute = routeForApp(targetApp);
+          if (!nextRoute) {
+            return;
+          }
+
+          void focusRuntime(tab.appId).then(() => {
+            navigate(nextRoute);
           });
         }}
-        onCloseApp={(targetAppId) => {
-          void killRuntime(targetAppId).then(() => {
-            if (targetAppId === activeApp?.common.id) {
+        onCloseApp={(tab) => {
+          void killRuntime(tab.appId).then(() => {
+            if (tab.appId === appId) {
               navigate('/apps');
             }
           });

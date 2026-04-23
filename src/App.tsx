@@ -59,7 +59,6 @@ import { Transactions } from './pages/Transactions';
 import Wallet from './pages/Wallet';
 import { Apps } from '@/pages/Apps.tsx';
 import { AppHost } from '@/pages/AppHost.tsx';
-import { TaskManager } from '@/pages/TaskManager.tsx';
 import { AppsProvider } from '@/contexts/AppsContext.tsx';
 import { AppsWorkspace } from '@/pages/AppsWorkspace.tsx';
 
@@ -144,7 +143,11 @@ const router = createHashRouter(
       <Route path='/apps' element={<Wallet />}>
         <Route element={<AppsWorkspace />}>
           <Route path='' element={<Apps />} />
-          <Route path='task-manager' element={<TaskManager />} />
+          <Route path=':appId' element={<AppHost />} />
+        </Route>
+      </Route>
+      <Route path='/system-apps' element={<Wallet />}>
+        <Route element={<AppsWorkspace />}>
           <Route path=':appId' element={<AppHost />} />
         </Route>
       </Route>
@@ -186,7 +189,6 @@ function AppInner() {
   const { locale } = useLanguage();
   const [isLocaleInitialized, setIsLocaleInitialized] = useState(false);
 
-  // Enable global transaction failure handling
   useTransactionFailures();
 
   useEffect(() => {
@@ -194,7 +196,7 @@ function AppInner() {
       await loadCatalog(locale);
       setIsLocaleInitialized(true);
     };
-    initLocale();
+    void initLocale();
   }, [locale]);
 
   return (
