@@ -7,4 +7,6 @@ pub use app::{
     AppGetCapabilities, AppRequestCapabilityGrant, AppRequestNetworkWhitelistGrant,
 };
 pub use bridge::{BridgePing, BridgeSend};
-pub use wallet::WalletSendXch;
+pub use wallet::{
+    WalletGetKey, WalletGetKeys, WalletGetSecretKey, WalletSendXch,
+};

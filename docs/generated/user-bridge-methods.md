@@ -64,6 +64,30 @@
 |---|---|
 | Capability | `bridge.send` |
 
+## `wallet.getKey`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_key` |
+
+## `wallet.getKeys`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_keys` |
+
+## `wallet.getSecretKey`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_secret_key` |
+
 ## `wallet.sendXch`
 
 

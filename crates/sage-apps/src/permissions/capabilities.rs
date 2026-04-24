@@ -131,6 +131,45 @@ pub fn get_user_capability_definition(
             },
         },
 
+        UserBridgeCapability::WalletGetKeys => UserCapabilityDefinition {
+            capability,
+            label: "List wallet keys",
+            description: "Allows the app to list wallet keys configured in Sage.",
+            flags: CapabilityFlags {
+                externally_observable: false,
+                accesses_sensitive_secret: false,
+                requestable_by_app: true,
+                user_grantable: true,
+                shared_with_app: true,
+            },
+        },
+
+        UserBridgeCapability::WalletGetKey => UserCapabilityDefinition {
+            capability,
+            label: "Read wallet key",
+            description: "Allows the app to read public information about a wallet key.",
+            flags: CapabilityFlags {
+                externally_observable: false,
+                accesses_sensitive_secret: false,
+                requestable_by_app: true,
+                user_grantable: true,
+                shared_with_app: true,
+            },
+        },
+
+        UserBridgeCapability::WalletGetSecretKey => UserCapabilityDefinition {
+            capability,
+            label: "Read wallet secret key",
+            description: "Allows the app to read wallet secrets, including the mnemonic or private key when available.",
+            flags: CapabilityFlags {
+                externally_observable: false,
+                accesses_sensitive_secret: true,
+                requestable_by_app: true,
+                user_grantable: true,
+                shared_with_app: true,
+            },
+        },
+
         UserBridgeCapability::WalletSendXch => UserCapabilityDefinition {
             capability,
             label: "Send XCH",

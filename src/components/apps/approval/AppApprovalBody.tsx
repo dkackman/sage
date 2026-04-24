@@ -2,6 +2,7 @@ import { SendXchApprovalCard } from '@/components/apps/approval/SendXchApprovalC
 import { CapabilityGrantApprovalCard } from '@/components/apps/approval/CapabilityGrantApprovalCard.tsx';
 import { NetworkWhitelistGrantApprovalCard } from '@/components/apps/approval/NetworkWhitelistGrantApprovalCard.tsx';
 import type { RustBridgeApprovalEvent } from '@/bindings';
+import { GetSecretKeyApprovalCard } from '@/components/apps/approval/GetSecretKeyApprovalCard.tsx';
 
 interface Props {
   approval: RustBridgeApprovalEvent;
@@ -12,6 +13,8 @@ export function AppApprovalBody({ approval, expanded }: Props) {
   const req = approval.approval;
 
   switch (req.kind) {
+    case 'getSecretKey':
+      return <GetSecretKeyApprovalCard approval={req} expanded={expanded} />;
     case 'sendXch':
       return <SendXchApprovalCard approval={req} expanded={expanded} />;
 

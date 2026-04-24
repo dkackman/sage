@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::bridge::methods::user::app::AppRequestNetworkWhitelistGrant;
-use super::methods::user::{AppGetInfo, BridgePing, BridgeSend, AppLifecycleReadyToStop, AppLifecycleSetBeforeStopListener, AppGetCapabilities, AppRequestCapabilityGrant, WalletSendXch};
+use super::methods::user::{AppGetInfo, BridgePing, BridgeSend, AppLifecycleReadyToStop, AppLifecycleSetBeforeStopListener, AppGetCapabilities, AppRequestCapabilityGrant, WalletSendXch, WalletGetKeys, WalletGetKey, WalletGetSecretKey};
 use super::methods::BridgeMethod;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,6 +54,9 @@ fn build_user_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
         Box::new(AppLifecycleReadyToStop),
     );
     methods.insert("wallet.sendXch", Box::new(WalletSendXch));
+    methods.insert("wallet.getKeys", Box::new(WalletGetKeys));
+    methods.insert("wallet.getKey", Box::new(WalletGetKey));
+    methods.insert("wallet.getSecretKey", Box::new(WalletGetSecretKey));
 
     methods
 }

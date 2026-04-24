@@ -1,6 +1,6 @@
 use specta::TypeCollection;
 use specta_typescript::{BigIntExportBehavior, Typescript};
-use sage_api::TransactionResponse;
+use sage_api::{GetKey, GetKeyResponse, GetKeys, GetKeysResponse, GetSecretKey, GetSecretKeyResponse, TransactionResponse};
 use crate::bridge::methods::system::runtime_manager::RuntimeTargetParams;
 use crate::bridge::methods::system::RuntimeManagerRuntimesChangedEvent;
 use crate::bridge::methods::user::app::get_info::{AppGetInfoResult, SageNetworkPermissionInfo};
@@ -45,6 +45,12 @@ pub fn export_user_bridge_typescript() -> Result<String, String> {
     types.register::<SetBeforeStopListenerParams>();
     types.register::<ReadyToStopParams>();
     types.register::<RuntimeAckResult>();
+    types.register::<GetKeys>();
+    types.register::<GetKeysResponse>();
+    types.register::<GetKey>();
+    types.register::<GetKeyResponse>();
+    types.register::<GetSecretKey>();
+    types.register::<GetSecretKeyResponse>();
 
     Typescript::default()
         .bigint(BigIntExportBehavior::Number)

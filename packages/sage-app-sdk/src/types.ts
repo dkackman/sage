@@ -2,6 +2,11 @@ import {
   AppGetInfoResult,
   BridgePingResult,
   BridgeSendResult,
+  GetKey,
+  GetKeyResponse,
+  GetKeysResponse,
+  GetSecretKey,
+  GetSecretKeyResponse,
   GrantedCapabilitiesChangeEvent,
   GrantedNetworkWhitelistChangeEvent,
   ReadyToStopParams,
@@ -61,6 +66,9 @@ export type SageBridgeRuntimeEvent =
   | GrantedNetworkWhitelistChangeEvent;
 
 export type SageWalletClient = {
+  getKeys(): Promise<GetKeysResponse>;
+  getKey(input?: GetKey): Promise<GetKeyResponse>;
+  getSecretKey(input: GetSecretKey): Promise<GetSecretKeyResponse>;
   sendXch(input: WalletSendXchParams): Promise<TransactionResponse>;
 };
 

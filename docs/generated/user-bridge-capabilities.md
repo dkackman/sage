@@ -112,6 +112,48 @@ Allows the app to request access to an additional network target after installat
 | Externally observable | `false` |
 | Accesses sensitive secret | `false` |
 
+## `wallet.get_keys`
+
+**List wallet keys**
+
+Allows the app to list wallet keys configured in Sage.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+
+## `wallet.get_key`
+
+**Read wallet key**
+
+Allows the app to read public information about a wallet key.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+
+## `wallet.get_secret_key`
+
+**Read wallet secret key**
+
+Allows the app to read wallet secrets, including the mnemonic or private key when available.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `true` |
+
 ## `wallet.send_xch`
 
 **Send XCH**

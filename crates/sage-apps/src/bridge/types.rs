@@ -63,6 +63,9 @@ pub struct RustBridgeApprovalRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum RustBridgeApprovalBody {
+    GetSecretKey {
+        fingerprint: u32,
+    },
     SendXch {
         summary: WalletSendXchParams,
     },

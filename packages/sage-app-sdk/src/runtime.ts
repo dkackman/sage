@@ -19,6 +19,11 @@ import type {
   SetBeforeStopListenerParams,
   TransactionResponse,
   WalletSendXchParams,
+  GetKey,
+  GetKeyResponse,
+  GetKeysResponse,
+  GetSecretKey,
+  GetSecretKeyResponse,
 } from './types';
 import { createBridgeRuntimeCore } from './bridge-runtime-core';
 
@@ -357,6 +362,18 @@ export function initSageRuntimeBridge(): boolean {
     },
 
     wallet: {
+      async getKeys() {
+        return await callHost<GetKeysResponse>('wallet.getKeys');
+      },
+      async getKey(input?: GetKey) {
+        return await callHost<GetKeyResponse>('wallet.getKey', input);
+      },
+      async getSecretKey(input: GetSecretKey) {
+        return await callHost<GetSecretKeyResponse>(
+          'wallet.getSecretKey',
+          input,
+        );
+      },
       async sendXch(input: WalletSendXchParams) {
         return await callHost<TransactionResponse>('wallet.sendXch', input);
       },

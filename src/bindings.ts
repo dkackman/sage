@@ -2248,7 +2248,7 @@ export type ResyncCatResponse = Record<string, never>
 export type ResyncResponse = Record<string, never>
 export type RuntimeTargetParams = { appId: string }
 export type RustBridgeApprovalEvent = { approvalId: string; approval: RustBridgeApprovalRequest }
-export type RustBridgeApprovalRequest = ({ kind: "sendXch"; summary: WalletSendXchParams } | { kind: "capabilityGrant"; capability: UserBridgeCapability; definition: SageAppCapabilityDefinitionView } | { kind: "networkWhitelistGrant"; entry: SageNetworkPermissionTarget }) & { app: SageApp; sourceLabel: string; requestId: string }
+export type RustBridgeApprovalRequest = ({ kind: "getSecretKey"; fingerprint: number } | { kind: "sendXch"; summary: WalletSendXchParams } | { kind: "capabilityGrant"; capability: UserBridgeCapability; definition: SageAppCapabilityDefinitionView } | { kind: "networkWhitelistGrant"; entry: SageNetworkPermissionTarget }) & { app: SageApp; sourceLabel: string; requestId: string }
 export type RustBridgeErrorPayload = { code: string; message: string }
 export type RustBridgeErrorResponse = { channel: string; bridgeVersion: string; id: string; ok: boolean; error: RustBridgeErrorPayload }
 export type RustBridgeInvokeResult = { kind: "immediate"; response: RustBridgeResponse } | { kind: "pending" }
@@ -2844,7 +2844,7 @@ visible: boolean }
  * Response after updating an option
  */
 export type UpdateOptionResponse = Record<string, never>
-export type UserBridgeCapability = "persistent_storage" | "bridge.send" | "app.get_capabilities" | "app.get_info" | "app.lifecycle.ready_to_stop" | "app.lifecycle.set_before_stop_listener" | "app.request_capability_grant" | "app.request_network_whitelist_grant" | "wallet.send_xch" | "wallet.send_xch_auto_submit"
+export type UserBridgeCapability = "persistent_storage" | "bridge.send" | "app.get_capabilities" | "app.get_info" | "app.lifecycle.ready_to_stop" | "app.lifecycle.set_before_stop_listener" | "app.request_capability_grant" | "app.request_network_whitelist_grant" | "wallet.get_keys" | "wallet.get_key" | "wallet.get_secret_key" | "wallet.send_xch" | "wallet.send_xch_auto_submit"
 export type UserSageApp = { common: SageAppCommon; source: UserSageAppSource; pendingUpdate: UserSageAppPendingUpdate | null }
 export type UserSageAppPendingUpdate = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type UserSageAppSource = { kind: "zip" } | { kind: "url"; app_url: string; manifest_url: string }
