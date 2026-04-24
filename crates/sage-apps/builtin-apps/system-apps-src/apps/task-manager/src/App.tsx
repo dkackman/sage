@@ -9,17 +9,111 @@ import {
 } from './taskManagerApi';
 
 function formatDuration(ms: number) {
-  const s = Math.floor(ms / 1000);
+  const safeMs = Math.max(0, ms);
+  const s = Math.floor(safeMs / 1000);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  return [h, m, sec].map((v) => String(v).padStart(2, '0')).join(':');
+
+  if (h > 0) {
+    return `${h}h ${String(m).padStart(2, '0')}m ${String(sec).padStart(2, '0')}s`;
+  }
+
+  if (m > 0) {
+    return `${m}m ${String(sec).padStart(2, '0')}s`;
+  }
+
+  return `${sec}s`;
+}
+
+function formatTime(value: number) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(new Date(value));
+}
+
+function statusColor(state: string) {
+  const normalized = state.toLowerCase();
+
+  if (normalized.includes('running') || normalized.includes('active')) {
+    return '#34d399';
+  }
+
+  if (normalized.includes('stopping') || normalized.includes('starting')) {
+    return '#fbbf24';
+  }
+
+  if (normalized.includes('failed') || normalized.includes('error')) {
+    return '#fb7185';
+  }
+
+  return '#94a3b8';
+}
+
+function ActionButton({
+  children,
+  danger,
+  disabled,
+  onClick,
+}: {
+  children: string;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick: () => void | Promise<void>;
+}) {
+  return (
+    <button
+      disabled={disabled}
+      onClick={() => void onClick()}
+      style={{
+        height: 34,
+        padding: '0 12px',
+        borderRadius: 999,
+        border: danger
+          ? '1px solid rgba(251,113,133,0.35)'
+          : '1px solid rgba(255,255,255,0.12)',
+        background: danger
+          ? 'rgba(251,113,133,0.10)'
+          : 'rgba(255,255,255,0.055)',
+        color: danger ? '#fecdd3' : '#f8fafc',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.45 : 1,
+        fontSize: 13,
+        fontWeight: 600,
+        backdropFilter: 'blur(16px)',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div
+      style={{
+        minWidth: 88,
+        padding: '10px 12px',
+        borderRadius: 14,
+        background: 'rgba(255,255,255,0.045)',
+        border: '1px solid rgba(255,255,255,0.08)',
+      }}
+    >
+      <div style={{ fontSize: 11, color: 'rgba(248,250,252,0.48)' }}>
+        {label}
+      </div>
+      <div style={{ marginTop: 4, fontSize: 14, fontWeight: 700 }}>{value}</div>
+    </div>
+  );
 }
 
 export function App() {
   const [runtimes, setRuntimes] = useState<RuntimeRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyAppId, setBusyAppId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   async function refresh() {
     setLoading(true);
@@ -29,6 +123,16 @@ export function App() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -55,136 +159,330 @@ export function App() {
     [runtimes],
   );
 
+  const totals = useMemo(
+    () => ({
+      runtimes: runtimes.length,
+      requests: runtimes.reduce((sum, r) => sum + r.inFlightRequestCount, 0),
+      batches: runtimes.reduce((sum, r) => sum + r.activeBatchCount, 0),
+      sockets: runtimes.reduce((sum, r) => sum + r.activeSocketCount, 0),
+    }),
+    [runtimes],
+  );
+
+  async function runAction(appId: string, action: () => Promise<unknown>) {
+    setBusyAppId(appId);
+    try {
+      await action();
+    } finally {
+      setBusyAppId(null);
+    }
+  }
+
   return (
     <div
       style={{
         fontFamily:
           'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        padding: 16,
-        background: '#0b0b0c',
-        color: '#f5f5f5',
         minHeight: '100vh',
+        color: '#f8fafc',
+        background:
+          'radial-gradient(circle at top left, rgba(59,130,246,0.22), transparent 34%), radial-gradient(circle at top right, rgba(168,85,247,0.16), transparent 32%), linear-gradient(180deg, #09090b 0%, #0f1117 100%)',
       }}
     >
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: 24 }}>
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 16,
+            alignItems: 'flex-start',
+            gap: 20,
+            marginBottom: 22,
           }}
         >
           <div>
-            <h1 style={{ margin: 0, fontSize: 24 }}>Task Manager</h1>
-            <div style={{ opacity: 0.7, marginTop: 4, fontSize: 14 }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '5px 10px',
+                borderRadius: 999,
+                border: '1px solid rgba(255,255,255,0.10)',
+                background: 'rgba(255,255,255,0.045)',
+                color: 'rgba(248,250,252,0.68)',
+                fontSize: 12,
+                marginBottom: 10,
+              }}
+            >
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 999,
+                  background: '#34d399',
+                  boxShadow: '0 0 18px rgba(52,211,153,0.75)',
+                }}
+              />
               Built-in system app
+            </div>
+
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 34,
+                letterSpacing: '-0.04em',
+                lineHeight: 1,
+              }}
+            >
+              Task Manager
+            </h1>
+
+            <div
+              style={{
+                marginTop: 8,
+                color: 'rgba(248,250,252,0.56)',
+                fontSize: 14,
+              }}
+            >
+              Live runtime control · updated {formatTime(now)}
             </div>
           </div>
 
           <button
             onClick={() => void refresh()}
+            disabled={loading}
             style={{
-              height: 36,
-              padding: '0 14px',
-              borderRadius: 10,
+              height: 40,
+              padding: '0 16px',
+              borderRadius: 999,
               border: '1px solid rgba(255,255,255,0.14)',
-              background: 'rgba(255,255,255,0.06)',
-              color: 'inherit',
-              cursor: 'pointer',
+              background:
+                'linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.055))',
+              color: '#f8fafc',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1,
+              fontWeight: 700,
+              boxShadow: '0 14px 40px rgba(0,0,0,0.25)',
             }}
           >
-            Refresh
+            {loading ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
 
         <div
           style={{
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: 18,
-            overflow: 'hidden',
-            background: 'rgba(255,255,255,0.03)',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+            gap: 12,
+            marginBottom: 18,
           }}
         >
-          {loading ? (
-            <div style={{ padding: 18, opacity: 0.75 }}>Loading runtimes…</div>
+          <Metric label='Runtimes' value={totals.runtimes} />
+          <Metric label='Requests' value={totals.requests} />
+          <Metric label='Batches' value={totals.batches} />
+          <Metric label='Sockets' value={totals.sockets} />
+        </div>
+
+        <div
+          style={{
+            overflow: 'hidden',
+            borderRadius: 24,
+            border: '1px solid rgba(255,255,255,0.10)',
+            background: 'rgba(15,23,42,0.48)',
+            boxShadow:
+              '0 24px 80px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.06)',
+            backdropFilter: 'blur(22px)',
+          }}
+        >
+          {loading && sorted.length === 0 ? (
+            <div style={{ padding: 22, color: 'rgba(248,250,252,0.62)' }}>
+              Loading runtimes…
+            </div>
           ) : sorted.length === 0 ? (
-            <div style={{ padding: 18, opacity: 0.75 }}>No running apps.</div>
+            <div style={{ padding: 28, color: 'rgba(248,250,252,0.62)' }}>
+              No running apps.
+            </div>
           ) : (
-            sorted.map((runtime) => (
-              <div
-                key={runtime.runtimeId}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: 16,
-                  padding: 16,
-                  borderTop: '1px solid rgba(255,255,255,0.08)',
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{runtime.appName}</div>
-                  <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
-                    {runtime.appId}
+            sorted.map((runtime, index) => {
+              const busy = busyAppId === runtime.appId;
+              const color = statusColor(runtime.state);
+
+              return (
+                <div
+                  key={runtime.runtimeId}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) auto',
+                    gap: 18,
+                    padding: 18,
+                    borderTop:
+                      index === 0
+                        ? 'none'
+                        : '1px solid rgba(255,255,255,0.075)',
+                    background:
+                      index % 2 === 0
+                        ? 'rgba(255,255,255,0.018)'
+                        : 'transparent',
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        minWidth: 0,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 9,
+                          height: 9,
+                          borderRadius: 999,
+                          background: color,
+                          boxShadow: `0 0 18px ${color}`,
+                          flexShrink: 0,
+                        }}
+                      />
+
+                      <div
+                        style={{
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          fontSize: 16,
+                          fontWeight: 750,
+                          letterSpacing: '-0.01em',
+                        }}
+                      >
+                        {runtime.appName}
+                      </div>
+
+                      {runtime.visible ? (
+                        <span
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: 999,
+                            background: 'rgba(52,211,153,0.10)',
+                            border: '1px solid rgba(52,211,153,0.20)',
+                            color: '#bbf7d0',
+                            fontSize: 11,
+                            fontWeight: 700,
+                          }}
+                        >
+                          Visible
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: 999,
+                            background: 'rgba(148,163,184,0.10)',
+                            border: '1px solid rgba(148,163,184,0.16)',
+                            color: '#cbd5e1',
+                            fontSize: 11,
+                            fontWeight: 700,
+                          }}
+                        >
+                          Hidden
+                        </span>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 7,
+                        fontSize: 12,
+                        color: 'rgba(248,250,252,0.45)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {runtime.appId}
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                        marginTop: 12,
+                      }}
+                    >
+                      <Metric
+                        label='Uptime'
+                        value={formatDuration(now - runtime.startedAt)}
+                      />
+                      <Metric
+                        label='Started'
+                        value={formatTime(runtime.startedAt)}
+                      />
+                      <Metric label='Kind' value={runtime.runtimeKind} />
+                      <Metric label='State' value={runtime.state} />
+                      <Metric label='Mode' value={runtime.mode} />
+                      <Metric
+                        label='Requests'
+                        value={runtime.inFlightRequestCount}
+                      />
+                      <Metric
+                        label='Batches'
+                        value={runtime.activeBatchCount}
+                      />
+                      <Metric
+                        label='Sockets'
+                        value={runtime.activeSocketCount}
+                      />
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
-                    kind={runtime.runtimeKind} · state={runtime.state} · mode=
-                    {runtime.mode}
-                  </div>
-                  <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
-                    uptime={formatDuration(Date.now() - runtime.startedAt)} ·
-                    requests={runtime.inFlightRequestCount} · batches=
-                    {runtime.activeBatchCount} · sockets=
-                    {runtime.activeSocketCount}
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 8,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <ActionButton
+                      disabled={busy}
+                      onClick={() =>
+                        runAction(runtime.appId, () =>
+                          focusRuntime(runtime.appId),
+                        )
+                      }
+                    >
+                      Focus
+                    </ActionButton>
+
+                    <ActionButton
+                      disabled={busy}
+                      onClick={() =>
+                        runAction(runtime.appId, () =>
+                          hideRuntime(runtime.appId),
+                        )
+                      }
+                    >
+                      Hide
+                    </ActionButton>
+
+                    <ActionButton
+                      danger
+                      disabled={busy}
+                      onClick={() =>
+                        runAction(runtime.appId, async () => {
+                          await killRuntime(runtime.appId);
+                          await refresh();
+                        })
+                      }
+                    >
+                      Kill
+                    </ActionButton>
                   </div>
                 </div>
-
-                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                  <button
-                    disabled={busyAppId === runtime.appId}
-                    onClick={async () => {
-                      setBusyAppId(runtime.appId);
-                      try {
-                        await focusRuntime(runtime.appId);
-                      } finally {
-                        setBusyAppId(null);
-                      }
-                    }}
-                  >
-                    Focus
-                  </button>
-
-                  <button
-                    disabled={busyAppId === runtime.appId}
-                    onClick={async () => {
-                      setBusyAppId(runtime.appId);
-                      try {
-                        await hideRuntime(runtime.appId);
-                      } finally {
-                        setBusyAppId(null);
-                      }
-                    }}
-                  >
-                    Hide
-                  </button>
-
-                  <button
-                    disabled={busyAppId === runtime.appId}
-                    onClick={async () => {
-                      setBusyAppId(runtime.appId);
-                      try {
-                        await killRuntime(runtime.appId);
-                        await refresh();
-                      } finally {
-                        setBusyAppId(null);
-                      }
-                    }}
-                  >
-                    Kill
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
