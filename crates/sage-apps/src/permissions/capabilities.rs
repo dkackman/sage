@@ -7,8 +7,8 @@ use crate::types::{SageAppCapabilityDefinitionView, SageAppCapabilityFlagsView};
 pub struct CapabilityFlags {
     pub externally_observable: bool,
     pub accesses_sensitive_secret: bool,
-    pub persistent_storage: bool,
     pub requestable_by_app: bool,
+    pub user_grantable: bool,
     pub shared_with_app: bool,
 }
 
@@ -31,8 +31,8 @@ const USER_CAPABILITY_DEFINITIONS: &[UserCapabilityDefinition] = &[
         flags: CapabilityFlags {
             externally_observable: false,
             accesses_sensitive_secret: false,
-            persistent_storage: true,
             requestable_by_app: true,
+            user_grantable: true,
             shared_with_app: false,
         },
     },
@@ -43,8 +43,8 @@ const USER_CAPABILITY_DEFINITIONS: &[UserCapabilityDefinition] = &[
         flags: CapabilityFlags {
             externally_observable: true,
             accesses_sensitive_secret: false,
-            persistent_storage: false,
             requestable_by_app: true,
+            user_grantable: true,
             shared_with_app: true,
         },
     },
@@ -55,8 +55,8 @@ const USER_CAPABILITY_DEFINITIONS: &[UserCapabilityDefinition] = &[
         flags: CapabilityFlags {
             externally_observable: false,
             accesses_sensitive_secret: false,
-            persistent_storage: false,
             requestable_by_app: false,
+            user_grantable: true,
             shared_with_app: false,
         },
     },
@@ -70,8 +70,8 @@ const SYSTEM_CAPABILITY_DEFINITIONS: &[SystemCapabilityDefinition] = &[
         flags: CapabilityFlags {
             externally_observable: false,
             accesses_sensitive_secret: false,
-            persistent_storage: false,
-            requestable_by_app: false,
+            requestable_by_app: true,
+            user_grantable: false,
             shared_with_app: true,
         },
     },
@@ -80,10 +80,10 @@ const SYSTEM_CAPABILITY_DEFINITIONS: &[SystemCapabilityDefinition] = &[
         label: "Focus app runtimes",
         description: "Allows the system app to focus running Sage app runtimes.",
         flags: CapabilityFlags {
-            externally_observable: true,
+            externally_observable: false,
             accesses_sensitive_secret: false,
-            persistent_storage: false,
-            requestable_by_app: false,
+            requestable_by_app: true,
+            user_grantable: false,
             shared_with_app: true,
         },
     },
@@ -92,10 +92,10 @@ const SYSTEM_CAPABILITY_DEFINITIONS: &[SystemCapabilityDefinition] = &[
         label: "Hide app runtimes",
         description: "Allows the system app to hide running Sage app runtimes.",
         flags: CapabilityFlags {
-            externally_observable: true,
+            externally_observable: false,
             accesses_sensitive_secret: false,
-            persistent_storage: false,
-            requestable_by_app: false,
+            requestable_by_app: true,
+            user_grantable: false,
             shared_with_app: true,
         },
     },
@@ -104,10 +104,10 @@ const SYSTEM_CAPABILITY_DEFINITIONS: &[SystemCapabilityDefinition] = &[
         label: "Kill app runtimes",
         description: "Allows the system app to stop running Sage app runtimes.",
         flags: CapabilityFlags {
-            externally_observable: true,
+            externally_observable: false,
             accesses_sensitive_secret: false,
-            persistent_storage: false,
-            requestable_by_app: false,
+            requestable_by_app: true,
+            user_grantable: false,
             shared_with_app: true,
         },
     },
@@ -118,8 +118,8 @@ const SYSTEM_CAPABILITY_DEFINITIONS: &[SystemCapabilityDefinition] = &[
         flags: CapabilityFlags {
             externally_observable: false,
             accesses_sensitive_secret: false,
-            persistent_storage: false,
-            requestable_by_app: false,
+            requestable_by_app: true,
+            user_grantable: false,
             shared_with_app: true,
         },
     },
@@ -209,9 +209,8 @@ pub fn user_capability_definition_view(
         flags: SageAppCapabilityFlagsView {
             externally_observable: definition.flags.externally_observable,
             accesses_sensitive_secret: definition.flags.accesses_sensitive_secret,
-            persistent_storage: definition.flags.persistent_storage,
             requestable_by_app: definition.flags.requestable_by_app,
-            shared_with_app: definition.flags.shared_with_app,
+            user_grantable: definition.flags.user_grantable,
         },
     }
 }

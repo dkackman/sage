@@ -168,7 +168,7 @@ pub fn summarize_capabilities(
 
         summary.externally_observable |= def.flags.externally_observable;
         summary.accesses_sensitive_secret |= def.flags.accesses_sensitive_secret;
-        summary.persistent_storage |= def.flags.persistent_storage;
+        summary.persistent_storage |= *capability == UserBridgeCapability::PersistentStorage;
     }
 
     Ok(summary)

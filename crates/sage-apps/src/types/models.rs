@@ -144,9 +144,8 @@ pub struct SageAppCapabilityFlags {
 pub struct SageAppCapabilityFlagsView {
     pub externally_observable: bool,
     pub accesses_sensitive_secret: bool,
-    pub persistent_storage: bool,
     pub requestable_by_app: bool,
-    pub shared_with_app: bool,
+    pub user_grantable: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
