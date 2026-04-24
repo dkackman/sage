@@ -11,31 +11,29 @@ interface Props {
 }
 
 function renderApprovalDetails(currentApproval: PendingApprovalItem) {
-  switch (currentApproval.request.kind) {
-    case 'send_xch':
+  const req = currentApproval.request;
+
+  switch (req.kind) {
+    case 'sendXch':
       return (
         <div className='rounded-md border p-3 text-xs font-mono whitespace-pre-wrap break-all'>
-          {JSON.stringify(currentApproval.request.params, null, 2)}
+          {JSON.stringify(req.summary, null, 2)}
         </div>
       );
 
-    case 'capability_grant':
+    case 'capabilityGrant':
       return (
         <div className='rounded-md border p-3 text-xs'>
-          Grant capability:{' '}
-          <span className='font-mono'>
-            {currentApproval.request.params.capability}
-          </span>
+          Grant capability: <span className='font-mono'>{req.capability}</span>
         </div>
       );
 
-    case 'network_whitelist_grant':
+    case 'networkWhitelistGrant':
       return (
         <div className='rounded-md border p-3 text-xs'>
           Grant network access:{' '}
           <span className='font-mono'>
-            {currentApproval.request.params.entry.scheme}://
-            {currentApproval.request.params.entry.host}
+            {req.entry.scheme}://{req.entry.host}
           </span>
         </div>
       );
@@ -53,20 +51,23 @@ export function AppApprovalBanner({
     return null;
   }
 
+  const req = currentApproval.request;
+
   return (
     <Alert>
       <AlertTitle>Approval required</AlertTitle>
       <AlertDescription className='space-y-3'>
         <div className='text-sm'>
-          App <strong>{currentApproval.request.app.common.name}</strong> wants
-          to perform{' '}
-          <span className='font-mono'>{currentApproval.request.kind}</span>.
+          App <strong>{req.app.common.name}</strong> wants to perform{' '}
+          <span className='font-mono'>{req.kind}</span>.
         </div>
 
         <div className='text-xs text-muted-foreground'>
           Expires in {currentApprovalSecondsLeft}s
           {queuedApprovalCount > 0
-            ? ` · ${queuedApprovalCount} more approval${queuedApprovalCount === 1 ? '' : 's'} pending`
+            ? ` · ${queuedApprovalCount} more approval${
+                queuedApprovalCount === 1 ? '' : 's'
+              } pending`
             : ''}
         </div>
 

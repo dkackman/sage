@@ -12,6 +12,7 @@ use crate::bridge::{
     emit_granted_capabilities_change_for_app,
     emit_granted_network_whitelist_change_for_app,
 };
+use crate::bridge::capabilities::UserBridgeCapability;
 use crate::host::{AppState, Result};
 use crate::lifecycle::{
     download_url_snapshot, manifest_entry_file, manifest_icon_file,
@@ -32,9 +33,9 @@ use crate::types::{
 
 #[derive(Debug, Clone)]
 pub struct GrantedCapabilitiesChange {
-    pub removed: Vec<String>,
-    pub added: Vec<String>,
-    pub full: Vec<String>,
+    pub removed: Vec<UserBridgeCapability>,
+    pub added: Vec<UserBridgeCapability>,
+    pub full: Vec<UserBridgeCapability>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,11 +48,11 @@ pub struct GrantedNetworkWhitelistChange {
 #[derive(Debug, Clone)]
 pub enum GrantCapabilityOutcome {
     AlreadyGranted {
-        capability: String,
-        full_granted_capabilities: Vec<String>,
+        capability: UserBridgeCapability,
+        full_granted_capabilities: Vec<UserBridgeCapability>,
     },
     Granted {
-        capability: String,
+        capability: UserBridgeCapability,
         change: GrantedCapabilitiesChange,
     },
 }
@@ -80,11 +81,11 @@ fn sort_unique_network(
     set.into_iter().collect()
 }
 
-fn requested_capability_set(app: &UserSageApp) -> BTreeSet<String> {
-    let mut requested = BTreeSet::new();
-    requested.extend(app.common.requested_permissions.capabilities.required.iter().cloned());
-    requested.extend(app.common.requested_permissions.capabilities.optional.iter().cloned());
-    requested
+fn requested_capability_set(app: &UserSageApp) -> BTreeSet<UserBridgeCapability> {
+    let mut out = BTreeSet::new();
+    out.extend(app.common.requested_permissions.capabilities.required.iter().copied());
+    out.extend(app.common.requested_permissions.capabilities.optional.iter().copied());
+    out
 }
 
 fn requested_network_set(app: &UserSageApp) -> AnyResult<BTreeSet<(String, String)>> {
@@ -111,13 +112,18 @@ fn requested_network_set(app: &UserSageApp) -> AnyResult<BTreeSet<(String, Strin
     Ok(out)
 }
 
-fn diff_capabilities(previous: &[String], next: &[String]) -> GrantedCapabilitiesChange {
-    let previous_set: BTreeSet<String> = previous.iter().cloned().collect();
-    let next_set: BTreeSet<String> = next.iter().cloned().collect();
+fn diff_capabilities(
+    previous: &[UserBridgeCapability],
+    next: &[UserBridgeCapability],
+) -> GrantedCapabilitiesChange {
+    let previous_set: BTreeSet<UserBridgeCapability> =
+        previous.iter().copied().collect();
+    let next_set: BTreeSet<UserBridgeCapability> =
+        next.iter().copied().collect();
 
     GrantedCapabilitiesChange {
-        removed: previous_set.difference(&next_set).cloned().collect(),
-        added: next_set.difference(&previous_set).cloned().collect(),
+        removed: previous_set.difference(&next_set).copied().collect(),
+        added: next_set.difference(&previous_set).copied().collect(),
         full: next.to_vec(),
     }
 }
@@ -134,6 +140,12 @@ fn diff_network_whitelist(
         added: next_set.difference(&previous_set).cloned().collect(),
         full: next.to_vec(),
     }
+}
+
+fn sort_unique_capabilities(
+    capabilities: Vec<UserBridgeCapability>,
+) -> Vec<UserBridgeCapability> {
+    capabilities.into_iter().collect::<BTreeSet<_>>().into_iter().collect()
 }
 
 pub fn update_app_permissions_internal(
@@ -184,34 +196,31 @@ pub fn update_app_permissions_internal(
 pub fn grant_requested_capability_internal(
     base_path: &Path,
     app_id: &str,
-    capability: &str,
+    capability: UserBridgeCapability,
 ) -> AnyResult<GrantCapabilityOutcome> {
     let app = read_installed_app_by_id(base_path, app_id)?;
 
     let requested = requested_capability_set(&app);
-    if !requested.contains(capability) {
-        anyhow::bail!("Capability was not requested by app manifest: {capability}");
+    if !requested.contains(&capability) {
+        anyhow::bail!(
+            "Capability was not requested by app manifest: {}",
+            capability.key()
+        );
     }
 
-    if app
-        .common
-        .granted_permissions
-        .capabilities
-        .iter()
-        .any(|existing| existing == capability)
-    {
+    if app.common.granted_permissions.capabilities.contains(&capability) {
         let full_granted_capabilities =
-            sort_unique_strings(app.common.granted_permissions.capabilities.clone());
+            sort_unique_capabilities(app.common.granted_permissions.capabilities.clone());
 
         return Ok(GrantCapabilityOutcome::AlreadyGranted {
-            capability: capability.to_string(),
+            capability,
             full_granted_capabilities,
         });
     }
 
     let mut next_capabilities = app.common.granted_permissions.capabilities.clone();
-    next_capabilities.push(capability.to_string());
-    next_capabilities = sort_unique_strings(next_capabilities);
+    next_capabilities.push(capability);
+    next_capabilities = sort_unique_capabilities(next_capabilities);
 
     let updated = update_app_permissions_internal(
         base_path,
@@ -228,10 +237,7 @@ pub fn grant_requested_capability_internal(
         &updated.common.granted_permissions.capabilities,
     );
 
-    Ok(GrantCapabilityOutcome::Granted {
-        capability: capability.to_string(),
-        change,
-    })
+    Ok(GrantCapabilityOutcome::Granted { capability, change })
 }
 
 pub fn grant_requested_network_whitelist_entry_internal(

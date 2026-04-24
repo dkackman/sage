@@ -2,7 +2,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::methods::shared::BridgeMethodCapability;
 
 #[derive(Debug, Clone, Copy)]
 pub struct BridgePing;
@@ -17,6 +18,14 @@ pub struct BridgePingResult {
 
 #[async_trait]
 impl BridgeMethod for BridgePing {
+    fn capability(&self) -> BridgeMethodCapability {
+        BridgeMethodCapability::ungated()
+    }
+
+    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+        None
+    }
+
     async fn handle(
         &self,
         ctx: BridgeContext<'_>,

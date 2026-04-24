@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use crate::bridge::methods::user::app::SageRequestNetworkWhitelistGrant;
-use super::methods::user::{AppGetInfo, BridgePing, BridgeSend, SageAppLifecycleReadyToStop, SageAppLifecycleSetBeforeStopListener, SageGetCapabilities, SageRequestCapabilityGrant, WalletSendXch};
+use crate::bridge::methods::user::app::AppRequestNetworkWhitelistGrant;
+use super::methods::user::{AppGetInfo, BridgePing, BridgeSend, AppLifecycleReadyToStop, AppLifecycleSetBeforeStopListener, AppGetCapabilities, AppRequestCapabilityGrant, WalletSendXch};
 use super::methods::BridgeMethod;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,22 +36,22 @@ fn build_user_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
     methods.insert("bridge.ping", Box::new(BridgePing));
     methods.insert("bridge.send", Box::new(BridgeSend));
     methods.insert("app.getInfo", Box::new(AppGetInfo));
-    methods.insert("app.getCapabilities", Box::new(SageGetCapabilities));
+    methods.insert("app.getCapabilities", Box::new(AppGetCapabilities));
     methods.insert(
         "app.requestCapabilityGrant",
-        Box::new(SageRequestCapabilityGrant),
+        Box::new(AppRequestCapabilityGrant),
     );
     methods.insert(
         "app.requestNetworkWhitelistGrant",
-        Box::new(SageRequestNetworkWhitelistGrant),
+        Box::new(AppRequestNetworkWhitelistGrant),
     );
     methods.insert(
         "app.lifecycle.setBeforeStopListener",
-        Box::new(SageAppLifecycleSetBeforeStopListener),
+        Box::new(AppLifecycleSetBeforeStopListener),
     );
     methods.insert(
         "app.lifecycle.readyToStop",
-        Box::new(SageAppLifecycleReadyToStop),
+        Box::new(AppLifecycleReadyToStop),
     );
     methods.insert("wallet.sendXch", Box::new(WalletSendXch));
 
@@ -61,10 +61,10 @@ fn build_user_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
 fn build_system_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
     let mut methods = build_user_methods();
 
-    methods.insert("runtimeManager.listRuntimes", Box::new(super::methods::system::runtime_manager::SystemListRuntimes));
-    methods.insert("runtimeManager.focusRuntime", Box::new(super::methods::system::runtime_manager::SystemFocusRuntime));
-    methods.insert("runtimeManager.killRuntime", Box::new(super::methods::system::runtime_manager::SystemKillRuntime));
-    methods.insert("runtimeManager.hideRuntime", Box::new(super::methods::system::runtime_manager::SystemHideRuntime));
+    methods.insert("runtimeManager.listRuntimes", Box::new(super::methods::system::runtime_manager::RuntimeManagerListRuntimes));
+    methods.insert("runtimeManager.focusRuntime", Box::new(super::methods::system::runtime_manager::RuntimeManagerFocusRuntime));
+    methods.insert("runtimeManager.killRuntime", Box::new(super::methods::system::runtime_manager::RuntimeManagerKillRuntime));
+    methods.insert("runtimeManager.hideRuntime", Box::new(super::methods::system::runtime_manager::RuntimeManagerHideRuntime));
 
     methods
 }

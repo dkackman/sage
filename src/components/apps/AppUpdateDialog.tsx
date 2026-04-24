@@ -6,6 +6,11 @@ import type {
   SageNetworkPermissionTarget,
   UserSageApp,
 } from '@/bindings';
+import {
+  networkKey,
+  sortCapabilities,
+  sortNetwork,
+} from '@/lib/apps/permissionCollections';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,20 +33,6 @@ interface Props {
   error: string | null;
   onCancel: () => void;
   onConfirm: (nextGranted: SageGrantedPermissions) => void;
-}
-
-function networkKey(entry: SageNetworkPermissionTarget): string {
-  return `${entry.scheme}://${entry.host}`;
-}
-
-function sortStrings(values: Iterable<string>): string[] {
-  return [...values].sort((a, b) => a.localeCompare(b));
-}
-
-function sortNetwork(
-  values: Iterable<SageNetworkPermissionTarget>,
-): SageNetworkPermissionTarget[] {
-  return [...values].sort((a, b) => networkKey(a).localeCompare(networkKey(b)));
 }
 
 function buildReviewManifest(
@@ -183,7 +174,7 @@ export function AppUpdateDialog({
     }
 
     return {
-      capabilities: sortStrings([
+      capabilities: sortCapabilities([
         ...delta.requiredCapabilitiesToGrant,
         ...selectedOptionalGrantedPermissions.capabilities,
       ]),
@@ -201,7 +192,7 @@ export function AppUpdateDialog({
       return null;
     }
 
-    const nextCapabilities = sortStrings([
+    const nextCapabilities = sortCapabilities([
       ...delta.nextGrantedPermissions.capabilities,
       ...selectedOptionalGrantedPermissions.capabilities,
     ]);
@@ -300,7 +291,7 @@ export function AppUpdateDialog({
                   );
 
                   setSelectedOptionalGrantedPermissions({
-                    capabilities: sortStrings(
+                    capabilities: sortCapabilities(
                       next.capabilities.filter(
                         (key) => !requiredCapabilitySet.has(key),
                       ),

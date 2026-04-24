@@ -6,8 +6,10 @@ use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{
     failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
 };
-use crate::types::SageApp;
 use sage_api::SendXch;
+use crate::bridge::capabilities::UserBridgeCapability;
+use crate::bridge::methods::shared::BridgeMethodCapability;
+use crate::bridge::types::RustBridgeApprovalBody;
 
 #[derive(Debug, Clone, Copy)]
 pub struct WalletSendXch;
@@ -66,20 +68,8 @@ fn to_send_xch_request(params: WalletSendXchParams) -> SendXch {
 
 #[async_trait]
 impl BridgeMethod for WalletSendXch {
-    fn permission(&self) -> Option<&'static str> {
-        Some("wallet.send_xch")
-    }
-
-    fn requires_approval(
-        &self,
-        app: &SageApp,
-        _request: &RustBridgeRequest,
-    ) -> bool {
-        !app
-            .granted_permissions()
-            .capabilities
-            .iter()
-            .any(|cap| cap == "wallet.send_xch_auto_submit")
+    fn capability(&self) -> BridgeMethodCapability {
+        BridgeMethodCapability::user(UserBridgeCapability::WalletSendXch)
     }
 
     fn approval_request(
@@ -87,16 +77,26 @@ impl BridgeMethod for WalletSendXch {
         ctx: BridgeContext<'_>,
         request: &RustBridgeRequest,
     ) -> Option<RustBridgeApprovalRequest> {
-        if !self.requires_approval(ctx.app, request) {
+        if ctx
+            .app
+            .granted_permissions()
+            .capabilities
+            .contains(&UserBridgeCapability::WalletSendXchAutoSubmit)
+        {
             return None;
         }
 
+        let Ok(params) = parse_wallet_send_xch_params(request) else {
+            return None;
+        };
+
         Some(RustBridgeApprovalRequest {
-            kind: "send_xch".into(),
             app: ctx.app.clone(),
             source_label: ctx.source_label.to_string(),
             request_id: request.id.clone(),
-            params_json: request.params_json.clone().unwrap_or_else(|| "null".into()),
+            body: RustBridgeApprovalBody::SendXch {
+                summary: params,
+            },
         })
     }
 

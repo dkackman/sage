@@ -1,4 +1,4 @@
-import type { PendingApproval } from '@/components/apps/AppApprovalStrip.tsx';
+import type { RustBridgeApprovalRequest } from '@/bindings';
 import { Globe } from 'lucide-react';
 import {
   ApprovalDetailRow,
@@ -7,8 +7,8 @@ import {
 
 interface Props {
   approval: Extract<
-    Exclude<PendingApproval, null>,
-    { kind: 'network_whitelist_grant' }
+    RustBridgeApprovalRequest,
+    { kind: 'networkWhitelistGrant' }
   >;
   expanded: boolean;
 }
@@ -30,7 +30,8 @@ export function NetworkWhitelistGrantApprovalCard({ approval }: Props) {
           </div>
 
           <div className='mt-1 text-xs text-muted-foreground'>
-            {approval.appName} wants to contact an additional network target.
+            {approval.app.common.name} wants to contact an additional network
+            target.
           </div>
         </div>
       </div>

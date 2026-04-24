@@ -3,7 +3,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::capabilities::UserBridgeCapability;
+use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::lifecycle::parse_network_permission_target;
 use crate::permissions::resolve_shared_capabilities;
 
@@ -25,12 +27,20 @@ pub struct AppGetInfoResult {
     pub name: String,
     pub version: String,
     pub requested_permissions: crate::types::SageRequestedPermissions,
-    pub capabilities: Vec<String>,
+    pub capabilities: Vec<UserBridgeCapability>,
     pub network: Vec<SageNetworkPermissionInfo>,
 }
 
 #[async_trait]
 impl BridgeMethod for AppGetInfo {
+    fn capability(&self) -> BridgeMethodCapability {
+        BridgeMethodCapability::user(UserBridgeCapability::AppGetInfo)
+    }
+
+    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+        None
+    }
+
     async fn handle(
         &self,
         ctx: BridgeContext<'_>,

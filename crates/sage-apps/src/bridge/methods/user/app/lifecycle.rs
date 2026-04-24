@@ -1,14 +1,16 @@
 use async_trait::async_trait;
 
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::capabilities::UserBridgeCapability;
+use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::runtime::{ReadyToStopParams, RuntimeAckResult, SetBeforeStopListenerParams};
 
 #[derive(Debug, Clone, Copy)]
-pub struct SageAppLifecycleSetBeforeStopListener;
+pub struct AppLifecycleSetBeforeStopListener;
 
 #[derive(Debug, Clone, Copy)]
-pub struct SageAppLifecycleReadyToStop;
+pub struct AppLifecycleReadyToStop;
 
 fn encode_success(
     request: &RustBridgeRequest,
@@ -70,7 +72,15 @@ fn parse_ready_to_stop_params(
 }
 
 #[async_trait]
-impl BridgeMethod for SageAppLifecycleSetBeforeStopListener {
+impl BridgeMethod for AppLifecycleSetBeforeStopListener {
+    fn capability(&self) -> BridgeMethodCapability {
+        BridgeMethodCapability::user(UserBridgeCapability::AppLifecycleSetBeforeStopListener)
+    }
+
+    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+        None
+    }
+
     async fn handle(
         &self,
         ctx: BridgeContext<'_>,
@@ -100,7 +110,15 @@ impl BridgeMethod for SageAppLifecycleSetBeforeStopListener {
 }
 
 #[async_trait]
-impl BridgeMethod for SageAppLifecycleReadyToStop {
+impl BridgeMethod for AppLifecycleReadyToStop {
+    fn capability(&self) -> BridgeMethodCapability {
+        BridgeMethodCapability::user(UserBridgeCapability::AppLifecycleReadyToStop)
+    }
+
+    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+        None
+    }
+
     async fn handle(
         &self,
         _ctx: BridgeContext<'_>,

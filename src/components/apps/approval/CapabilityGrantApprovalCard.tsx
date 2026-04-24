@@ -1,5 +1,4 @@
-import type { SageAppCapabilityDefinitionView } from '@/bindings';
-import type { PendingApproval } from '@/components/apps/AppApprovalStrip.tsx';
+import type { RustBridgeApprovalRequest } from '@/bindings';
 import { KeyRound, ShieldAlert } from 'lucide-react';
 import {
   ApprovalDetailRow,
@@ -7,34 +6,13 @@ import {
 } from '@/components/apps/approval/shared.tsx';
 
 interface Props {
-  approval: Extract<
-    Exclude<PendingApproval, null>,
-    { kind: 'capability_grant' }
-  >;
+  approval: Extract<RustBridgeApprovalRequest, { kind: 'capabilityGrant' }>;
   expanded: boolean;
-  capabilityRegistry: Record<string, SageAppCapabilityDefinitionView>;
 }
 
-function formatCapabilityFallback(key: string) {
-  const parts = key.split('.');
-  const leaf = parts[parts.length - 1] ?? key;
-
-  return leaf
-    .split('_')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-export function CapabilityGrantApprovalCard({
-  approval,
-  expanded,
-  capabilityRegistry,
-}: Props) {
-  const definition = capabilityRegistry[approval.capability];
-  const label =
-    definition?.label ?? formatCapabilityFallback(approval.capability);
-  const description = definition?.description ?? null;
+export function CapabilityGrantApprovalCard({ approval, expanded }: Props) {
+  const label = approval.definition.label;
+  const description = approval.definition.description;
 
   return (
     <div className='space-y-3'>
@@ -50,7 +28,7 @@ export function CapabilityGrantApprovalCard({
           </div>
 
           <div className='mt-1 text-xs text-muted-foreground'>
-            {approval.appName} wants access to an additional capability.
+            {approval.app.common.name} wants access to an additional capability.
           </div>
         </div>
       </div>

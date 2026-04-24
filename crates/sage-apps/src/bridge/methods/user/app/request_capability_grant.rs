@@ -1,23 +1,26 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use specta::Type;
 
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{
-    emit_granted_capabilities_change_for_app, failure, success, RustBridgeApprovalRequest,
+    emit_granted_capabilities_change_for_app, failure, RustBridgeApprovalRequest,
     RustBridgeRequest, RustBridgeResponse,
 };
-use crate::bridge::methods::user::app::resolve_app_base_path;
+use crate::bridge::capabilities::UserBridgeCapability;
+use crate::bridge::methods::shared::BridgeMethodCapability;
+use crate::bridge::methods::user::app::{encode_request_success, resolve_app_base_path};
+use crate::bridge::types::RustBridgeApprovalBody;
 use crate::lifecycle::{grant_requested_capability_internal, GrantCapabilityOutcome};
+use crate::permissions::{get_user_capability_definition, user_capability_definition_view};
 
 #[derive(Debug, Clone, Copy)]
-pub struct SageRequestCapabilityGrant;
+pub struct AppRequestCapabilityGrant;
 
-#[derive(Debug, Clone, Deserialize, Serialize, Type)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestCapabilityGrantParams {
-    pub capability: String,
+    pub capability: UserBridgeCapability,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -26,24 +29,8 @@ pub struct RequestCapabilityGrantResult {
     pub granted: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub already_granted: Option<bool>,
-    pub capability: String,
-    pub full_granted_capabilities: Vec<String>,
-}
-
-fn encode_success<T: Serialize>(
-    request: &RustBridgeRequest,
-    value: T,
-    context: &str,
-) -> RustBridgeResponse {
-    match serde_json::to_value(value) {
-        Ok(value) => success(&request.channel, &request.id, value),
-        Err(err) => failure(
-            &request.channel,
-            &request.id,
-            "internal_error",
-            format!("failed to encode {context}: {err}"),
-        ),
-    }
+    pub capability: UserBridgeCapability,
+    pub full_granted_capabilities: Vec<UserBridgeCapability>,
 }
 
 fn parse_capability_grant_params(
@@ -69,21 +56,9 @@ fn parse_capability_grant_params(
 }
 
 #[async_trait]
-impl BridgeMethod for SageRequestCapabilityGrant {
-    fn requires_approval(
-        &self,
-        app: &crate::types::SageApp,
-        request: &RustBridgeRequest,
-    ) -> bool {
-        let Ok(params) = parse_capability_grant_params(request) else {
-            return false;
-        };
-
-        !app
-            .granted_permissions()
-            .capabilities
-            .iter()
-            .any(|cap| cap == &params.capability)
+impl BridgeMethod for AppRequestCapabilityGrant {
+    fn capability(&self) -> BridgeMethodCapability {
+        BridgeMethodCapability::user(UserBridgeCapability::AppRequestCapabilityGrant)
     }
 
     fn approval_request(
@@ -91,20 +66,29 @@ impl BridgeMethod for SageRequestCapabilityGrant {
         ctx: BridgeContext<'_>,
         request: &RustBridgeRequest,
     ) -> Option<RustBridgeApprovalRequest> {
-        if !self.requires_approval(ctx.app, request) {
-            return None;
-        }
-
         let Ok(params) = parse_capability_grant_params(request) else {
             return None;
         };
 
+        if ctx
+            .app
+            .granted_permissions()
+            .capabilities
+            .contains(&params.capability)
+        {
+            return None;
+        }
+
+        let definition = get_user_capability_definition(params.capability)?;
+
         Some(RustBridgeApprovalRequest {
-            kind: "capability_grant".into(),
             app: ctx.app.clone(),
             source_label: ctx.source_label.to_string(),
             request_id: request.id.clone(),
-            params_json: json!({ "capability": params.capability }).to_string(),
+            body: RustBridgeApprovalBody::CapabilityGrant {
+                capability: params.capability,
+                definition: user_capability_definition_view(definition),
+            },
         })
     }
 
@@ -124,11 +108,11 @@ impl BridgeMethod for SageRequestCapabilityGrant {
             Err(err) => return err,
         };
 
-        match grant_requested_capability_internal(&base_path, &ctx.app.id(), &params.capability) {
+        match grant_requested_capability_internal(&base_path, &ctx.app.id(), params.capability) {
             Ok(GrantCapabilityOutcome::AlreadyGranted {
                    capability,
                    full_granted_capabilities,
-               }) => encode_success(
+               }) => encode_request_success(
                 request,
                 RequestCapabilityGrantResult {
                     granted: true,
@@ -149,7 +133,7 @@ impl BridgeMethod for SageRequestCapabilityGrant {
                 )
                     .await;
 
-                encode_success(
+                encode_request_success(
                     request,
                     RequestCapabilityGrantResult {
                         granted: true,

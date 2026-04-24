@@ -1,6 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use specta::Type;
 
+use crate::bridge::capabilities::{SystemBridgeCapability, UserBridgeCapability};
 use crate::lifecycle::parse_network_permission_target;
 
 #[derive(
@@ -22,12 +23,10 @@ pub struct SageRequestedNetworkPermissions {
     pub whitelist: SageRequestedNetworkWhitelist,
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq)]
 pub struct SageRequestedCapabilities {
-    pub required: Vec<String>,
-    pub optional: Vec<String>,
+    pub required: Vec<UserBridgeCapability>,
+    pub optional: Vec<UserBridgeCapability>,
 }
 
 #[derive(Debug, Clone, Serialize, Type, Default, PartialEq, Eq)]
@@ -36,42 +35,36 @@ pub struct SageRequestedPermissions {
     pub capabilities: SageRequestedCapabilities,
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq)]
 pub struct SageGrantedNetworkPermissions {
     pub whitelist: Vec<SageNetworkPermissionTarget>,
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq)]
 pub struct SageGrantedPermissions {
-    pub capabilities: Vec<String>,
+    pub capabilities: Vec<UserBridgeCapability>,
     pub network: SageGrantedNetworkPermissions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SageGrantedSystemPermissions {
+    pub capabilities: Vec<SystemBridgeCapability>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum InstalledSageAppStorage {
-    AppleDataStore {
-        identifier_hex: String,
-    },
-    WindowsProfile {
-        directory_name: String,
-    },
+    AppleDataStore { identifier_hex: String },
+    WindowsProfile { directory_name: String },
     Unmanaged,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum PendingStorageCleanupTarget {
-    AppleDataStore {
-        identifier_hex: String,
-    },
-    WindowsProfile {
-        directory_name: String,
-    },
+    AppleDataStore { identifier_hex: String },
+    WindowsProfile { directory_name: String },
     Unmanaged,
 }
 
@@ -152,6 +145,8 @@ pub struct SageAppCapabilityFlagsView {
     pub externally_observable: bool,
     pub accesses_sensitive_secret: bool,
     pub persistent_storage: bool,
+    pub requestable_by_app: bool,
+    pub shared_with_app: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -161,8 +156,6 @@ pub struct SageAppCapabilityDefinitionView {
     pub label: String,
     pub description: String,
     pub flags: SageAppCapabilityFlagsView,
-    pub requestable_by_app: bool,
-    pub shared_with_app: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -219,6 +212,7 @@ pub struct UserSageApp {
 #[serde(rename_all = "camelCase")]
 pub struct SystemSageApp {
     pub common: SageAppCommon,
+    pub system_granted_permissions: SageGrantedSystemPermissions,
     pub presentation: SystemAppPresentation,
 }
 
@@ -271,6 +265,13 @@ impl SageApp {
 
     pub fn granted_permissions(&self) -> &SageGrantedPermissions {
         &self.common().granted_permissions
+    }
+
+    pub fn system_granted_permissions(&self) -> Option<&SageGrantedSystemPermissions> {
+        match self {
+            Self::System(app) => Some(&app.system_granted_permissions),
+            Self::User(_) => None,
+        }
     }
 
     pub fn capability_flags(&self) -> &SageAppCapabilityFlags {
@@ -436,10 +437,7 @@ impl<'de> Deserialize<'de> for SageRequestedPermissions {
             .whitelist
             .required
             .into_iter()
-            .map(|value| {
-                parse_network_permission_target(&value)
-                    .map_err(serde::de::Error::custom)
-            })
+            .map(|value| parse_network_permission_target(&value).map_err(serde::de::Error::custom))
             .collect::<Result<Vec<_>, _>>()?;
 
         let optional_network = raw
@@ -447,10 +445,7 @@ impl<'de> Deserialize<'de> for SageRequestedPermissions {
             .whitelist
             .optional
             .into_iter()
-            .map(|value| {
-                parse_network_permission_target(&value)
-                    .map_err(serde::de::Error::custom)
-            })
+            .map(|value| parse_network_permission_target(&value).map_err(serde::de::Error::custom))
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(SageRequestedPermissions {

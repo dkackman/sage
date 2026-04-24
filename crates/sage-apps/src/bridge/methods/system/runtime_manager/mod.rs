@@ -4,29 +4,17 @@ pub mod kill_runtime;
 pub mod list_runtimes;
 pub mod events;
 
-pub use focus_runtime::SystemFocusRuntime;
-pub use hide_runtime::SystemHideRuntime;
-pub use kill_runtime::SystemKillRuntime;
-pub use list_runtimes::SystemListRuntimes;
+pub use focus_runtime::RuntimeManagerFocusRuntime;
+pub use hide_runtime::RuntimeManagerHideRuntime;
+pub use kill_runtime::RuntimeManagerKillRuntime;
+pub use list_runtimes::RuntimeManagerListRuntimes;
 pub use events::RuntimeManagerRuntimesChangedEvent;
 
 pub use crate::runtime::{RuntimeTargetParams, SystemKillRuntimeResult};
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use serde::Deserialize;
-use specta::Type;
-
 use crate::bridge::methods::BridgeTools;
 use crate::bridge::{failure, RustBridgeRequest, RustBridgeResponse};
 use crate::runtime::SageAppRuntimeRecord;
-
-fn now_ms() -> Result<i64, String> {
-    Ok(SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|err| format!("system clock error: {err}"))?
-        .as_millis() as i64)
-}
 
 fn parse_runtime_target_params(
     request: &RustBridgeRequest,

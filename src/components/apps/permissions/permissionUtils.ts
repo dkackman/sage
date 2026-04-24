@@ -3,6 +3,7 @@ import type {
   SageGrantedPermissions,
   SageNetworkPermissionTarget,
 } from '@/bindings';
+import { sortCapabilities } from '@/lib/apps/permissionCollections.ts';
 
 function sortNetworkEntries(
   entries: SageNetworkPermissionTarget[],
@@ -12,10 +13,6 @@ function sortNetworkEntries(
     const bKey = `${b.scheme}://${b.host}`;
     return aKey.localeCompare(bKey);
   });
-}
-
-function sortStrings(values: string[]): string[] {
-  return [...values].sort((a, b) => a.localeCompare(b));
 }
 
 export function buildEmptyGrantedPermissions(): SageGrantedPermissions {
@@ -31,7 +28,7 @@ export function buildInitialGrantedPermissions(
   manifest: SageAppPackageManifest,
 ): SageGrantedPermissions {
   return {
-    capabilities: sortStrings(
+    capabilities: sortCapabilities(
       manifest.permissions?.capabilities?.required ?? [],
     ),
     network: {

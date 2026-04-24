@@ -1,14 +1,16 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use specta::Type;
 
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{
-    emit_granted_network_whitelist_change_for_app, failure, success, RustBridgeApprovalRequest,
+    emit_granted_network_whitelist_change_for_app, failure, RustBridgeApprovalRequest,
     RustBridgeRequest, RustBridgeResponse,
 };
-use crate::bridge::methods::user::app::resolve_app_base_path;
+use crate::bridge::capabilities::UserBridgeCapability;
+use crate::bridge::methods::shared::BridgeMethodCapability;
+use crate::bridge::methods::user::app::{encode_request_success, resolve_app_base_path};
+use crate::bridge::types::RustBridgeApprovalBody;
 use crate::lifecycle::{
     grant_requested_network_whitelist_entry_internal, parse_network_permission_target,
     GrantNetworkWhitelistOutcome,
@@ -16,7 +18,7 @@ use crate::lifecycle::{
 use crate::types::SageNetworkPermissionTarget;
 
 #[derive(Debug, Clone, Copy)]
-pub struct SageRequestNetworkWhitelistGrant;
+pub struct AppRequestNetworkWhitelistGrant;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -32,22 +34,6 @@ pub struct RequestNetworkWhitelistGrantResult {
     pub already_granted: Option<bool>,
     pub entry: SageNetworkPermissionTarget,
     pub full_granted_network_whitelist: Vec<SageNetworkPermissionTarget>,
-}
-
-fn encode_success<T: Serialize>(
-    request: &RustBridgeRequest,
-    value: T,
-    context: &str,
-) -> RustBridgeResponse {
-    match serde_json::to_value(value) {
-        Ok(value) => success(&request.channel, &request.id, value),
-        Err(err) => failure(
-            &request.channel,
-            &request.id,
-            "internal_error",
-            format!("failed to encode {context}: {err}"),
-        ),
-    }
 }
 
 fn parse_network_whitelist_grant_params(
@@ -85,22 +71,9 @@ fn parse_network_whitelist_grant_params(
 }
 
 #[async_trait]
-impl BridgeMethod for SageRequestNetworkWhitelistGrant {
-    fn requires_approval(
-        &self,
-        app: &crate::types::SageApp,
-        request: &RustBridgeRequest,
-    ) -> bool {
-        let Ok(params) = parse_network_whitelist_grant_params(request) else {
-            return false;
-        };
-
-        !app
-            .granted_permissions()
-            .network
-            .whitelist
-            .iter()
-            .any(|entry| entry == &params.entry)
+impl BridgeMethod for AppRequestNetworkWhitelistGrant {
+    fn capability(&self) -> BridgeMethodCapability {
+        BridgeMethodCapability::user(UserBridgeCapability::AppRequestNetworkWhitelistGrant)
     }
 
     fn approval_request(
@@ -108,20 +81,28 @@ impl BridgeMethod for SageRequestNetworkWhitelistGrant {
         ctx: BridgeContext<'_>,
         request: &RustBridgeRequest,
     ) -> Option<RustBridgeApprovalRequest> {
-        if !self.requires_approval(ctx.app, request) {
-            return None;
-        }
-
         let Ok(params) = parse_network_whitelist_grant_params(request) else {
             return None;
         };
 
+        if ctx
+            .app
+            .granted_permissions()
+            .network
+            .whitelist
+            .iter()
+            .any(|entry| entry == &params.entry)
+        {
+            return None;
+        }
+
         Some(RustBridgeApprovalRequest {
-            kind: "network_whitelist_grant".into(),
             app: ctx.app.clone(),
             source_label: ctx.source_label.to_string(),
             request_id: request.id.clone(),
-            params_json: json!({ "entry": params.entry }).to_string(),
+            body: RustBridgeApprovalBody::NetworkWhitelistGrant {
+                entry: params.entry,
+            },
         })
     }
 
@@ -149,7 +130,7 @@ impl BridgeMethod for SageRequestNetworkWhitelistGrant {
             Ok(GrantNetworkWhitelistOutcome::AlreadyGranted {
                    entry,
                    full_granted_network_whitelist,
-               }) => encode_success(
+               }) => encode_request_success(
                 request,
                 RequestNetworkWhitelistGrantResult {
                     granted: true,
@@ -170,7 +151,7 @@ impl BridgeMethod for SageRequestNetworkWhitelistGrant {
                 )
                     .await;
 
-                encode_success(
+                encode_request_success(
                     request,
                     RequestNetworkWhitelistGrantResult {
                         granted: true,

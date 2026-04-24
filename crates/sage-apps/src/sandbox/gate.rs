@@ -1,3 +1,4 @@
+use crate::bridge::capabilities::UserBridgeCapability;
 use crate::types::SageApp;
 
 use super::{
@@ -29,15 +30,14 @@ fn app_requires_sandbox_gate(app: &SageApp) -> bool {
     !app.id().starts_with("__sage_test_")
 }
 
-fn app_has_capability(app: &SageApp, capability: &str) -> bool {
+fn app_has_capability(app: &SageApp, capability: UserBridgeCapability) -> bool {
     app.granted_permissions()
         .capabilities
-        .iter()
-        .any(|cap| cap == capability)
+        .contains(&capability)
 }
 
 fn app_uses_persistent_storage(app: &SageApp) -> bool {
-    app_has_capability(app, "persistent_storage")
+    app_has_capability(app, UserBridgeCapability::PersistentStorage)
 }
 
 fn app_has_secret_access(app: &SageApp) -> bool {

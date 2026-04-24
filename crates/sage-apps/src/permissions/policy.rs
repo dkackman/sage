@@ -1,16 +1,15 @@
-use anyhow::{Result as AnyResult, anyhow};
+use anyhow::{anyhow, Result as AnyResult};
 use std::collections::BTreeSet;
 
+use crate::bridge::capabilities::UserBridgeCapability;
 use crate::{
-    permissions::{
-        get_capability_definition, require_capability_definition,
-    },
+    permissions::{get_user_capability_definition, user_registry},
     types::{
-        SageAppCapabilityFlags, SageRequestedCapabilities,
-        SageRequestedNetworkPermissions, SageRequestedPermissions,
+        SageAppCapabilityFlags, SageNetworkPermissionTarget,
+        SageRequestedCapabilities, SageRequestedNetworkPermissions,
+        SageRequestedPermissions,
     },
 };
-use crate::types::SageNetworkPermissionTarget;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CapabilitySummary {
@@ -25,31 +24,33 @@ fn normalize_capability_keys(
     let mut required = BTreeSet::new();
     let mut optional = BTreeSet::new();
 
-    for key in &capabilities.required {
-        let definition = require_capability_definition(key)?;
+    for capability in &capabilities.required {
+        let definition = get_user_capability_definition(*capability)
+            .ok_or_else(|| anyhow!("unknown capability: {}", capability.key()))?;
 
-        if !definition.requestable_by_app {
+        if !definition.flags.requestable_by_app {
             return Err(anyhow!(
                 "capability is not requestable by apps: {}",
-                key
+                capability.key()
             ));
         }
 
-        required.insert(key.clone());
+        required.insert(*capability);
     }
 
-    for key in &capabilities.optional {
-        let definition = require_capability_definition(key)?;
+    for capability in &capabilities.optional {
+        let definition = get_user_capability_definition(*capability)
+            .ok_or_else(|| anyhow!("unknown capability: {}", capability.key()))?;
 
-        if !definition.requestable_by_app {
+        if !definition.flags.requestable_by_app {
             return Err(anyhow!(
                 "capability is not requestable by apps: {}",
-                key
+                capability.key()
             ));
         }
 
-        if !required.contains(key) {
-            optional.insert(key.clone());
+        if !required.contains(capability) {
+            optional.insert(*capability);
         }
     }
 
@@ -99,8 +100,7 @@ fn normalize_requested_network_entries(
 fn normalize_requested_network_permissions(
     permissions: &SageRequestedNetworkPermissions,
 ) -> AnyResult<SageRequestedNetworkPermissions> {
-    let required =
-        normalize_requested_network_entries(&permissions.whitelist.required)?;
+    let required = normalize_requested_network_entries(&permissions.whitelist.required)?;
 
     let required_keys: BTreeSet<_> = required
         .iter()
@@ -109,16 +109,11 @@ fn normalize_requested_network_permissions(
 
     let optional = normalize_requested_network_entries(&permissions.whitelist.optional)?
         .into_iter()
-        .filter(|entry| {
-            !required_keys.contains(&(entry.scheme.clone(), entry.host.clone()))
-        })
+        .filter(|entry| !required_keys.contains(&(entry.scheme.clone(), entry.host.clone())))
         .collect();
 
     Ok(SageRequestedNetworkPermissions {
-        whitelist: crate::types::SageRequestedNetworkWhitelist {
-            required,
-            optional,
-        },
+        whitelist: crate::types::SageRequestedNetworkWhitelist { required, optional },
     })
 }
 
@@ -136,38 +131,40 @@ pub fn normalize_and_validate_requested_permissions(
 
 pub fn validate_granted_capabilities(
     permissions: &SageRequestedPermissions,
-    granted: &[String],
+    granted: &[UserBridgeCapability],
 ) -> AnyResult<()> {
     let mut allowed = BTreeSet::new();
-    allowed.extend(permissions.capabilities.required.iter().cloned());
-    allowed.extend(permissions.capabilities.optional.iter().cloned());
+    allowed.extend(permissions.capabilities.required.iter().copied());
+    allowed.extend(permissions.capabilities.optional.iter().copied());
 
-    let granted_set: BTreeSet<_> = granted.iter().cloned().collect();
+    let granted_set: BTreeSet<_> = granted.iter().copied().collect();
 
-    for key in &granted_set {
-        if !allowed.contains(key) {
+    for capability in &granted_set {
+        if !allowed.contains(capability) {
             return Err(anyhow!(
                 "granted permission not requested in manifest: {}",
-                key
+                capability.key()
             ));
         }
     }
 
-    for key in &permissions.capabilities.required {
-        if !granted_set.contains(key) {
-            return Err(anyhow!("missing required permission: {}", key));
+    for capability in &permissions.capabilities.required {
+        if !granted_set.contains(capability) {
+            return Err(anyhow!("missing required permission: {}", capability.key()));
         }
     }
 
     Ok(())
 }
 
-pub fn summarize_capabilities(keys: &[String]) -> AnyResult<CapabilitySummary> {
+pub fn summarize_capabilities(
+    capabilities: &[UserBridgeCapability],
+) -> AnyResult<CapabilitySummary> {
     let mut summary = CapabilitySummary::default();
 
-    for key in keys {
-        let def = get_capability_definition(key)
-            .ok_or_else(|| anyhow!("unknown capability: {}", key))?;
+    for capability in capabilities {
+        let def = get_user_capability_definition(*capability)
+            .ok_or_else(|| anyhow!("unknown capability: {}", capability.key()))?;
 
         summary.externally_observable |= def.flags.externally_observable;
         summary.accesses_sensitive_secret |= def.flags.accesses_sensitive_secret;
@@ -178,15 +175,16 @@ pub fn summarize_capabilities(keys: &[String]) -> AnyResult<CapabilitySummary> {
 }
 
 pub fn resolve_shared_capabilities(
-    granted_capabilities: &[String],
-) -> AnyResult<Vec<String>> {
+    granted_capabilities: &[UserBridgeCapability],
+) -> AnyResult<Vec<UserBridgeCapability>> {
     let mut shared = BTreeSet::new();
 
-    for key in granted_capabilities {
-        let definition = require_capability_definition(key)?;
+    for capability in granted_capabilities {
+        let definition = get_user_capability_definition(*capability)
+            .ok_or_else(|| anyhow!("unknown capability: {}", capability.key()))?;
 
-        if definition.shared_with_app {
-            shared.insert(key.clone());
+        if definition.flags.shared_with_app {
+            shared.insert(*capability);
         }
     }
 
@@ -197,8 +195,8 @@ pub fn validate_requested_permission_policy(
     permissions: &SageRequestedPermissions,
 ) -> AnyResult<()> {
     let mut requested = Vec::new();
-    requested.extend(permissions.capabilities.required.iter().cloned());
-    requested.extend(permissions.capabilities.optional.iter().cloned());
+    requested.extend(permissions.capabilities.required.iter().copied());
+    requested.extend(permissions.capabilities.optional.iter().copied());
 
     let summary = summarize_capabilities(&requested)?;
 
@@ -212,7 +210,7 @@ pub fn validate_requested_permission_policy(
 }
 
 pub fn resolve_capability_flags(
-    granted: &[String],
+    granted: &[UserBridgeCapability],
     previous_flags: Option<&SageAppCapabilityFlags>,
 ) -> AnyResult<SageAppCapabilityFlags> {
     let summary = summarize_capabilities(granted)?;
@@ -223,7 +221,6 @@ pub fn resolve_capability_flags(
 
     let has_secret_access = summary.accesses_sensitive_secret;
     let has_external_access = summary.externally_observable;
-
     let storage_may_contain_secrets = previous_storage_may_contain_secrets;
 
     if has_external_access && has_secret_access {
@@ -269,7 +266,7 @@ pub fn clear_storage_may_contain_secrets(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::permissions::registry;
+    use crate::permissions::user_registry;
     use crate::types::{
         SageRequestedCapabilities, SageRequestedNetworkPermissions,
         SageRequestedNetworkWhitelist, SageRequestedPermissions,
@@ -290,39 +287,34 @@ mod tests {
         }
     }
 
-    fn first_non_requestable_capability() -> String {
-        registry()
+    fn first_non_requestable_capability() -> UserBridgeCapability {
+        user_registry()
             .values()
-            .find(|definition| !definition.requestable_by_app)
+            .find(|definition| !definition.flags.requestable_by_app)
             .unwrap_or_else(|| {
-                panic!(
-                    "test requires at least one capability with requestable_by_app = false"
-                )
+                panic!("test requires at least one capability with requestable_by_app = false")
             })
-            .key
-            .to_string()
+            .capability
     }
 
-    fn first_shared_capability() -> String {
-        registry()
+    fn first_shared_capability() -> UserBridgeCapability {
+        user_registry()
             .values()
-            .find(|definition| definition.shared_with_app)
+            .find(|definition| definition.flags.shared_with_app)
             .unwrap_or_else(|| {
                 panic!("test requires at least one capability with shared_with_app = true")
             })
-            .key
-            .to_string()
+            .capability
     }
 
-    fn first_non_shared_capability() -> String {
-        registry()
+    fn first_non_shared_capability() -> UserBridgeCapability {
+        user_registry()
             .values()
-            .find(|definition| !definition.shared_with_app)
+            .find(|definition| !definition.flags.shared_with_app)
             .unwrap_or_else(|| {
                 panic!("test requires at least one capability with shared_with_app = false")
             })
-            .key
-            .to_string()
+            .capability
     }
 
     #[test]
@@ -337,7 +329,7 @@ mod tests {
 
         let message = err.to_string();
         assert!(
-            message.contains(&non_requestable),
+            message.contains(&non_requestable.key()),
             "error should mention rejected capability, got: {message}"
         );
     }
@@ -354,7 +346,7 @@ mod tests {
 
         let message = err.to_string();
         assert!(
-            message.contains(&non_requestable),
+            message.contains(&non_requestable.key()),
             "error should mention rejected capability, got: {message}"
         );
     }
@@ -399,11 +391,11 @@ mod tests {
     fn normalize_requested_permissions_deduplicates_and_sorts_capabilities() {
         let mut requested = empty_requested_permissions();
         requested.capabilities.required = vec![
-            "wallet.send_xch".to_string(),
-            "wallet.send_xch".to_string(),
+            UserBridgeCapability::WalletSendXch,
+            UserBridgeCapability::WalletSendXch,
         ];
         requested.capabilities.optional = vec![
-            "wallet.send_xch".to_string(),
+            UserBridgeCapability::WalletSendXch,
         ];
 
         let normalized = normalize_and_validate_requested_permissions(&requested)
@@ -411,7 +403,7 @@ mod tests {
 
         assert_eq!(
             normalized.capabilities.required,
-            vec!["wallet.send_xch".to_string()]
+            vec![UserBridgeCapability::WalletSendXch]
         );
         assert!(normalized.capabilities.optional.is_empty());
     }
@@ -463,13 +455,13 @@ mod tests {
     #[test]
     fn validate_granted_capabilities_rejects_unrequested_capability() {
         let mut requested = empty_requested_permissions();
-        requested.capabilities.required = vec!["wallet.send_xch".to_string()];
+        requested.capabilities.required = vec![UserBridgeCapability::WalletSendXch];
 
         let err = validate_granted_capabilities(
             &requested,
             &vec![
-                "wallet.send_xch".to_string(),
-                "persistent_storage".to_string(),
+                UserBridgeCapability::WalletSendXch,
+                UserBridgeCapability::PersistentStorage,
             ],
         )
             .expect_err("expected unrequested capability to be rejected");
@@ -483,13 +475,13 @@ mod tests {
     #[test]
     fn validate_granted_capabilities_rejects_missing_required_capability() {
         let mut requested = empty_requested_permissions();
-        requested.capabilities.required = vec!["wallet.send_xch".to_string()];
+        requested.capabilities.required = vec![UserBridgeCapability::WalletSendXch];
 
         let err = validate_granted_capabilities(&requested, &[])
             .expect_err("expected missing required capability to be rejected");
 
         assert!(
-            err.to_string().contains("wallet.send_xch"),
+            err.to_string().contains(UserBridgeCapability::WalletSendXch.key()),
             "error should mention missing required capability"
         );
     }
@@ -497,25 +489,14 @@ mod tests {
     #[test]
     fn validate_granted_capabilities_allows_subset_of_optional_capabilities() {
         let mut requested = empty_requested_permissions();
-        requested.capabilities.required = vec!["wallet.send_xch".to_string()];
-        requested.capabilities.optional = vec!["persistent_storage".to_string()];
+        requested.capabilities.required = vec![UserBridgeCapability::WalletSendXch];
+        requested.capabilities.optional = vec![UserBridgeCapability::PersistentStorage];
 
         validate_granted_capabilities(
             &requested,
-            &vec!["wallet.send_xch".to_string()],
+            &vec![UserBridgeCapability::WalletSendXch],
         )
             .expect("expected optional capability to be omittable");
-    }
-
-    #[test]
-    fn summarize_capabilities_rejects_unknown_capability() {
-        let err = summarize_capabilities(&vec!["does.not.exist".to_string()])
-            .expect_err("expected unknown capability to be rejected");
-
-        assert!(
-            err.to_string().contains("unknown capability"),
-            "error should mention unknown capability"
-        );
     }
 
     #[test]
@@ -523,8 +504,8 @@ mod tests {
     fn requested_permissions_policy_rejects_secret_and_external_combination() {
         let mut requested = empty_requested_permissions();
         requested.capabilities.required = vec![
-            "wallet.send_xch".to_string(),
-            "wallet.send_xch_auto_submit".to_string(),
+            UserBridgeCapability::WalletSendXch,
+            UserBridgeCapability::WalletSendXchAutoSubmit,
         ];
 
         let err = validate_requested_permission_policy(&requested)
@@ -538,7 +519,7 @@ mod tests {
 
     #[test]
     fn resolve_capability_flags_sets_expected_flags_for_shared_send_capability() {
-        let flags = resolve_capability_flags(&vec!["wallet.send_xch".to_string()], None)
+        let flags = resolve_capability_flags(&vec![UserBridgeCapability::WalletSendXch], None)
             .expect("expected capability flags to resolve");
 
         assert!(flags.has_external_access);
@@ -557,7 +538,7 @@ mod tests {
         };
 
         let err = resolve_capability_flags(
-            &vec!["wallet.send_xch".to_string()],
+            &vec![UserBridgeCapability::WalletSendXch],
             Some(&previous),
         )
             .expect_err("expected tainted storage to block externally observable capability");

@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type {
   SageApp,
-  SageAppCapabilityDefinitionView,
   SageGrantedPermissions,
   SageNetworkPermissionTarget,
   SystemSageApp,
+  UserBridgeCapability,
   UserSageApp,
 } from '@/bindings';
-import { commands } from '@/bindings';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,18 +33,28 @@ interface Props {
   editable?: boolean;
 }
 
-type PermissionKind = 'capability' | 'network';
-
-interface PermissionEntry {
-  id: string;
-  kind: PermissionKind;
-  key: string;
-  label: string;
-  description: string | null;
-  required: boolean;
-  granted: boolean;
-  sensitivityRank: number;
-}
+type PermissionEntry =
+  | {
+      id: string;
+      kind: 'capability';
+      key: string;
+      capability: UserBridgeCapability;
+      label: string;
+      description: string | null;
+      required: boolean;
+      granted: boolean;
+      sensitivityRank: number;
+    }
+  | {
+      id: string;
+      kind: 'network';
+      key: string;
+      label: string;
+      description: string | null;
+      required: boolean;
+      granted: boolean;
+      sensitivityRank: number;
+    };
 
 interface PermissionGroupNode {
   id: string;
@@ -90,64 +99,55 @@ function normalizeKey(key: string): string {
   return key.trim().toLowerCase();
 }
 
-function capabilitySensitivityRankFromRegistry(
-  key: string,
-  registry: Record<string, SageAppCapabilityDefinitionView>,
-): number {
-  const definition = registry[key];
-
-  if (definition?.flags.accessesSensitiveSecret) {
-    return 0;
-  }
-
-  if (definition?.flags.persistentStorage) {
-    return 2;
-  }
-
-  if (definition?.flags.externallyObservable) {
-    return 3;
-  }
-
+function capabilitySensitivityRank(key: string): number {
+  if (key.includes('secret')) return 0;
+  if (key === 'persistent_storage') return 2;
+  if (key.includes('send') || key.includes('network')) return 3;
   return 4;
 }
 
 function buildCapabilityEntries(
-  requestedRequired: string[],
-  requestedOptional: string[],
-  grantedCapabilities: string[],
-  registry: Record<string, SageAppCapabilityDefinitionView>,
+  requestedRequired: UserBridgeCapability[],
+  requestedOptional: UserBridgeCapability[],
+  grantedCapabilities: UserBridgeCapability[],
 ): PermissionEntry[] {
-  const grantedSet = new Set(grantedCapabilities);
+  const grantedSet = new Set<UserBridgeCapability>(grantedCapabilities);
 
-  const requiredEntries: PermissionEntry[] = requestedRequired.map((key) => {
-    const definition = registry[key];
+  const requiredEntries: PermissionEntry[] = requestedRequired.map(
+    (capability) => {
+      const key = capability;
 
-    return {
-      id: `capability:${key}`,
-      kind: 'capability',
-      key,
-      label: definition?.label ?? formatCapabilityLeafLabel(key),
-      description: definition?.description ?? null,
-      required: true,
-      granted: true,
-      sensitivityRank: capabilitySensitivityRankFromRegistry(key, registry),
-    };
-  });
+      return {
+        id: `capability:${key}`,
+        kind: 'capability',
+        key,
+        capability,
+        label: formatCapabilityLeafLabel(key),
+        description: null,
+        required: true,
+        granted: true,
+        sensitivityRank: capabilitySensitivityRank(key),
+      };
+    },
+  );
 
-  const optionalEntries: PermissionEntry[] = requestedOptional.map((key) => {
-    const definition = registry[key];
+  const optionalEntries: PermissionEntry[] = requestedOptional.map(
+    (capability) => {
+      const key = capability;
 
-    return {
-      id: `capability:${key}`,
-      kind: 'capability',
-      key,
-      label: definition?.label ?? formatCapabilityLeafLabel(key),
-      description: definition?.description ?? null,
-      required: false,
-      granted: grantedSet.has(key),
-      sensitivityRank: capabilitySensitivityRankFromRegistry(key, registry),
-    };
-  });
+      return {
+        id: `capability:${key}`,
+        kind: 'capability',
+        key,
+        capability,
+        label: formatCapabilityLeafLabel(key),
+        description: null,
+        required: false,
+        granted: grantedSet.has(capability),
+        sensitivityRank: capabilitySensitivityRank(key),
+      };
+    },
+  );
 
   return [...requiredEntries, ...optionalEntries];
 }
@@ -558,27 +558,6 @@ export function PermissionsEditor({
       : app.common.activeSnapshot.manifest;
 
   const [showOptional, setShowOptional] = useState(false);
-  const [capabilityRegistry, setCapabilityRegistry] = useState<
-    Record<string, SageAppCapabilityDefinitionView>
-  >({});
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void commands.appsGetCapabilityRegistry().then((entries) => {
-      if (cancelled) {
-        return;
-      }
-
-      setCapabilityRegistry(
-        Object.fromEntries(entries.map((entry) => [entry.key, entry])),
-      );
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const grantedCapabilities = grantedPermissions.capabilities ?? [];
   const grantedNetworkWhitelist = grantedPermissions.network.whitelist ?? [];
@@ -598,7 +577,6 @@ export function PermissionsEditor({
       requestedRequiredCapabilities,
       [],
       grantedCapabilities,
-      capabilityRegistry,
     );
 
     const networkEntries = buildNetworkEntries(
@@ -611,7 +589,6 @@ export function PermissionsEditor({
   }, [
     requestedRequiredCapabilities,
     grantedCapabilities,
-    capabilityRegistry,
     requestedRequiredNetwork,
     grantedNetworkWhitelist,
   ]);
@@ -621,7 +598,6 @@ export function PermissionsEditor({
       [],
       requestedOptionalCapabilities,
       grantedCapabilities,
-      capabilityRegistry,
     );
 
     const networkEntries = buildNetworkEntries(
@@ -634,7 +610,6 @@ export function PermissionsEditor({
   }, [
     requestedOptionalCapabilities,
     grantedCapabilities,
-    capabilityRegistry,
     requestedOptionalNetwork,
     grantedNetworkWhitelist,
   ]);
@@ -659,17 +634,19 @@ export function PermissionsEditor({
     }
 
     if (entry.kind === 'capability') {
-      const requiredSet = new Set<string>(requestedRequiredCapabilities);
-      const nextSet = new Set(grantedCapabilities);
+      const requiredSet = new Set<UserBridgeCapability>(
+        requestedRequiredCapabilities,
+      );
+      const nextSet = new Set<UserBridgeCapability>(grantedCapabilities);
 
       if (nextGranted) {
-        nextSet.add(entry.key);
+        nextSet.add(entry.capability);
       } else {
-        nextSet.delete(entry.key);
+        nextSet.delete(entry.capability);
       }
 
-      for (const requiredKey of requiredSet) {
-        nextSet.add(requiredKey);
+      for (const requiredCapability of requiredSet) {
+        nextSet.add(requiredCapability);
       }
 
       emitGrantedPermissions({

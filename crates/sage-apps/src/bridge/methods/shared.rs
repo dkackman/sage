@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use crate::bridge::{
     RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
 };
+use crate::bridge::capabilities::{BridgeCapability, SystemBridgeCapability, UserBridgeCapability};
 use crate::host::AppState;
 use crate::state::AppsHostState;
 use crate::types::SageApp;
@@ -20,40 +21,21 @@ pub struct BridgeTools<'a> {
     pub host_state: &'a tauri::State<'a, AppsHostState>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BridgeMethodCapability {
+    Ungated,
+    Required(BridgeCapability),
+}
+
 #[async_trait]
 pub trait BridgeMethod: Send + Sync {
-    fn permission(&self) -> Option<&'static str> {
-        None
-    }
-
-    fn requires_approval(
-        &self,
-        _app: &SageApp,
-        _request: &RustBridgeRequest,
-    ) -> bool {
-        false
-    }
+    fn capability(&self) -> BridgeMethodCapability;
 
     fn approval_request(
         &self,
         ctx: BridgeContext<'_>,
         request: &RustBridgeRequest,
-    ) -> Option<RustBridgeApprovalRequest> {
-        if !self.requires_approval(ctx.app, request) {
-            return None;
-        }
-
-        Some(RustBridgeApprovalRequest {
-            kind: "unknown".into(),
-            app: ctx.app.clone(),
-            source_label: ctx.source_label.to_string(),
-            request_id: request.id.clone(),
-            params_json: request
-                .params_json
-                .clone()
-                .unwrap_or_else(|| "null".to_string()),
-        })
-    }
+    ) -> Option<RustBridgeApprovalRequest>;
 
     async fn handle(
         &self,
@@ -61,4 +43,18 @@ pub trait BridgeMethod: Send + Sync {
         tools: BridgeTools<'_>,
         request: &RustBridgeRequest,
     ) -> RustBridgeResponse;
+}
+
+impl BridgeMethodCapability {
+    pub fn ungated() -> Self {
+        Self::Ungated
+    }
+
+    pub fn user(cap: UserBridgeCapability) -> Self {
+        Self::Required(BridgeCapability::User(cap))
+    }
+
+    pub fn system(cap: SystemBridgeCapability) -> Self {
+        Self::Required(BridgeCapability::System(cap))
+    }
 }

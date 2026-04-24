@@ -18,6 +18,7 @@ use sage_apps::types::{
     SageRequestedPermissions, UserSageApp,
 };
 use tempfile::tempdir;
+use sage_apps::bridge::capabilities::UserBridgeCapability;
 
 fn sample_app(base: &Path, app_id: &str) -> UserSageApp {
     let mut app = sample_installed_app(base, app_id, "Test App");
@@ -38,8 +39,8 @@ fn sample_app(base: &Path, app_id: &str) -> UserSageApp {
         capabilities: SageRequestedCapabilities {
             required: vec![],
             optional: vec![
-                "wallet.send_xch".to_string(),
-                "persistent_storage".to_string(),
+                UserBridgeCapability::WalletSendXch,
+                UserBridgeCapability::PersistentStorage,
             ],
         },
     };
@@ -111,7 +112,7 @@ fn update_app_permissions_internal_rejects_unrequested_capability() {
         dir.path(),
         &app.common.id,
         SageGrantedPermissions {
-            capabilities: vec!["wallet.send_xch_auto_submit".to_string()],
+            capabilities: vec![UserBridgeCapability::WalletSendXchAutoSubmit],
             network: SageGrantedNetworkPermissions { whitelist: vec![] },
         },
         false,
@@ -160,15 +161,15 @@ fn grant_requested_capability_internal_grants_optional_capability() {
     write_installed_app_metadata(&app, &app_path).unwrap();
 
     let outcome =
-        grant_requested_capability_internal(dir.path(), &app.common.id, "wallet.send_xch")
+        grant_requested_capability_internal(dir.path(), &app.common.id, UserBridgeCapability::WalletSendXch)
             .unwrap();
 
     match outcome {
         GrantCapabilityOutcome::Granted { capability, change } => {
-            assert_eq!(capability, "wallet.send_xch");
-            assert_eq!(change.added, vec!["wallet.send_xch".to_string()]);
+            assert_eq!(capability, UserBridgeCapability::WalletSendXch);
+            assert_eq!(change.added, vec![UserBridgeCapability::WalletSendXch]);
             assert!(change.removed.is_empty());
-            assert_eq!(change.full, vec!["wallet.send_xch".to_string()]);
+            assert_eq!(change.full, vec![UserBridgeCapability::WalletSendXch]);
         }
         GrantCapabilityOutcome::AlreadyGranted { .. } => {
             panic!("expected capability to be newly granted")
@@ -178,7 +179,7 @@ fn grant_requested_capability_internal_grants_optional_capability() {
     let reloaded = read_installed_app_by_id(dir.path(), &app.common.id).unwrap();
     assert_eq!(
         reloaded.common.granted_permissions.capabilities,
-        vec!["wallet.send_xch".to_string()]
+        vec![UserBridgeCapability::WalletSendXch]
     );
 }
 
@@ -186,13 +187,13 @@ fn grant_requested_capability_internal_grants_optional_capability() {
 fn grant_requested_capability_internal_returns_already_granted_when_present() {
     let dir = tempdir().unwrap();
     let mut app = sample_app(dir.path(), "app-1");
-    app.common.granted_permissions.capabilities = vec!["wallet.send_xch".to_string()];
+    app.common.granted_permissions.capabilities = vec![UserBridgeCapability::WalletSendXch];
 
     let app_path = app_dir(dir.path(), &app.common.id);
     write_installed_app_metadata(&app, &app_path).unwrap();
 
     let outcome =
-        grant_requested_capability_internal(dir.path(), &app.common.id, "wallet.send_xch")
+        grant_requested_capability_internal(dir.path(), &app.common.id, UserBridgeCapability::WalletSendXch)
             .unwrap();
 
     match outcome {
@@ -200,8 +201,8 @@ fn grant_requested_capability_internal_returns_already_granted_when_present() {
             capability,
             full_granted_capabilities,
         } => {
-            assert_eq!(capability, "wallet.send_xch");
-            assert_eq!(full_granted_capabilities, vec!["wallet.send_xch".to_string()]);
+            assert_eq!(capability, UserBridgeCapability::WalletSendXch);
+            assert_eq!(full_granted_capabilities, vec![UserBridgeCapability::WalletSendXch]);
         }
         GrantCapabilityOutcome::Granted { .. } => {
             panic!("expected already-granted outcome")
@@ -219,7 +220,7 @@ fn grant_requested_capability_internal_rejects_unrequested_capability() {
     let err = grant_requested_capability_internal(
         dir.path(),
         &app.common.id,
-        "wallet.send_xch_auto_submit",
+        UserBridgeCapability::WalletSendXchAutoSubmit,
     )
         .unwrap_err();
 

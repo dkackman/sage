@@ -15,6 +15,7 @@ mod error;
 
 #[cfg(all(debug_assertions, not(mobile)))]
 use specta_typescript::{BigIntExportBehavior, Typescript};
+use sage_apps::bridge::RustBridgeApprovalEvent;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -164,14 +165,13 @@ pub fn run() {
             apps::lifecycle::apps_update_permissions,
             apps::lifecycle::apps_mark_storage_may_contain_secrets,
             apps::sandbox::get_builtin_test_app,
-            apps::permissions::apps_get_capability_registry,
             apps::system_apps::get_builtin_system_app,
             apps::runtime::manager::apps_list_runtimes,
             apps::runtime::manager::apps_focus_runtime,
             apps::runtime::manager::apps_hide_runtime,
             apps::runtime::manager::apps_kill_runtime,
         ])
-        .events(collect_events![SyncEvent]);
+        .events(collect_events![SyncEvent, RustBridgeApprovalEvent]);
 
     #[cfg(all(debug_assertions, not(mobile)))]
     builder

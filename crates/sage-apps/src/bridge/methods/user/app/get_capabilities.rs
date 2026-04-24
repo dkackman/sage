@@ -1,13 +1,23 @@
 use async_trait::async_trait;
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::capabilities::UserBridgeCapability;
+use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::permissions::resolve_shared_capabilities;
 
 #[derive(Debug, Clone, Copy)]
-pub struct SageGetCapabilities;
+pub struct AppGetCapabilities;
 
 #[async_trait]
-impl BridgeMethod for SageGetCapabilities {
+impl BridgeMethod for AppGetCapabilities {
+    fn capability(&self) -> BridgeMethodCapability {
+        BridgeMethodCapability::user(UserBridgeCapability::AppGetCapabilities)
+    }
+
+    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+        None
+    }
+
     async fn handle(
         &self,
         ctx: BridgeContext<'_>,

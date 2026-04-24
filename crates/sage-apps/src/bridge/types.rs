@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use crate::types::SageApp;
+use tauri_specta::Event;
+use crate::bridge::capabilities::UserBridgeCapability;
+use crate::bridge::methods::user::wallet::send_xch::WalletSendXchParams;
+use crate::types::{SageApp, SageAppCapabilityDefinitionView, SageNetworkPermissionTarget};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -46,21 +49,35 @@ pub enum RustBridgeResponse {
     Error(RustBridgeErrorResponse),
 }
 
-#[derive(Debug, Clone, Serialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RustBridgeApprovalRequest {
-    pub kind: String,
     pub app: SageApp,
     pub source_label: String,
     pub request_id: String,
-    pub params_json: String,
+
+    #[serde(flatten)]
+    pub body: RustBridgeApprovalBody,
 }
 
-#[derive(Debug, Clone, Serialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum RustBridgeApprovalBody {
+    SendXch {
+        summary: WalletSendXchParams,
+    },
+    CapabilityGrant {
+        capability: UserBridgeCapability,
+        definition: SageAppCapabilityDefinitionView,
+    },
+    NetworkWhitelistGrant {
+        entry: SageNetworkPermissionTarget,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 #[serde(rename_all = "camelCase")]
 pub struct RustBridgeApprovalEvent {
-    #[serde(rename = "approvalId")]
-    #[specta(rename = "approvalId")]
     pub approval_id: String,
     pub approval: RustBridgeApprovalRequest,
 }

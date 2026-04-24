@@ -144,20 +144,6 @@ fn validate_package_manifest_rejects_blank_version() {
 }
 
 #[test]
-fn validate_package_manifest_rejects_invalid_requested_capability() {
-    let mut manifest = sample_manifest();
-    manifest.permissions.capabilities.required =
-        vec!["definitely.not.a.real.capability".to_string()];
-
-    let err = validate_package_manifest(&manifest).unwrap_err();
-    let msg = err.to_string();
-    assert!(
-        msg.contains("unknown capability") || msg.contains("definitely.not.a.real.capability"),
-        "unexpected error: {msg}"
-    );
-}
-
-#[test]
 fn validate_package_manifest_returns_total_size_when_valid() {
     let manifest = sample_manifest();
     let total = validate_package_manifest(&manifest).unwrap();

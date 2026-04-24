@@ -34,6 +34,13 @@ fn installed_app_metadata_roundtrips() {
     assert_eq!(loaded.common.capability_flags.has_external_access, false);
 }
 
+fn without_system_apps(listed: Vec<ListedSageApp>) -> Vec<ListedSageApp> {
+    listed
+        .into_iter()
+        .filter(|entry| !matches!(entry, ListedSageApp::System(_)))
+        .collect()
+}
+
 #[test]
 fn installed_app_metadata_roundtrips_pending_update() {
     let base = tempdir().unwrap();
@@ -65,7 +72,7 @@ fn corrupted_metadata_is_reported_as_corrupted_listing() {
 
     fs::write(dir.join(".sage-installed.json"), "{ definitely not json").unwrap();
 
-    let listed = list_installed_apps_internal(&apps_root(base.path())).unwrap();
+    let listed = without_system_apps(list_installed_apps_internal(&apps_root(base.path())).unwrap());
     assert_eq!(listed.len(), 1);
 
     match &listed[0] {
@@ -160,7 +167,7 @@ fn corrupted_persisted_network_entry_is_reported_as_corrupted_listing() {
     )
         .unwrap();
 
-    let listed = list_installed_apps_internal(&apps_root(base.path())).unwrap();
+    let listed = without_system_apps(list_installed_apps_internal(&apps_root(base.path())).unwrap());
     assert_eq!(listed.len(), 1);
 
     match &listed[0] {
@@ -195,7 +202,7 @@ fn installed_apps_are_sorted_by_name() {
     zeta.common.app_dir = zeta_dir.to_string_lossy().to_string();
     write_installed_app_metadata(&zeta, &zeta_dir).unwrap();
 
-    let listed = list_installed_apps_internal(&apps_root(base.path())).unwrap();
+    let listed = without_system_apps(list_installed_apps_internal(&apps_root(base.path())).unwrap());
     let names: Vec<_> = listed
         .into_iter()
         .map(|entry| match entry {
@@ -214,7 +221,7 @@ fn list_installed_apps_ignores_tmp_directories() {
     let root = apps_root(base.path());
     fs::create_dir_all(root.join(".tmp-123")).unwrap();
 
-    let listed = list_installed_apps_internal(&root).unwrap();
+    let listed = without_system_apps(list_installed_apps_internal(&apps_root(base.path())).unwrap());
     assert!(listed.is_empty());
 }
 
@@ -224,7 +231,7 @@ fn list_installed_apps_ignores_directories_without_metadata() {
     let root = apps_root(base.path());
     fs::create_dir_all(root.join("missing-metadata")).unwrap();
 
-    let listed = list_installed_apps_internal(&root).unwrap();
+    let listed = without_system_apps(list_installed_apps_internal(&apps_root(base.path())).unwrap());
     assert!(listed.is_empty());
 }
 

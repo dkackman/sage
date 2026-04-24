@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
-
+use crate::bridge::capabilities::UserBridgeCapability;
 use crate::lifecycle::{GrantedCapabilitiesChange, GrantedNetworkWhitelistChange};
 use crate::types::SageNetworkPermissionTarget;
 
@@ -10,9 +10,9 @@ pub struct GrantedCapabilitiesChangeEvent {
     pub channel: String,
     #[serde(rename = "type")]
     pub event_type: String,
-    pub removed_granted_capabilities: Vec<String>,
-    pub added_granted_capabilities: Vec<String>,
-    pub full_granted_capabilities: Vec<String>,
+    pub removed_granted_capabilities: Vec<UserBridgeCapability>,
+    pub added_granted_capabilities: Vec<UserBridgeCapability>,
+    pub full_granted_capabilities: Vec<UserBridgeCapability>,
 }
 
 impl GrantedCapabilitiesChangeEvent {

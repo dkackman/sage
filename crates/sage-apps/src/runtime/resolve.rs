@@ -3,7 +3,7 @@ use std::path::Path;
 
 use tauri::{AppHandle, Manager};
 use url::Url;
-
+use crate::bridge::capabilities::UserBridgeCapability;
 use crate::lifecycle::read_installed_app_by_id;
 use crate::sandbox::build_builtin_test_app;
 use crate::system_apps::build_builtin_system_app;
@@ -85,8 +85,7 @@ pub fn should_use_incognito(app: &SageApp) -> bool {
     let has_persistent_storage = app
         .granted_permissions()
         .capabilities
-        .iter()
-        .any(|cap| cap == "persistent_storage");
+        .contains(&UserBridgeCapability::PersistentStorage);
 
     if !has_persistent_storage {
         return true;

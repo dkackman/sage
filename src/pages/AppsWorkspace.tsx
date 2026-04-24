@@ -2,7 +2,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   AppApprovalStrip,
-  type PendingApproval,
 } from '@/components/apps/AppApprovalStrip.tsx';
 import {
   AppTaskBar,
@@ -136,53 +135,6 @@ export function AppsWorkspace() {
     return out;
   }, [runtimes, tabOrder, getListedApp, appId]);
 
-  const approvalStripData = useMemo<PendingApproval>(() => {
-    if (!currentApproval) {
-      return null;
-    }
-
-    if (currentApproval.request.kind === 'send_xch') {
-      return {
-        kind: 'send_xch',
-        appId: currentApproval.request.app.common.id,
-        appName: currentApproval.request.app.common.name,
-        requestId: currentApproval.request.requestId,
-        summary: {
-          address: currentApproval.request.params.address,
-          amount: String(currentApproval.request.params.amount),
-          fee: String(currentApproval.request.params.fee),
-          memos: currentApproval.request.params.memos ?? [],
-          autoSubmit: false,
-        },
-      };
-    }
-
-    if (currentApproval.request.kind === 'capability_grant') {
-      return {
-        kind: 'capability_grant',
-        appId: currentApproval.request.app.common.id,
-        appName: currentApproval.request.app.common.name,
-        requestId: currentApproval.request.requestId,
-        capability: currentApproval.request.params.capability,
-      };
-    }
-
-    if (currentApproval.request.kind === 'network_whitelist_grant') {
-      return {
-        kind: 'network_whitelist_grant',
-        appId: currentApproval.request.app.common.id,
-        appName: currentApproval.request.app.common.name,
-        requestId: currentApproval.request.requestId,
-        entry: {
-          scheme: currentApproval.request.params.entry.scheme,
-          host: currentApproval.request.params.entry.host,
-        },
-      };
-    }
-
-    return null;
-  }, [currentApproval]);
-
   const handleConfirmUpdate = useCallback(
     async (nextGrantedPermissions: SageGrantedPermissions) => {
       if (!activeApp) {
@@ -265,7 +217,10 @@ export function AppsWorkspace() {
       currentApproval &&
       currentApproval.request.app.common.id === activeApp.common.id ? (
         <AppApprovalStrip
-          approval={approvalStripData}
+          approval={{
+            approvalId: currentApproval.id,
+            approval: currentApproval.request,
+          }}
           expanded={approvalExpanded}
           queuedApprovalCount={queuedApprovalCount}
           secondsLeft={currentApprovalSecondsLeft}

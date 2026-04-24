@@ -1,39 +1,29 @@
 use async_trait::async_trait;
 
-use crate::bridge::methods::system::runtime_manager::{
-    RuntimeTargetParams, SystemKillRuntimeResult,
-};
+use crate::bridge::methods::system::runtime_manager::{parse_runtime_target_params, SystemKillRuntimeResult};
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::capabilities::SystemBridgeCapability;
+use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::runtime::kill_runtime_internal;
 
 #[derive(Debug, Clone, Copy)]
-pub struct SystemKillRuntime;
-
-fn parse_runtime_target_params(
-    request: &RustBridgeRequest,
-) -> Result<RuntimeTargetParams, RustBridgeResponse> {
-    let Some(params_json) = request.params_json.clone() else {
-        return Err(failure(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            "method requires params",
-        ));
-    };
-
-    serde_json::from_str(&params_json).map_err(|err| {
-        failure(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            format!("failed to decode params: {err}"),
-        )
-    })
-}
+pub struct RuntimeManagerKillRuntime;
 
 #[async_trait]
-impl BridgeMethod for SystemKillRuntime {
+impl BridgeMethod for RuntimeManagerKillRuntime {
+    fn capability(&self) -> BridgeMethodCapability {
+        BridgeMethodCapability::system(SystemBridgeCapability::RuntimeManagerKillRuntime)
+    }
+
+    fn approval_request(
+        &self,
+        _ctx: BridgeContext<'_>,
+        _request: &RustBridgeRequest
+    ) -> Option<RustBridgeApprovalRequest> {
+        None
+    }
+
     async fn handle(
         &self,
         _ctx: BridgeContext<'_>,

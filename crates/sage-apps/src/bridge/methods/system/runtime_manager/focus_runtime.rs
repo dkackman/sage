@@ -1,37 +1,25 @@
 use async_trait::async_trait;
 
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::methods::system::runtime_manager::RuntimeTargetParams;
-use crate::bridge::{failure, success, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::methods::system::runtime_manager::{parse_runtime_target_params};
+use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::capabilities::{SystemBridgeCapability};
+use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::runtime::focus_runtime_internal;
 
 #[derive(Debug, Clone, Copy)]
-pub struct SystemFocusRuntime;
-
-fn parse_runtime_target_params(
-    request: &RustBridgeRequest,
-) -> Result<RuntimeTargetParams, RustBridgeResponse> {
-    let Some(params_json) = request.params_json.clone() else {
-        return Err(failure(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            "method requires params",
-        ));
-    };
-
-    serde_json::from_str(&params_json).map_err(|err| {
-        failure(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            format!("failed to decode params: {err}"),
-        )
-    })
-}
+pub struct RuntimeManagerFocusRuntime;
 
 #[async_trait]
-impl BridgeMethod for SystemFocusRuntime {
+impl BridgeMethod for RuntimeManagerFocusRuntime {
+    fn capability(&self) -> BridgeMethodCapability {
+        BridgeMethodCapability::system(SystemBridgeCapability::RuntimeManagerFocusRuntime)
+    }
+
+    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+        None
+    }
+
     async fn handle(
         &self,
         _ctx: BridgeContext<'_>,

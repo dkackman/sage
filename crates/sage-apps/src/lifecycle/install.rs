@@ -645,7 +645,7 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
-
+    use crate::bridge::capabilities::UserBridgeCapability;
     use crate::lifecycle::{
         write_retired_app_origins,
     };
@@ -669,8 +669,8 @@ mod tests {
                     },
                 },
                 capabilities: SageRequestedCapabilities {
-                    required: vec!["persistent_storage".into()],
-                    optional: vec!["wallet.send_xch".into()],
+                    required: vec![UserBridgeCapability::PersistentStorage],
+                    optional: vec![UserBridgeCapability::WalletSendXch],
                 },
             },
             files: vec![SageAppManifestFile {
@@ -701,7 +701,7 @@ mod tests {
                 icon_file: "icon.png".into(),
                 requested_permissions: sample_manifest().permissions.clone(),
                 granted_permissions: SageGrantedPermissions {
-                    capabilities: vec!["persistent_storage".into()],
+                    capabilities: vec![UserBridgeCapability::PersistentStorage],
                     network: SageGrantedNetworkPermissions {
                         whitelist: vec![SageNetworkPermissionTarget {
                             scheme: "https".into(),
@@ -871,7 +871,7 @@ mod tests {
             &app_dir,
             &manifest,
             SageGrantedPermissions {
-                capabilities: vec!["persistent_storage".into()],
+                capabilities: vec![UserBridgeCapability::PersistentStorage],
                 network: SageGrantedNetworkPermissions { whitelist: vec![] },
             },
             SageAppCapabilityFlags::default(),

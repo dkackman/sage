@@ -5,30 +5,14 @@ import type {
   SageGrantedPermissions,
   SageNetworkPermissionTarget,
   SageRequestedPermissions,
+  UserBridgeCapability,
 } from '@/bindings';
-
-function networkKey(entry: SageNetworkPermissionTarget): string {
-  return `${entry.scheme}://${entry.host}`;
-}
-
-function sortStrings(values: Iterable<string>): string[] {
-  return [...values].sort((a, b) => a.localeCompare(b));
-}
-
-function sortNetwork(
-  values: Iterable<SageNetworkPermissionTarget>,
-): SageNetworkPermissionTarget[] {
-  return [...values].sort((a, b) => networkKey(a).localeCompare(networkKey(b)));
-}
-
-function cloneNetwork(
-  values: Iterable<SageNetworkPermissionTarget>,
-): SageNetworkPermissionTarget[] {
-  return [...values].map((entry) => ({
-    scheme: entry.scheme,
-    host: entry.host,
-  }));
-}
+import {
+  cloneNetwork,
+  networkKey,
+  sortCapabilities,
+  sortNetwork,
+} from '@/lib/apps/permissionCollections';
 
 function getRequestedCapabilities(permissions: SageRequestedPermissions) {
   return {
@@ -54,18 +38,18 @@ function getManifestRequestedPermissions(
 
 export interface AppUpdatePermissionsDelta {
   addedRequestedCapabilities: {
-    required: string[];
-    optional: string[];
+    required: UserBridgeCapability[];
+    optional: UserBridgeCapability[];
   };
   addedRequestedNetwork: {
     required: SageNetworkPermissionTarget[];
     optional: SageNetworkPermissionTarget[];
   };
 
-  requiredCapabilitiesToGrant: string[];
+  requiredCapabilitiesToGrant: UserBridgeCapability[];
   requiredNetworkToGrant: SageNetworkPermissionTarget[];
 
-  removedGrantedCapabilities: string[];
+  removedGrantedCapabilities: UserBridgeCapability[];
   removedGrantedNetwork: SageNetworkPermissionTarget[];
 
   nextGrantedPermissions: SageGrantedPermissions;
@@ -125,7 +109,7 @@ export function getAppUpdatePermissionsDelta(
     ),
   };
 
-  const requiredCapabilitiesToGrant = sortStrings(
+  const requiredCapabilitiesToGrant = sortCapabilities(
     nextCaps.required.filter((key) => !oldGrantedCapabilitiesSet.has(key)),
   );
 
@@ -144,7 +128,7 @@ export function getAppUpdatePermissionsDelta(
     ...nextNetwork.optional.map(networkKey),
   ]);
 
-  const removedGrantedCapabilities = sortStrings(
+  const removedGrantedCapabilities = sortCapabilities(
     oldGrantedCapabilities.filter((key) => !nextAllowedCapsSet.has(key)),
   );
 
@@ -158,7 +142,7 @@ export function getAppUpdatePermissionsDelta(
     nextAllowedCapsSet.has(key),
   );
 
-  const nextGrantedCapabilities = sortStrings(
+  const nextGrantedCapabilities = sortCapabilities(
     new Set([...retainedGrantedCapabilities, ...nextCaps.required]),
   );
 

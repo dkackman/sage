@@ -1,6 +1,7 @@
 mod common;
 
 use common::sample_manifest_file;
+use sage_apps::bridge::capabilities::UserBridgeCapability;
 use sage_apps::lifecycle::install::{
     manifest_entry_file, manifest_icon_file, normalize_app_url,
 };
@@ -25,8 +26,8 @@ fn requested_permissions() -> SageRequestedPermissions {
             },
         },
         capabilities: SageRequestedCapabilities {
-            required: vec!["wallet.send_xch".to_string()],
-            optional: vec!["persistent_storage".to_string()],
+            required: vec![UserBridgeCapability::WalletSendXch],
+            optional: vec![UserBridgeCapability::PersistentStorage],
         },
     }
 }

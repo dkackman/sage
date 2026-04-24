@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::capabilities::UserBridgeCapability;
+use crate::bridge::methods::shared::BridgeMethodCapability;
 
 #[derive(Debug, Clone, Copy)]
 pub struct BridgeSend;
@@ -46,6 +48,14 @@ fn parse_bridge_send_request(
 
 #[async_trait]
 impl BridgeMethod for BridgeSend {
+    fn capability(&self) -> BridgeMethodCapability {
+        BridgeMethodCapability::user(UserBridgeCapability::BridgeSend)
+    }
+
+    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+        None
+    }
+
     async fn handle(
         &self,
         ctx: BridgeContext<'_>,

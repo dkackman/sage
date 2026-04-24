@@ -1,44 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { commands, type SageAppCapabilityDefinitionView } from '@/bindings';
+import { useMemo } from 'react';
 import { Button } from '@/components/ui/button.tsx';
 import { BadgeCheck } from 'lucide-react';
 import { AppApprovalBody } from '@/components/apps/approval/AppApprovalBody.tsx';
-
-export type PendingApproval =
-  | {
-      kind: 'send_xch';
-      appId: string;
-      appName: string;
-      requestId: string;
-      summary: {
-        address: string;
-        amount: string;
-        fee: string;
-        memos: string[];
-        autoSubmit: boolean;
-      };
-    }
-  | {
-      kind: 'capability_grant';
-      appId: string;
-      appName: string;
-      requestId: string;
-      capability: string;
-    }
-  | {
-      kind: 'network_whitelist_grant';
-      appId: string;
-      appName: string;
-      requestId: string;
-      entry: {
-        scheme: string;
-        host: string;
-      };
-    }
-  | null;
+import { RustBridgeApprovalEvent } from '@/bindings.ts';
 
 interface Props {
-  approval: PendingApproval;
+  approval: RustBridgeApprovalEvent;
   expanded: boolean;
   queuedApprovalCount: number;
   secondsLeft: number;
@@ -72,28 +39,6 @@ export function AppApprovalStrip({
   onApprove,
   onReject,
 }: Props) {
-  const [capabilityRegistry, setCapabilityRegistry] = useState<
-    Record<string, SageAppCapabilityDefinitionView>
-  >({});
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void commands.appsGetCapabilityRegistry().then((entries) => {
-      if (cancelled) {
-        return;
-      }
-
-      setCapabilityRegistry(
-        Object.fromEntries(entries.map((entry) => [entry.key, entry])),
-      );
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const queueText = useMemo(() => {
     if (queuedApprovalCount <= 0) {
       return null;
@@ -122,9 +67,9 @@ export function AppApprovalStrip({
 
               <div className='mt-1 flex items-center gap-2 text-xs text-muted-foreground'>
                 <BadgeCheck className='h-3.5 w-3.5' />
-                <span>{approval.appName}</span>
+                <span>{approval.approval.app.common.name}</span>
                 <span>·</span>
-                <span>{approval.requestId}</span>
+                <span>{approval.approval.requestId}</span>
               </div>
             </div>
 
@@ -144,7 +89,6 @@ export function AppApprovalStrip({
           <AppApprovalBody
             approval={approval}
             expanded={expanded}
-            capabilityRegistry={capabilityRegistry}
           />
         </div>
       </div>

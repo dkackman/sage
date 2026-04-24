@@ -2,17 +2,14 @@ use std::{fs, path::PathBuf};
 
 use anyhow::{anyhow, Context, Result as AnyResult};
 use tauri::command;
-
+use crate::bridge::capabilities::SystemBridgeCapability;
 use crate::host::Result;
 use crate::lifecycle::{manifest_entry_file, manifest_icon_file};
 use crate::permissions::{
     normalize_and_validate_requested_permissions, resolve_capability_flags,
     validate_granted_capabilities,
 };
-use crate::types::{
-    InstalledSageAppStorage, SageApp, SageAppCommon, SageAppPackageManifest, SageAppSnapshot,
-    SageGrantedNetworkPermissions, SageGrantedPermissions, SystemAppPresentation, SystemSageApp,
-};
+use crate::types::{InstalledSageAppStorage, SageApp, SageAppCommon, SageAppPackageManifest, SageAppSnapshot, SageGrantedNetworkPermissions, SageGrantedPermissions, SageGrantedSystemPermissions, SystemAppPresentation, SystemSageApp};
 
 pub const SYSTEM_APP_TASK_MANAGER_ID: &str = "task-manager";
 
@@ -21,12 +18,20 @@ pub struct BuiltinSystemAppSpec {
     pub app_id: &'static str,
     pub dir_name: &'static str,
     pub presentation: SystemAppPresentation,
+    pub system_capabilities: &'static [SystemBridgeCapability],
 }
 
 const BUILTIN_SYSTEM_APPS: &[BuiltinSystemAppSpec] = &[BuiltinSystemAppSpec {
     app_id: SYSTEM_APP_TASK_MANAGER_ID,
     dir_name: "task-manager",
     presentation: SystemAppPresentation::Taskbar,
+    system_capabilities: &[
+        SystemBridgeCapability::RuntimeManagerListRuntimes,
+        SystemBridgeCapability::RuntimeManagerFocusRuntime,
+        SystemBridgeCapability::RuntimeManagerHideRuntime,
+        SystemBridgeCapability::RuntimeManagerKillRuntime,
+        SystemBridgeCapability::RuntimeManagerListenRuntimesChanged,
+    ],
 }];
 
 pub fn builtin_system_app_spec(app_id: &str) -> Option<&'static BuiltinSystemAppSpec> {
@@ -181,6 +186,9 @@ pub fn build_builtin_system_app(app_id: &str) -> AnyResult<Option<SageApp>> {
             },
         },
         presentation: spec.presentation,
+        system_granted_permissions: SageGrantedSystemPermissions {
+            capabilities: spec.system_capabilities.to_vec(),
+        }
     };
 
     Ok(Some(SageApp::System(app)))

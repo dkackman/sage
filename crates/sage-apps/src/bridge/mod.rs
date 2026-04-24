@@ -5,7 +5,6 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::host::AppState;
-use crate::permissions::require_capability_definition;
 use crate::state::AppsHostState;
 use crate::types::{SageApp};
 use crate::runtime::{assert_bridge_origin, resolve_app};
@@ -15,6 +14,7 @@ pub mod methods;
 pub mod registry;
 pub mod types;
 pub mod ts_exports;
+pub mod capabilities;
 
 use methods::{BridgeContext, BridgeTools};
 use registry::BridgeRegistry;
@@ -23,10 +23,13 @@ pub use types::{
     RustBridgeErrorPayload, RustBridgeErrorResponse, RustBridgeInvokeResult,
     RustBridgeRequest, RustBridgeResponse, RustBridgeSuccessResponse,
 };
+use crate::bridge::capabilities::{BridgeCapability, SystemBridgeCapability, UserBridgeCapability};
+use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::bridge::methods::user::app::{
     GrantedCapabilitiesChangeEvent, GrantedNetworkWhitelistChangeEvent,
 };
 use crate::lifecycle::{GrantedCapabilitiesChange, GrantedNetworkWhitelistChange};
+use crate::permissions::{require_system_capability_definition, require_user_capability_definition};
 
 #[derive(Debug, Clone)]
 struct PendingBridgeApproval {
@@ -134,43 +137,108 @@ async fn execute_bridge_request(
 fn authorize_method_capability(
     app: &SageApp,
     request: &RustBridgeRequest,
-    capability_key: &str,
+    capability: BridgeCapability,
 ) -> Result<(), RustBridgeResponse> {
-    let capability_definition = require_capability_definition(capability_key)
-        .map_err(|err| {
-            failure(
-                &request.channel,
-                &request.id,
-                "internal_error",
-                format!(
-                    "bridge method declared unknown capability {capability_key}: {err}"
-                ),
-            )
-        })?;
+    match capability {
+        BridgeCapability::User(capability) => {
+            let definition =
+                require_user_capability_definition(capability).map_err(|err| {
+                    failure(
+                        &request.channel,
+                        &request.id,
+                        "internal_error",
+                        format!(
+                            "bridge method declared unknown user capability {}: {err}",
+                            capability.key(),
+                        ),
+                    )
+                })?;
 
-    if !capability_definition.shared_with_app {
+            authorize_user_capability(
+                app,
+                request,
+                capability,
+                definition.flags.shared_with_app,
+            )
+        }
+
+        BridgeCapability::System(capability) => {
+            let definition =
+                require_system_capability_definition(capability).map_err(|err| {
+                    failure(
+                        &request.channel,
+                        &request.id,
+                        "internal_error",
+                        format!(
+                            "bridge method declared unknown system capability {}: {err}",
+                            capability.key(),
+                        ),
+                    )
+                })?;
+
+            authorize_system_capability(
+                app,
+                request,
+                capability,
+                definition.flags.shared_with_app,
+            )
+        }
+    }
+}
+
+fn authorize_user_capability(
+    app: &SageApp,
+    request: &RustBridgeRequest,
+    capability: UserBridgeCapability,
+    shared_with_app: bool,
+) -> Result<(), RustBridgeResponse> {
+    if !shared_with_app {
         return Err(failure(
             &request.channel,
             &request.id,
             "permission_denied",
-            format!(
-                "Capability {} is not shared with apps",
-                capability_definition.key
-            ),
+            format!("Capability {} is not shared with apps", capability.key()),
         ));
     }
 
-    if !app
-        .granted_permissions()
-        .capabilities
-        .iter()
-        .any(|capability| capability == capability_definition.key)
-    {
+    if !app.granted_permissions().capabilities.contains(&capability) {
         return Err(failure(
             &request.channel,
             &request.id,
             "permission_denied",
-            format!("Permission denied for {}", capability_definition.key),
+            format!("Permission denied for {}", capability.key()),
+        ));
+    }
+
+    Ok(())
+}
+
+fn authorize_system_capability(
+    app: &SageApp,
+    request: &RustBridgeRequest,
+    capability: SystemBridgeCapability,
+    shared_with_app: bool,
+) -> Result<(), RustBridgeResponse> {
+    if !shared_with_app {
+        return Err(failure(
+            &request.channel,
+            &request.id,
+            "permission_denied",
+            format!("Capability {} is not shared with apps", capability.key()),
+        ));
+    }
+
+    let granted = app
+        .system_granted_permissions()
+        .map(|permissions| permissions.capabilities.contains(&capability))
+        .unwrap_or(false);
+
+    if !granted {
+        return Err(failure(
+            &request.channel,
+            &request.id,
+            "permission_denied",
+            format!("Permission denied for {}", capability.key()),
         ));
     }
 
@@ -322,33 +390,24 @@ async fn apps_invoke_bridge_internal(
         });
     };
 
-    if let Some(permission) = method.permission() {
-        if let Err(response) = authorize_method_capability(&app_model, &request, permission) {
-            return Ok(RustBridgeInvokeResult::Immediate { response });
+    match method.capability() {
+        BridgeMethodCapability::Ungated => {}
+        BridgeMethodCapability::Required(capability) => {
+            if let Err(response) =
+                authorize_method_capability(&app_model, &request, capability)
+            {
+                return Ok(RustBridgeInvokeResult::Immediate { response });
+            }
         }
     }
 
-    if method.requires_approval(&app_model, &request) {
-        let approval = match method.approval_request(
-            BridgeContext {
-                app: &app_model,
-                source_label: &source_label,
-            },
-            &request,
-        ) {
-            Some(approval) => approval,
-            None => {
-                return Ok(RustBridgeInvokeResult::Immediate {
-                    response: failure(
-                        expected_channel,
-                        &request.id,
-                        "invalid_request",
-                        "Failed to build approval request",
-                    ),
-                });
-            }
-        };
-
+    if let Some(approval) = method.approval_request(
+        BridgeContext {
+            app: &app_model,
+            source_label: &source_label,
+        },
+        &request,
+    ) {
         let approval_id = Uuid::new_v4().to_string();
 
         {

@@ -1,12 +1,12 @@
-import type { PendingApproval } from '@/components/apps/AppApprovalStrip.tsx';
-import { ShieldAlert, Wallet } from 'lucide-react';
+import { Wallet } from 'lucide-react';
 import {
   ApprovalDetailRow,
   ApprovalMetaPill,
 } from '@/components/apps/approval/shared.tsx';
+import type { RustBridgeApprovalRequest } from '@/bindings';
 
 interface Props {
-  approval: Extract<Exclude<PendingApproval, null>, { kind: 'send_xch' }>;
+  approval: Extract<RustBridgeApprovalRequest, { kind: 'sendXch' }>;
   expanded: boolean;
 }
 
@@ -25,19 +25,24 @@ function memoKey(memo: string, indexWithinSameValue: number) {
 }
 
 export function SendXchApprovalCard({ approval, expanded }: Props) {
-  const hasFee = approval.summary.fee !== '0';
-  const hasMemos = approval.summary.memos.length > 0;
+  const summary = approval.summary;
 
-  const memoEntries = approval.summary.memos.map((memo, index, all) => {
-    const duplicateIndex = all
-      .slice(0, index)
-      .filter((previous) => previous === memo).length;
+  const hasFee = summary.fee !== '0';
+  const memos = summary.memos ?? [];
+  const hasMemos = memos.length > 0;
 
-    return {
-      key: memoKey(memo, duplicateIndex),
-      value: memo,
-    };
-  });
+  const memoEntries = memos.map(
+    (memo: string, index: number, all: string[]) => {
+      const duplicateIndex = all
+        .slice(0, index)
+        .filter((previous: string) => previous === memo).length;
+
+      return {
+        key: memoKey(memo, duplicateIndex),
+        value: memo,
+      };
+    },
+  );
 
   return (
     <div className='space-y-3'>
@@ -50,32 +55,22 @@ export function SendXchApprovalCard({ approval, expanded }: Props) {
           <div className='flex flex-wrap items-center gap-2'>
             <div className='text-sm font-medium'>Send XCH</div>
             <ApprovalMetaPill>Wallet</ApprovalMetaPill>
-            {approval.summary.autoSubmit ? (
-              <ApprovalMetaPill>Auto submit</ApprovalMetaPill>
-            ) : null}
           </div>
 
           <div className='mt-1 text-xs text-muted-foreground'>
-            {approval.appName} wants to send funds from your wallet.
+            {approval.app.common.name} wants to send funds from your wallet.
           </div>
         </div>
       </div>
 
       <div className='space-y-2 rounded-xl border bg-background/70 p-3'>
-        <ApprovalDetailRow label='Amount' value={approval.summary.amount} />
-        <ApprovalDetailRow
-          label='To'
-          value={approval.summary.address}
-          mono
-          breakAll
-        />
-        {hasFee ? (
-          <ApprovalDetailRow label='Fee' value={approval.summary.fee} />
-        ) : null}
+        <ApprovalDetailRow label='Amount' value={summary.amount} />
+        <ApprovalDetailRow label='To' value={summary.address} mono breakAll />
+        {hasFee ? <ApprovalDetailRow label='Fee' value={summary.fee} /> : null}
         {hasMemos ? (
           <ApprovalDetailRow
             label='Memos'
-            value={`${approval.summary.memos.length} attached`}
+            value={`${memos.length} attached`}
           />
         ) : null}
       </div>
@@ -100,16 +95,6 @@ export function SendXchApprovalCard({ approval, expanded }: Props) {
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-      ) : null}
-
-      {approval.summary.autoSubmit ? (
-        <div className='flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground'>
-          <ShieldAlert className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
-          <div>
-            This request indicates automatic submission behavior. Approve only
-            if you trust this app and intended this action.
           </div>
         </div>
       ) : null}
