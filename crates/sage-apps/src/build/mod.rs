@@ -4,3 +4,4 @@ mod fs_utils;
 mod runtime_apps;
 mod system_apps;
 mod test_apps;
+pub mod docs;

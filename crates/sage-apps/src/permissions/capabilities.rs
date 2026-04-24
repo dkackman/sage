@@ -43,7 +43,7 @@ pub fn get_user_capability_definition(
         UserBridgeCapability::BridgeSend => UserCapabilityDefinition {
             capability,
             label: "Bridge messaging",
-            description: "Allows the app to send messages through the Sage bridge.",
+            description: "Allows the app to send messages through the Sage bridge. (Only for sandbox tests)",
             flags: CapabilityFlags {
                 externally_observable: false,
                 accesses_sensitive_secret: false,

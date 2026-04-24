@@ -76,3 +76,11 @@ impl std::fmt::Debug for BridgeRegistry {
             .finish()
     }
 }
+
+impl BridgeRegistry {
+    pub fn iter(&self) -> impl Iterator<Item = (&'static str, &dyn BridgeMethod)> {
+        self.methods
+            .iter()
+            .map(|(name, method)| (*name, method.as_ref()))
+    }
+}
