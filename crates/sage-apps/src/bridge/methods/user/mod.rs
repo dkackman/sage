@@ -3,10 +3,34 @@ pub mod bridge;
 pub mod wallet;
 
 pub use app::{
-    AppGetInfo, AppLifecycleReadyToStop, AppLifecycleSetBeforeStopListener,
-    AppGetCapabilities, AppRequestCapabilityGrant, AppRequestNetworkWhitelistGrant,
+    AppGetInfo,
+    AppLifecycleReadyToStop,
+    AppLifecycleSetBeforeStopListener,
+    AppGetCapabilities,
+    AppRequestCapabilityGrant,
+    AppRequestNetworkWhitelistGrant,
 };
-pub use bridge::{BridgePing, BridgeSend};
+
+pub use bridge::{
+    BridgePing,
+    BridgeSend,
+};
+
 pub use wallet::{
-    WalletGetKey, WalletGetKeys, WalletGetSecretKey, WalletSendXch,
+    WalletGetSecretKey,
+
+    WalletSendXch,
+
+    WalletGetKey,
+    WalletGetKeys,
+    WalletGetSyncStatus,
+    WalletGetVersion,
+    WalletGetPendingTransactions,
+    WalletCheckAddress,
+    WalletGetDerivations,
+    WalletGetSpendableCoinCount,
+    WalletGetCoinsByIds,
+    WalletGetCoins,
+    WalletGetTransaction,
+    WalletGetTransactions,
 };

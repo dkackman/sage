@@ -41,7 +41,7 @@ pub fn resolve_app_base_path(
         })
 }
 
-fn encode_request_success<T: Serialize>(
+pub fn encode_request_success<T: Serialize>(
     request: &RustBridgeRequest,
     value: T,
     context: &str,

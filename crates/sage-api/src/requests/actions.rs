@@ -36,7 +36,7 @@ pub struct ResyncCatResponse {}
         description = "Get XCH-USD price"
     )
 )]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[cfg_attr(feature = "tauri", derive(specta::Type))]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GetXchUsdPrice {}

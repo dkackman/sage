@@ -64,6 +64,38 @@
 |---|---|
 | Capability | `bridge.send` |
 
+## `wallet.checkAddress`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.check_address` |
+
+## `wallet.getCoins`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_coins` |
+
+## `wallet.getCoinsByIds`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_coins_by_ids` |
+
+## `wallet.getDerivations`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_derivations` |
+
 ## `wallet.getKey`
 
 
@@ -80,6 +112,14 @@
 |---|---|
 | Capability | `wallet.get_keys` |
 
+## `wallet.getPendingTransactions`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_pending_transactions` |
+
 ## `wallet.getSecretKey`
 
 
@@ -87,6 +127,46 @@
 | Field | Value |
 |---|---|
 | Capability | `wallet.get_secret_key` |
+
+## `wallet.getSpendableCoinCount`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_spendable_coin_count` |
+
+## `wallet.getSyncStatus`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_sync_status` |
+
+## `wallet.getTransaction`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_transaction` |
+
+## `wallet.getTransactions`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_transactions` |
+
+## `wallet.getVersion`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_version` |
 
 ## `wallet.sendXch`
 

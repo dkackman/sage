@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 
 use crate::bridge::capabilities::UserBridgeCapability;
 use crate::{
-    permissions::{get_user_capability_definition, user_registry},
+    permissions::{get_user_capability_definition},
     types::{
         SageAppCapabilityFlags, SageNetworkPermissionTarget,
         SageRequestedCapabilities, SageRequestedNetworkPermissions,

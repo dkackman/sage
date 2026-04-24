@@ -1,29 +1,10 @@
+import type * as Generated from './generated-types';
 import type {
-  AppGetInfoResult,
-  BridgePingResult,
-  BridgeSendResult,
-  GrantedCapabilitiesChangeEvent,
-  GrantedNetworkWhitelistChangeEvent,
-  ReadyToStopParams,
-  RequestCapabilityGrantParams,
-  RequestCapabilityGrantResult,
-  RequestNetworkWhitelistGrantParams,
-  RequestNetworkWhitelistGrantResult,
-  RuntimeAckResult,
   SageBridgeResponse,
   SageBridgeRuntimeEvent,
   SageBridgeSendPayload,
   SageBridgeVersion,
   SageClient,
-  SageLifecycleBeforeStopDetail,
-  SetBeforeStopListenerParams,
-  TransactionResponse,
-  WalletSendXchParams,
-  GetKey,
-  GetKeyResponse,
-  GetKeysResponse,
-  GetSecretKey,
-  GetSecretKeyResponse,
 } from './types';
 import { createBridgeRuntimeCore } from './bridge-runtime-core';
 
@@ -46,17 +27,20 @@ type SageWebviewHandle = {
 type SageWindow = Window &
   typeof globalThis & {
     __SAGE__?: SageClient;
-    __SAGE_APP_INFO__?: AppGetInfoResult;
+    __SAGE_APP_INFO__?: Generated.AppGetInfoResult;
     __SAGE_RUNTIME_BRIDGE_INITIALIZED__?: boolean;
   };
 
-type BeforeStopPublicDetail = Omit<SageLifecycleBeforeStopDetail, 'requestId'>;
+type BeforeStopPublicDetail = Omit<
+  Generated.SageLifecycleBeforeStopDetail,
+  'requestId'
+>;
 
 function getSageWindow(): SageWindow {
   return window as SageWindow;
 }
 
-function buildFallbackAppInfo(): AppGetInfoResult {
+function buildFallbackAppInfo(): Generated.AppGetInfoResult {
   return {
     id: 'unknown',
     name: 'Unknown App',
@@ -99,7 +83,7 @@ function isBridgeRuntimeEvent(value: unknown): value is SageBridgeRuntimeEvent {
 
 function isGrantedCapabilitiesChangeEvent(
   value: unknown,
-): value is GrantedCapabilitiesChangeEvent {
+): value is Generated.GrantedCapabilitiesChangeEvent {
   return (
     isObject(value) &&
     value.channel === 'sage-bridge' &&
@@ -109,7 +93,7 @@ function isGrantedCapabilitiesChangeEvent(
 
 function isGrantedNetworkWhitelistChangeEvent(
   value: unknown,
-): value is GrantedNetworkWhitelistChangeEvent {
+): value is Generated.GrantedNetworkWhitelistChangeEvent {
   return (
     isObject(value) &&
     value.channel === 'sage-bridge' &&
@@ -159,9 +143,12 @@ export function initSageRuntimeBridge(): boolean {
     beforeStopRegistered = shouldBeRegistered;
 
     try {
-      await callHost<RuntimeAckResult>('app.lifecycle.setBeforeStopListener', {
-        active: shouldBeRegistered,
-      } satisfies SetBeforeStopListenerParams);
+      await callHost<Generated.RuntimeAckResult>(
+        'app.lifecycle.setBeforeStopListener',
+        {
+          active: shouldBeRegistered,
+        } satisfies Generated.SetBeforeStopListenerParams,
+      );
     } catch (error) {
       console.error('Failed to sync before-stop listener registration:', error);
     }
@@ -178,7 +165,7 @@ export function initSageRuntimeBridge(): boolean {
       try {
         if (isGrantedCapabilitiesChangeEvent(data)) {
           window.dispatchEvent(
-            new CustomEvent<GrantedCapabilitiesChangeEvent>(
+            new CustomEvent<Generated.GrantedCapabilitiesChangeEvent>(
               'app:granted-capabilities-change',
               { detail: data },
             ),
@@ -188,7 +175,7 @@ export function initSageRuntimeBridge(): boolean {
 
         if (isGrantedNetworkWhitelistChangeEvent(data)) {
           window.dispatchEvent(
-            new CustomEvent<GrantedNetworkWhitelistChangeEvent>(
+            new CustomEvent<Generated.GrantedNetworkWhitelistChangeEvent>(
               'app:granted-network-whitelist-change',
               { detail: data },
             ),
@@ -238,9 +225,9 @@ export function initSageRuntimeBridge(): boolean {
     });
 
   webview
-    .listen<SageLifecycleBeforeStopDetail>(
+    .listen<Generated.SageLifecycleBeforeStopDetail>(
       'sage-lifecycle:before-stop',
-      (event: SageListenEvent<SageLifecycleBeforeStopDetail>) => {
+      (event: SageListenEvent<Generated.SageLifecycleBeforeStopDetail>) => {
         const detail = event.payload;
         rejectAllPending('Sage runtime is stopping');
 
@@ -259,9 +246,12 @@ export function initSageRuntimeBridge(): boolean {
         void Promise.allSettled(
           handlers.map((handler) => Promise.resolve(handler(publicDetail))),
         ).finally(() => {
-          void callHost<RuntimeAckResult>('app.lifecycle.readyToStop', {
-            requestId: detail.requestId,
-          } satisfies ReadyToStopParams).catch((error: unknown) => {
+          void callHost<Generated.RuntimeAckResult>(
+            'app.lifecycle.readyToStop',
+            {
+              requestId: detail.requestId,
+            } satisfies Generated.ReadyToStopParams,
+          ).catch((error: unknown) => {
             console.error('Failed to acknowledge before-stop:', error);
           });
         });
@@ -278,32 +268,34 @@ export function initSageRuntimeBridge(): boolean {
     initialAppInfo: w.__SAGE_APP_INFO__ ?? buildFallbackAppInfo(),
     app: {
       async bridgePing() {
-        return await callHost<BridgePingResult>('bridge.ping');
+        return await callHost<Generated.BridgePingResult>('bridge.ping');
       },
 
       async bridgeSend(input: SageBridgeSendPayload) {
-        return await callHost<BridgeSendResult>('bridge.send', input);
+        return await callHost<Generated.BridgeSendResult>('bridge.send', input);
       },
 
       async getInfo() {
-        return await callHost<AppGetInfoResult>('app.getInfo');
+        return await callHost<Generated.AppGetInfoResult>('app.getInfo');
       },
 
       async getCapabilities() {
         return await callHost<string[]>('app.getCapabilities');
       },
 
-      async requestCapabilityGrant(input: RequestCapabilityGrantParams) {
-        return await callHost<RequestCapabilityGrantResult>(
+      async requestCapabilityGrant(
+        input: Generated.RequestCapabilityGrantParams,
+      ) {
+        return await callHost<Generated.RequestCapabilityGrantResult>(
           'app.requestCapabilityGrant',
           input,
         );
       },
 
       async requestNetworkWhitelistGrant(
-        input: RequestNetworkWhitelistGrantParams,
+        input: Generated.RequestNetworkWhitelistGrantParams,
       ) {
-        return await callHost<RequestNetworkWhitelistGrantResult>(
+        return await callHost<Generated.RequestNetworkWhitelistGrantResult>(
           'app.requestNetworkWhitelistGrant',
           input,
         );
@@ -311,7 +303,8 @@ export function initSageRuntimeBridge(): boolean {
 
       onGrantedCapabilitiesChange(handler) {
         const listener = (event: Event) => {
-          const custom = event as CustomEvent<GrantedCapabilitiesChangeEvent>;
+          const custom =
+            event as CustomEvent<Generated.GrantedCapabilitiesChangeEvent>;
           handler(custom.detail);
         };
 
@@ -331,7 +324,7 @@ export function initSageRuntimeBridge(): boolean {
       onGrantedNetworkWhitelistChange(handler) {
         const listener = (event: Event) => {
           const custom =
-            event as CustomEvent<GrantedNetworkWhitelistChangeEvent>;
+            event as CustomEvent<Generated.GrantedNetworkWhitelistChangeEvent>;
           handler(custom.detail);
         };
 
@@ -363,19 +356,92 @@ export function initSageRuntimeBridge(): boolean {
 
     wallet: {
       async getKeys() {
-        return await callHost<GetKeysResponse>('wallet.getKeys');
+        return await callHost<Generated.GetKeysResponse>('wallet.getKeys');
       },
-      async getKey(input?: GetKey) {
-        return await callHost<GetKeyResponse>('wallet.getKey', input);
+
+      async getKey(input: Generated.GetKey) {
+        return await callHost<Generated.GetKeyResponse>('wallet.getKey', input);
       },
-      async getSecretKey(input: GetSecretKey) {
-        return await callHost<GetSecretKeyResponse>(
+
+      async getSecretKey(input: Generated.GetSecretKey) {
+        return await callHost<Generated.GetSecretKeyResponse>(
           'wallet.getSecretKey',
           input,
         );
       },
-      async sendXch(input: WalletSendXchParams) {
-        return await callHost<TransactionResponse>('wallet.sendXch', input);
+
+      async getSyncStatus() {
+        return await callHost<Generated.GetSyncStatusResponse>(
+          'wallet.getSyncStatus',
+        );
+      },
+
+      async getVersion() {
+        return await callHost<Generated.GetVersionResponse>(
+          'wallet.getVersion',
+        );
+      },
+
+      async getPendingTransactions() {
+        return await callHost<Generated.GetPendingTransactionsResponse>(
+          'wallet.getPendingTransactions',
+        );
+      },
+
+      async checkAddress(input: Generated.CheckAddress) {
+        return await callHost<Generated.CheckAddressResponse>(
+          'wallet.checkAddress',
+          input,
+        );
+      },
+
+      async getDerivations(input: Generated.GetDerivations) {
+        return await callHost<Generated.GetDerivationsResponse>(
+          'wallet.getDerivations',
+          input,
+        );
+      },
+
+      async getSpendableCoinCount(input: Generated.GetSpendableCoinCount) {
+        return await callHost<Generated.GetSpendableCoinCountResponse>(
+          'wallet.getSpendableCoinCount',
+          input,
+        );
+      },
+
+      async getCoinsByIds(input: Generated.GetCoinsByIds) {
+        return await callHost<Generated.GetCoinsByIdsResponse>(
+          'wallet.getCoinsByIds',
+          input,
+        );
+      },
+
+      async getCoins(input: Generated.GetCoins) {
+        return await callHost<Generated.GetCoinsResponse>(
+          'wallet.getCoins',
+          input,
+        );
+      },
+
+      async getTransaction(input: Generated.GetTransaction) {
+        return await callHost<Generated.GetTransactionResponse>(
+          'wallet.getTransaction',
+          input,
+        );
+      },
+
+      async getTransactions(input: Generated.GetTransactions) {
+        return await callHost<Generated.GetTransactionsResponse>(
+          'wallet.getTransactions',
+          input,
+        );
+      },
+
+      async sendXch(input: Generated.WalletSendXchParams) {
+        return await callHost<Generated.TransactionResponse>(
+          'wallet.sendXch',
+          input,
+        );
       },
     },
   };

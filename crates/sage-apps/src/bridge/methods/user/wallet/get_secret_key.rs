@@ -45,7 +45,7 @@ impl BridgeMethod for WalletGetSecretKey {
     ) -> Option<RustBridgeApprovalRequest> {
         let params = match parse_params(request) {
             Ok(params) => params,
-            Err(response) => return None,
+            Err(_response) => return None,
         };
 
         Some(RustBridgeApprovalRequest {

@@ -1,25 +1,4 @@
-import {
-  AppGetInfoResult,
-  BridgePingResult,
-  BridgeSendResult,
-  GetKey,
-  GetKeyResponse,
-  GetKeysResponse,
-  GetSecretKey,
-  GetSecretKeyResponse,
-  GrantedCapabilitiesChangeEvent,
-  GrantedNetworkWhitelistChangeEvent,
-  ReadyToStopParams,
-  RequestCapabilityGrantParams,
-  RequestCapabilityGrantResult,
-  RequestNetworkWhitelistGrantParams,
-  RequestNetworkWhitelistGrantResult,
-  RuntimeAckResult,
-  SageLifecycleBeforeStopDetail,
-  SetBeforeStopListenerParams,
-  TransactionResponse,
-  WalletSendXchParams,
-} from './generated-types';
+import type * as Generated from './generated-types';
 
 export * from './generated-types';
 
@@ -28,14 +7,6 @@ export type SageBridgeVersion = 'v1';
 export type SageBridgeSendPayload = {
   kind: string;
   [key: string]: unknown;
-};
-
-export type SageBridgeRequest = {
-  channel: 'sage-bridge';
-  bridgeVersion?: SageBridgeVersion;
-  id: string;
-  method: string;
-  params?: unknown;
 };
 
 export type SageBridgeSuccessResponse = {
@@ -62,46 +33,75 @@ export type SageBridgeResponse =
   | SageBridgeErrorResponse;
 
 export type SageBridgeRuntimeEvent =
-  | GrantedCapabilitiesChangeEvent
-  | GrantedNetworkWhitelistChangeEvent;
+  | Generated.GrantedCapabilitiesChangeEvent
+  | Generated.GrantedNetworkWhitelistChangeEvent;
 
 export type SageWalletClient = {
-  getKeys(): Promise<GetKeysResponse>;
-  getKey(input?: GetKey): Promise<GetKeyResponse>;
-  getSecretKey(input: GetSecretKey): Promise<GetSecretKeyResponse>;
-  sendXch(input: WalletSendXchParams): Promise<TransactionResponse>;
+  getKeys(): Promise<Generated.GetKeysResponse>;
+  getKey(input: Generated.GetKey): Promise<Generated.GetKeyResponse>;
+  getSecretKey(
+    input: Generated.GetSecretKey,
+  ): Promise<Generated.GetSecretKeyResponse>;
+
+  getSyncStatus(): Promise<Generated.GetSyncStatusResponse>;
+  getVersion(): Promise<Generated.GetVersionResponse>;
+  getPendingTransactions(): Promise<Generated.GetPendingTransactionsResponse>;
+
+  checkAddress(
+    input: Generated.CheckAddress,
+  ): Promise<Generated.CheckAddressResponse>;
+  getDerivations(
+    input: Generated.GetDerivations,
+  ): Promise<Generated.GetDerivationsResponse>;
+  getSpendableCoinCount(
+    input: Generated.GetSpendableCoinCount,
+  ): Promise<Generated.GetSpendableCoinCountResponse>;
+  getCoinsByIds(
+    input: Generated.GetCoinsByIds,
+  ): Promise<Generated.GetCoinsByIdsResponse>;
+  getCoins(input: Generated.GetCoins): Promise<Generated.GetCoinsResponse>;
+  getTransaction(
+    input: Generated.GetTransaction,
+  ): Promise<Generated.GetTransactionResponse>;
+  getTransactions(
+    input: Generated.GetTransactions,
+  ): Promise<Generated.GetTransactionsResponse>;
+
+  sendXch(
+    input: Generated.WalletSendXchParams,
+  ): Promise<Generated.TransactionResponse>;
 };
 
 export type SageAppLifecycleClient = {
   onBeforeStop(
     handler: (
-      detail: Omit<SageLifecycleBeforeStopDetail, 'requestId'>,
+      detail: Omit<Generated.SageLifecycleBeforeStopDetail, 'requestId'>,
     ) => void | Promise<void>,
   ): () => void;
 };
 
 export type SageAppClient = {
-  bridgePing(): Promise<BridgePingResult>;
-  bridgeSend(input: SageBridgeSendPayload): Promise<BridgeSendResult>;
-  getInfo(): Promise<AppGetInfoResult>;
+  bridgePing(): Promise<Generated.BridgePingResult>;
+  bridgeSend(input: SageBridgeSendPayload): Promise<Generated.BridgeSendResult>;
+  getInfo(): Promise<Generated.AppGetInfoResult>;
   getCapabilities(): Promise<string[]>;
   requestCapabilityGrant(
-    input: RequestCapabilityGrantParams,
-  ): Promise<RequestCapabilityGrantResult>;
+    input: Generated.RequestCapabilityGrantParams,
+  ): Promise<Generated.RequestCapabilityGrantResult>;
   requestNetworkWhitelistGrant(
-    input: RequestNetworkWhitelistGrantParams,
-  ): Promise<RequestNetworkWhitelistGrantResult>;
+    input: Generated.RequestNetworkWhitelistGrantParams,
+  ): Promise<Generated.RequestNetworkWhitelistGrantResult>;
   onGrantedCapabilitiesChange(
-    handler: (event: GrantedCapabilitiesChangeEvent) => void,
+    handler: (event: Generated.GrantedCapabilitiesChangeEvent) => void,
   ): () => void;
   onGrantedNetworkWhitelistChange(
-    handler: (event: GrantedNetworkWhitelistChangeEvent) => void,
+    handler: (event: Generated.GrantedNetworkWhitelistChangeEvent) => void,
   ): () => void;
   lifecycle: SageAppLifecycleClient;
 };
 
 export type SageClient = {
-  initialAppInfo: AppGetInfoResult;
+  initialAppInfo: Generated.AppGetInfoResult;
   app: SageAppClient;
   wallet: SageWalletClient;
 };
@@ -111,5 +111,4 @@ export type {
   ReadyToStopParams,
   SetBeforeStopListenerParams,
   SageLifecycleBeforeStopDetail,
-};
-
+} from './generated-types';

@@ -18,7 +18,7 @@ pub struct BridgeSendRequest {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSendResult {
     pub ok: bool,

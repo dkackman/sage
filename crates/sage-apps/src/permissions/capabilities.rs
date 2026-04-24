@@ -23,6 +23,16 @@ pub struct CapabilityDefinition<C> {
 pub type UserCapabilityDefinition = CapabilityDefinition<UserBridgeCapability>;
 pub type SystemCapabilityDefinition = CapabilityDefinition<SystemBridgeCapability>;
 
+fn read_wallet_flags() -> CapabilityFlags {
+    CapabilityFlags {
+        externally_observable: false,
+        accesses_sensitive_secret: false,
+        requestable_by_app: true,
+        user_grantable: true,
+        shared_with_app: true,
+    }
+}
+
 pub fn get_user_capability_definition(
     capability: UserBridgeCapability,
 ) -> Option<UserCapabilityDefinition> {
@@ -135,26 +145,14 @@ pub fn get_user_capability_definition(
             capability,
             label: "List wallet keys",
             description: "Allows the app to list wallet keys configured in Sage.",
-            flags: CapabilityFlags {
-                externally_observable: false,
-                accesses_sensitive_secret: false,
-                requestable_by_app: true,
-                user_grantable: true,
-                shared_with_app: true,
-            },
+            flags: read_wallet_flags(),
         },
 
         UserBridgeCapability::WalletGetKey => UserCapabilityDefinition {
             capability,
             label: "Read wallet key",
             description: "Allows the app to read public information about a wallet key.",
-            flags: CapabilityFlags {
-                externally_observable: false,
-                accesses_sensitive_secret: false,
-                requestable_by_app: true,
-                user_grantable: true,
-                shared_with_app: true,
-            },
+            flags: read_wallet_flags(),
         },
 
         UserBridgeCapability::WalletGetSecretKey => UserCapabilityDefinition {
@@ -194,6 +192,75 @@ pub fn get_user_capability_definition(
                 user_grantable: false,
                 shared_with_app: false,
             },
+        },
+        UserBridgeCapability::WalletGetSyncStatus => UserCapabilityDefinition {
+            capability,
+            label: "Read sync status",
+            description: "Allows the app to read wallet sync status and current wallet balance summary.",
+            flags: read_wallet_flags(),
+        },
+
+        UserBridgeCapability::WalletGetVersion => UserCapabilityDefinition {
+            capability,
+            label: "Read wallet version",
+            description: "Allows the app to read the current Sage wallet version.",
+            flags: read_wallet_flags(),
+        },
+
+        UserBridgeCapability::WalletCheckAddress => UserCapabilityDefinition {
+            capability,
+            label: "Check address",
+            description: "Allows the app to validate whether an address belongs to this wallet.",
+            flags: read_wallet_flags(),
+        },
+
+        UserBridgeCapability::WalletGetDerivations => UserCapabilityDefinition {
+            capability,
+            label: "Read derivations",
+            description: "Allows the app to read wallet derivation records and addresses.",
+            flags: read_wallet_flags(),
+        },
+
+        UserBridgeCapability::WalletGetSpendableCoinCount => UserCapabilityDefinition {
+            capability,
+            label: "Read spendable coin count",
+            description: "Allows the app to read the number of spendable coins in the wallet.",
+            flags: read_wallet_flags(),
+        },
+
+        UserBridgeCapability::WalletGetCoinsByIds => UserCapabilityDefinition {
+            capability,
+            label: "Read coins by IDs",
+            description: "Allows the app to read specific wallet coin records by coin ID.",
+            flags: read_wallet_flags(),
+        },
+
+        UserBridgeCapability::WalletGetCoins => UserCapabilityDefinition {
+            capability,
+            label: "Read coins",
+            description: "Allows the app to list wallet coins.",
+            flags: read_wallet_flags(),
+        },
+
+        UserBridgeCapability::WalletGetPendingTransactions => UserCapabilityDefinition {
+            capability,
+            label: "Read pending transactions",
+            description: "Allows the app to read pending wallet transactions.",
+            flags: read_wallet_flags(),
+        },
+
+        UserBridgeCapability::WalletGetTransaction => UserCapabilityDefinition {
+            capability,
+            label: "Read transaction",
+            description: "Allows the app to read a wallet transaction by height.",
+            flags: read_wallet_flags(),
+        },
+
+        UserBridgeCapability::WalletGetTransactions => UserCapabilityDefinition {
+            capability,
+            label: "Read transactions",
+            description: "Allows the app to list wallet transactions.",
+            flags: read_wallet_flags(),
         },
     })
 }

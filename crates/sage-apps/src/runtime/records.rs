@@ -23,7 +23,7 @@ pub struct SageLifecycleBeforeStopDetail {
     pub runtime_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SetBeforeStopListenerParams {
     pub active: bool,
@@ -35,7 +35,7 @@ pub struct ReadyToStopParams {
     pub request_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeAckResult {
     pub ok: bool,

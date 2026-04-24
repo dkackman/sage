@@ -182,3 +182,143 @@ Allows the app to submit XCH transactions without asking for per-transaction app
 | Externally observable | `false` |
 | Accesses sensitive secret | `false` |
 
+## `wallet.get_sync_status`
+
+**Read sync status**
+
+Allows the app to read wallet sync status and current wallet balance summary.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+
+## `wallet.get_version`
+
+**Read wallet version**
+
+Allows the app to read the current Sage wallet version.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+
+## `wallet.check_address`
+
+**Check address**
+
+Allows the app to validate whether an address belongs to this wallet.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+
+## `wallet.get_derivations`
+
+**Read derivations**
+
+Allows the app to read wallet derivation records and addresses.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+
+## `wallet.get_spendable_coin_count`
+
+**Read spendable coin count**
+
+Allows the app to read the number of spendable coins in the wallet.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+
+## `wallet.get_coins_by_ids`
+
+**Read coins by IDs**
+
+Allows the app to read specific wallet coin records by coin ID.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+
+## `wallet.get_coins`
+
+**Read coins**
+
+Allows the app to list wallet coins.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+
+## `wallet.get_pending_transactions`
+
+**Read pending transactions**
+
+Allows the app to read pending wallet transactions.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+
+## `wallet.get_transaction`
+
+**Read transaction**
+
+Allows the app to read a wallet transaction by height.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+
+## `wallet.get_transactions`
+
+**Read transactions**
+
+Allows the app to list wallet transactions.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+

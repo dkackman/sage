@@ -1,7 +1,19 @@
 use std::collections::HashMap;
-use crate::bridge::methods::user::app::AppRequestNetworkWhitelistGrant;
-use super::methods::user::{AppGetInfo, BridgePing, BridgeSend, AppLifecycleReadyToStop, AppLifecycleSetBeforeStopListener, AppGetCapabilities, AppRequestCapabilityGrant, WalletSendXch, WalletGetKeys, WalletGetKey, WalletGetSecretKey};
+
 use super::methods::BridgeMethod;
+use super::methods::system::runtime_manager::{
+    RuntimeManagerFocusRuntime, RuntimeManagerHideRuntime,
+    RuntimeManagerKillRuntime, RuntimeManagerListRuntimes,
+};
+use super::methods::user::{
+    AppGetCapabilities, AppGetInfo, AppLifecycleReadyToStop,
+    AppLifecycleSetBeforeStopListener, AppRequestCapabilityGrant,
+    AppRequestNetworkWhitelistGrant, BridgePing, BridgeSend, WalletCheckAddress,
+    WalletGetCoins, WalletGetCoinsByIds, WalletGetDerivations, WalletGetKey,
+    WalletGetKeys, WalletGetPendingTransactions, WalletGetSecretKey,
+    WalletGetSpendableCoinCount, WalletGetSyncStatus, WalletGetTransaction,
+    WalletGetTransactions, WalletGetVersion, WalletSendXch,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BridgeRegistryKind {
@@ -26,21 +38,27 @@ impl BridgeRegistry {
     }
 
     pub fn get(&self, method: &str) -> Option<&dyn BridgeMethod> {
-        self.methods.get(method).map(|m| m.as_ref())
+        self.methods.get(method).map(|method| method.as_ref())
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&'static str, &dyn BridgeMethod)> {
+        self.methods
+            .iter()
+            .map(|(name, method)| (*name, method.as_ref()))
     }
 }
 
 fn build_user_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
     let mut methods: HashMap<&'static str, Box<dyn BridgeMethod>> = HashMap::new();
 
+    // Bridge
     methods.insert("bridge.ping", Box::new(BridgePing));
     methods.insert("bridge.send", Box::new(BridgeSend));
+
+    // App
     methods.insert("app.getInfo", Box::new(AppGetInfo));
     methods.insert("app.getCapabilities", Box::new(AppGetCapabilities));
-    methods.insert(
-        "app.requestCapabilityGrant",
-        Box::new(AppRequestCapabilityGrant),
-    );
+    methods.insert("app.requestCapabilityGrant", Box::new(AppRequestCapabilityGrant));
     methods.insert(
         "app.requestNetworkWhitelistGrant",
         Box::new(AppRequestNetworkWhitelistGrant),
@@ -49,14 +67,33 @@ fn build_user_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
         "app.lifecycle.setBeforeStopListener",
         Box::new(AppLifecycleSetBeforeStopListener),
     );
-    methods.insert(
-        "app.lifecycle.readyToStop",
-        Box::new(AppLifecycleReadyToStop),
-    );
-    methods.insert("wallet.sendXch", Box::new(WalletSendXch));
+    methods.insert("app.lifecycle.readyToStop", Box::new(AppLifecycleReadyToStop));
+
+    // Wallet keys / secrets
     methods.insert("wallet.getKeys", Box::new(WalletGetKeys));
     methods.insert("wallet.getKey", Box::new(WalletGetKey));
     methods.insert("wallet.getSecretKey", Box::new(WalletGetSecretKey));
+
+    // Wallet XCH
+    methods.insert("wallet.sendXch", Box::new(WalletSendXch));
+
+    // Wallet read/query
+    methods.insert("wallet.getSyncStatus", Box::new(WalletGetSyncStatus));
+    methods.insert("wallet.getVersion", Box::new(WalletGetVersion));
+    methods.insert(
+        "wallet.getPendingTransactions",
+        Box::new(WalletGetPendingTransactions),
+    );
+    methods.insert("wallet.checkAddress", Box::new(WalletCheckAddress));
+    methods.insert("wallet.getDerivations", Box::new(WalletGetDerivations));
+    methods.insert(
+        "wallet.getSpendableCoinCount",
+        Box::new(WalletGetSpendableCoinCount),
+    );
+    methods.insert("wallet.getCoinsByIds", Box::new(WalletGetCoinsByIds));
+    methods.insert("wallet.getCoins", Box::new(WalletGetCoins));
+    methods.insert("wallet.getTransaction", Box::new(WalletGetTransaction));
+    methods.insert("wallet.getTransactions", Box::new(WalletGetTransactions));
 
     methods
 }
@@ -64,10 +101,16 @@ fn build_user_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
 fn build_system_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
     let mut methods = build_user_methods();
 
-    methods.insert("runtimeManager.listRuntimes", Box::new(super::methods::system::runtime_manager::RuntimeManagerListRuntimes));
-    methods.insert("runtimeManager.focusRuntime", Box::new(super::methods::system::runtime_manager::RuntimeManagerFocusRuntime));
-    methods.insert("runtimeManager.killRuntime", Box::new(super::methods::system::runtime_manager::RuntimeManagerKillRuntime));
-    methods.insert("runtimeManager.hideRuntime", Box::new(super::methods::system::runtime_manager::RuntimeManagerHideRuntime));
+    methods.insert(
+        "runtimeManager.listRuntimes",
+        Box::new(RuntimeManagerListRuntimes),
+    );
+    methods.insert(
+        "runtimeManager.focusRuntime",
+        Box::new(RuntimeManagerFocusRuntime),
+    );
+    methods.insert("runtimeManager.hideRuntime", Box::new(RuntimeManagerHideRuntime));
+    methods.insert("runtimeManager.killRuntime", Box::new(RuntimeManagerKillRuntime));
 
     methods
 }
@@ -77,13 +120,5 @@ impl std::fmt::Debug for BridgeRegistry {
         f.debug_struct("BridgeRegistry")
             .field("method_count", &self.methods.len())
             .finish()
-    }
-}
-
-impl BridgeRegistry {
-    pub fn iter(&self) -> impl Iterator<Item = (&'static str, &dyn BridgeMethod)> {
-        self.methods
-            .iter()
-            .map(|(name, method)| (*name, method.as_ref()))
     }
 }

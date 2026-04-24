@@ -72,6 +72,16 @@ define_bridge_capabilities! {
         WalletGetSecretKey => "wallet.get_secret_key",
         WalletSendXch => "wallet.send_xch",
         WalletSendXchAutoSubmit => "wallet.send_xch_auto_submit",
+        WalletGetSyncStatus => "wallet.get_sync_status",
+        WalletGetVersion => "wallet.get_version",
+        WalletCheckAddress => "wallet.check_address",
+        WalletGetDerivations => "wallet.get_derivations",
+        WalletGetSpendableCoinCount => "wallet.get_spendable_coin_count",
+        WalletGetCoinsByIds => "wallet.get_coins_by_ids",
+        WalletGetCoins => "wallet.get_coins",
+        WalletGetPendingTransactions => "wallet.get_pending_transactions",
+        WalletGetTransaction => "wallet.get_transaction",
+        WalletGetTransactions => "wallet.get_transactions",
     }
 }
 

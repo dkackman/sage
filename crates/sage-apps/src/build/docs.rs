@@ -52,13 +52,6 @@ fn method_capability_cell(capability: BridgeMethodCapability) -> String {
     }
 }
 
-fn approval_cell(capability: BridgeMethodCapability) -> &'static str {
-    match capability {
-        BridgeMethodCapability::Ungated => "Never",
-        BridgeMethodCapability::Required(_) => "Depends on capability",
-    }
-}
-
 pub fn user_capabilities_markdown() -> String {
     let mut out = String::from("# User bridge capabilities\n\n");
 

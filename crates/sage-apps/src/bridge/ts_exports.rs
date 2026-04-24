@@ -1,6 +1,6 @@
 use specta::TypeCollection;
 use specta_typescript::{BigIntExportBehavior, Typescript};
-use sage_api::{GetKey, GetKeyResponse, GetKeys, GetKeysResponse, GetSecretKey, GetSecretKeyResponse, TransactionResponse};
+use sage_api::{CheckAddress, CheckAddressResponse, GetCoins, GetCoinsByIds, GetCoinsByIdsResponse, GetCoinsResponse, GetDerivations, GetDerivationsResponse, GetKey, GetKeyResponse, GetKeys, GetKeysResponse, GetPendingTransactions, GetPendingTransactionsResponse, GetSecretKey, GetSecretKeyResponse, GetSpendableCoinCount, GetSpendableCoinCountResponse, GetSyncStatus, GetSyncStatusResponse, GetTransaction, GetTransactionResponse, GetTransactions, GetTransactionsResponse, GetVersion, GetVersionResponse, TransactionResponse};
 use crate::bridge::methods::system::runtime_manager::RuntimeTargetParams;
 use crate::bridge::methods::system::RuntimeManagerRuntimesChangedEvent;
 use crate::bridge::methods::user::app::get_info::{AppGetInfoResult, SageNetworkPermissionInfo};
@@ -51,6 +51,26 @@ pub fn export_user_bridge_typescript() -> Result<String, String> {
     types.register::<GetKeyResponse>();
     types.register::<GetSecretKey>();
     types.register::<GetSecretKeyResponse>();
+    types.register::<GetSyncStatus>();
+    types.register::<GetSyncStatusResponse>();
+    types.register::<GetVersion>();
+    types.register::<GetVersionResponse>();
+    types.register::<GetPendingTransactions>();
+    types.register::<GetPendingTransactionsResponse>();
+    types.register::<CheckAddress>();
+    types.register::<CheckAddressResponse>();
+    types.register::<GetDerivations>();
+    types.register::<GetDerivationsResponse>();
+    types.register::<GetSpendableCoinCount>();
+    types.register::<GetSpendableCoinCountResponse>();
+    types.register::<GetCoinsByIds>();
+    types.register::<GetCoinsByIdsResponse>();
+    types.register::<GetCoins>();
+    types.register::<GetCoinsResponse>();
+    types.register::<GetTransaction>();
+    types.register::<GetTransactionResponse>();
+    types.register::<GetTransactions>();
+    types.register::<GetTransactionsResponse>();
 
     Typescript::default()
         .bigint(BigIntExportBehavior::Number)
