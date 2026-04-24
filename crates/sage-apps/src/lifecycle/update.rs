@@ -21,7 +21,7 @@ use crate::lifecycle::{
 use crate::lifecycle::registry::{
     parse_network_permission_target, read_installed_app_by_id, write_installed_app_metadata,
 };
-use crate::permissions::{clear_storage_may_contain_secrets, mark_storage_may_contain_secrets, resolve_capability_flags, resolve_effective_granted_capabilities, validate_user_granted_capabilities};
+use crate::permissions::{clear_storage_may_contain_secrets, mark_storage_may_contain_secrets, normalize_user_granted_capabilities, resolve_capability_flags, resolve_effective_granted_capabilities, validate_user_granted_capabilities};
 use crate::types::{
     SageAppUrlPreview, SageGrantedNetworkPermissions, SageGrantedPermissions,
     SageNetworkPermissionTarget, UserSageApp, UserSageAppPendingUpdate,
@@ -153,9 +153,14 @@ pub fn update_app_permissions_internal(
         &granted_permissions.capabilities,
     )?;
 
-    let effective_capabilities = resolve_effective_granted_capabilities(
+    let normalized_capabilities = normalize_user_granted_capabilities(
         &app.common.requested_permissions,
         &granted_permissions.capabilities,
+    )?;
+
+    let effective_capabilities = resolve_effective_granted_capabilities(
+        &app.common.requested_permissions,
+        &normalized_capabilities,
     )?;
 
     let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
@@ -173,7 +178,7 @@ pub fn update_app_permissions_internal(
     }
 
     app.common.granted_permissions = SageGrantedPermissions {
-        capabilities: granted_permissions.capabilities,
+        capabilities: normalized_capabilities,
         network: SageGrantedNetworkPermissions {
             whitelist: granted_network_whitelist,
         },
@@ -468,6 +473,12 @@ pub async fn apply_app_update(
     )
         .map_err(|err| io::Error::other(format!("invalid granted permissions for update: {err}")))?;
 
+    let normalized_capabilities = normalize_user_granted_capabilities(
+        &pending.manifest.permissions,
+        &granted_permissions.capabilities,
+    )
+        .map_err(|err| io::Error::other(format!("invalid granted permissions for update: {err}")))?;
+
     let granted_network_whitelist = normalize_and_validate_granted_network_whitelist(
         &pending.manifest.permissions.network,
         &granted_permissions.network.whitelist,
@@ -478,7 +489,7 @@ pub async fn apply_app_update(
 
     let effective_capabilities = resolve_effective_granted_capabilities(
         &pending.manifest.permissions,
-        &granted_permissions.capabilities,
+        &normalized_capabilities,
     )
         .map_err(|err| {
             io::Error::other(format!("invalid granted permission policy for update: {err}"))
@@ -508,7 +519,7 @@ pub async fn apply_app_update(
     app.common.requested_permissions = pending.manifest.permissions.clone();
 
     app.common.granted_permissions = SageGrantedPermissions {
-        capabilities: granted_permissions.capabilities,
+        capabilities: normalized_capabilities,
         network: SageGrantedNetworkPermissions {
             whitelist: granted_network_whitelist,
         },

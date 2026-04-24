@@ -186,6 +186,26 @@ pub fn validate_user_granted_capabilities(
     Ok(())
 }
 
+pub fn normalize_user_granted_capabilities(
+    permissions: &SageRequestedPermissions,
+    granted: &[UserBridgeCapability],
+) -> AnyResult<Vec<UserBridgeCapability>> {
+    validate_user_granted_capabilities(permissions, granted)?;
+
+    let mut out = BTreeSet::new();
+
+    for capability in granted {
+        let definition = get_user_capability_definition(*capability)
+            .ok_or_else(|| anyhow!("unknown capability: {}", capability.key()))?;
+
+        if definition.flags.user_grantable {
+            out.insert(*capability);
+        }
+    }
+
+    Ok(out.into_iter().collect())
+}
+
 pub fn summarize_capabilities(
     capabilities: &[UserBridgeCapability],
 ) -> AnyResult<CapabilitySummary> {
@@ -643,19 +663,21 @@ mod tests {
     }
 
     #[test]
-    fn non_user_grantable_capability_must_not_be_persisted_as_user_grant() {
+    fn normalize_user_granted_capabilities_strips_non_user_grantable_capability() {
         let auto = auto_granted_capability();
 
         let mut requested = empty_requested_permissions();
         requested.capabilities.required = vec![auto];
 
-        let err = validate_user_granted_capabilities(&requested, &[auto])
-            .expect_err("non-user-grantable capability must not be stored as user grant");
+        let normalized = normalize_user_granted_capabilities(&requested, &[auto])
+            .expect("normalization should tolerate and strip stale non-user-grantable grants");
 
-        assert!(
-            err.to_string().contains("not user-grantable"),
-            "unexpected error: {err}"
-        );
+        assert!(normalized.is_empty());
+
+        let effective = resolve_effective_granted_capabilities(&requested, &normalized)
+            .expect("auto capability should still be effective");
+
+        assert_eq!(effective, vec![auto]);
     }
 
     #[test]

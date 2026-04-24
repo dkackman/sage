@@ -19,10 +19,7 @@ use crate::lifecycle::{
     write_installed_app_metadata,
 };
 use crate::lifecycle::registry::read_installed_app_by_id;
-use crate::permissions::{
-    normalize_and_validate_requested_permissions, resolve_capability_flags,
-    resolve_effective_granted_capabilities, validate_user_granted_capabilities,
-};
+use crate::permissions::{normalize_and_validate_requested_permissions, normalize_user_granted_capabilities, resolve_capability_flags, resolve_effective_granted_capabilities, validate_user_granted_capabilities};
 use crate::runtime::apps_clear_runtime_browsing_data;
 use crate::types::{
     InstalledSageAppStorage, ListedSageApp, SageAppCommon,
@@ -245,7 +242,7 @@ fn normalize_and_validate_granted_permissions(
     )?;
 
     Ok(SageGrantedPermissions {
-        capabilities: granted.capabilities,
+        capabilities: normalize_user_granted_capabilities(requested, &granted.capabilities)?,
         network: crate::types::SageGrantedNetworkPermissions { whitelist },
     })
 }
