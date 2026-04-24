@@ -10,7 +10,7 @@ Allows the app to store data on this device between sessions.
 |---|---|
 | Requestable by app | `true` |
 | User grantable | `true` |
-| Shared with app | `false` |
+| Shared with app | `true` |
 | Externally observable | `false` |
 | Accesses sensitive secret | `false` |
 

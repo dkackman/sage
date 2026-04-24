@@ -36,7 +36,7 @@ pub fn get_user_capability_definition(
                 accesses_sensitive_secret: false,
                 requestable_by_app: true,
                 user_grantable: true,
-                shared_with_app: false,
+                shared_with_app: true,
             },
         },
 
