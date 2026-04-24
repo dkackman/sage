@@ -5,7 +5,6 @@ use std::{
 };
 
 use anyhow::{Context, Result as AnyResult, anyhow};
-use sha2::{Digest, Sha256};
 use tauri::{AppHandle, State, command};
 use uuid::Uuid;
 
@@ -25,6 +24,7 @@ use crate::types::{
     SageAppPackageManifest, SageAppSnapshot, SageAppUrlPreview,
     UserSageApp, UserSageAppSource, SageGrantedPermissions,
 };
+use crate::utils::bytes_sha256_hex;
 
 pub fn current_millis() -> u128 {
     SystemTime::now()
@@ -60,7 +60,7 @@ fn generate_zip_app_id(name: &str) -> String {
 }
 
 fn generate_url_app_id(manifest_url: &str) -> String {
-    let hash = hash_string(manifest_url);
+    let hash = bytes_sha256_hex(manifest_url.as_bytes());
     format!("url-{}", &hash[..16])
 }
 
@@ -206,12 +206,6 @@ fn resolve_url_install_target(
     Ok((app_id.clone(), app_dir, existing))
 }
 
-pub fn hash_string(input: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(input.as_bytes());
-    hex::encode(hasher.finalize())
-}
-
 fn normalize_manifest_permissions(
     mut manifest: SageAppPackageManifest,
 ) -> AnyResult<SageAppPackageManifest> {
@@ -235,7 +229,7 @@ async fn allocate_new_storage(
     _base_path: &Path,
 ) -> AnyResult<InstalledSageAppStorage> {
     loop {
-        let identifier = *uuid::Uuid::new_v4().as_bytes();
+        let identifier = *Uuid::new_v4().as_bytes();
         let existing_ids = app
             .fetch_data_store_identifiers()
             .await
@@ -585,23 +579,27 @@ mod tests {
     use crate::permissions::normalize_and_validate_granted_network_whitelist;
     use crate::types::{InstalledSageAppStorage, RetiredAppOriginEntry, SageAppCapabilityFlags, SageAppManifestFile, SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedCapabilities, SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist, SageRequestedPermissions};
 
+    fn get_dual_example_com_requested_network_permissions() -> SageRequestedNetworkPermissions {
+        SageRequestedNetworkPermissions {
+            whitelist: SageRequestedNetworkWhitelist {
+                required: vec![SageNetworkPermissionTarget {
+                    scheme: "https".into(),
+                    host: "api.example.com".into(),
+                }],
+                optional: vec![SageNetworkPermissionTarget {
+                    scheme: "wss".into(),
+                    host: "ws.example.com".into(),
+                }],
+            }
+        }
+    }
+
     fn sample_manifest() -> SageAppPackageManifest {
         SageAppPackageManifest {
             name: "Test App".into(),
             version: "1.0.0".into(),
             permissions: SageRequestedPermissions {
-                network: SageRequestedNetworkPermissions {
-                    whitelist: SageRequestedNetworkWhitelist {
-                        required: vec![SageNetworkPermissionTarget {
-                            scheme: "https".into(),
-                            host: "api.example.com".into(),
-                        }],
-                        optional: vec![SageNetworkPermissionTarget {
-                            scheme: "wss".into(),
-                            host: "ws.example.com".into(),
-                        }],
-                    },
-                },
+                network: get_dual_example_com_requested_network_permissions(),
                 capabilities: SageRequestedCapabilities {
                     required: vec![UserBridgeCapability::PersistentStorage],
                     optional: vec![UserBridgeCapability::WalletSendXch],
@@ -707,18 +705,7 @@ mod tests {
 
     #[test]
     fn granted_network_whitelist_always_includes_required_and_selected_optional() {
-        let requested = SageRequestedNetworkPermissions {
-            whitelist: SageRequestedNetworkWhitelist {
-                required: vec![SageNetworkPermissionTarget {
-                    scheme: "https".into(),
-                    host: "api.example.com".into(),
-                }],
-                optional: vec![SageNetworkPermissionTarget {
-                    scheme: "wss".into(),
-                    host: "ws.example.com".into(),
-                }],
-            },
-        };
+        let requested = get_dual_example_com_requested_network_permissions();
 
         let granted = vec![SageNetworkPermissionTarget {
             scheme: "wss".into(),
