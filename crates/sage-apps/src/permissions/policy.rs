@@ -172,16 +172,6 @@ pub fn validate_user_granted_capabilities(
                 capability.key()
             ));
         }
-
-        let definition = get_user_capability_definition(*capability)
-            .ok_or_else(|| anyhow!("unknown capability: {}", capability.key()))?;
-
-        if !definition.flags.user_grantable {
-            return Err(anyhow!(
-                "permission is not user-grantable and must not be persisted as a user grant: {}",
-                capability.key()
-            ));
-        }
     }
 
     for capability in &permissions.capabilities.required {
