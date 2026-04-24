@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::host::AppState;
 use crate::state::AppsHostState;
-use crate::types::{SageApp};
+use crate::types::{SageApp, SageAppCapabilityDefinitionView};
 use crate::runtime::{assert_bridge_origin, resolve_app};
 use crate::runtime::records::SageAppRuntimeKind;
 
@@ -29,7 +29,7 @@ use crate::bridge::methods::user::app::{
     GrantedCapabilitiesChangeEvent, GrantedNetworkWhitelistChangeEvent,
 };
 use crate::lifecycle::{GrantedCapabilitiesChange, GrantedNetworkWhitelistChange};
-use crate::permissions::{require_system_capability_definition, require_user_capability_definition, resolve_effective_granted_capabilities};
+use crate::permissions::{require_system_capability_definition, require_user_capability_definition, resolve_effective_granted_capabilities, user_capability_definition_view, user_registry};
 
 #[derive(Debug, Clone)]
 struct PendingBridgeApproval {
@@ -543,6 +543,17 @@ pub async fn apps_resolve_bridge_approval(
 
     emit_bridge_response_to_source(&app, &pending.source_label, runtime_kind, &response)?;
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_user_capability_definitions(
+) -> Result<Vec<SageAppCapabilityDefinitionView>, String> {
+    Ok(user_registry()
+        .values()
+        .copied()
+        .map(user_capability_definition_view)
+        .collect())
 }
 
 pub(crate) async fn emit_bridge_event_to_app_id(

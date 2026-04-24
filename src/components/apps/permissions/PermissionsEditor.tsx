@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   SageApp,
+  SageAppCapabilityDefinitionView,
   SageGrantedPermissions,
   SageNetworkPermissionTarget,
   SystemSageApp,
   UserBridgeCapability,
   UserSageApp,
 } from '@/bindings';
+import { commands } from '@/bindings';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import {
@@ -71,18 +73,13 @@ function networkKey(entry: SageNetworkPermissionTarget): string {
 function sortNetworkEntries(
   entries: SageNetworkPermissionTarget[],
 ): SageNetworkPermissionTarget[] {
-  return [...entries].sort((a, b) => {
-    const aKey = networkKey(a);
-    const bKey = networkKey(b);
-    return aKey.localeCompare(bKey);
-  });
+  return [...entries].sort((a, b) =>
+    networkKey(a).localeCompare(networkKey(b)),
+  );
 }
 
 function titleCasePart(value: string): string {
-  if (!value) {
-    return value;
-  }
-
+  if (!value) return value;
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
@@ -106,15 +103,38 @@ function capabilitySensitivityRank(key: string): number {
   return 4;
 }
 
+function capabilityDefinitionMap(
+  definitions: SageAppCapabilityDefinitionView[],
+): Map<UserBridgeCapability, SageAppCapabilityDefinitionView> {
+  return new Map(
+    definitions.map((definition) => [
+      definition.key as UserBridgeCapability,
+      definition,
+    ]),
+  );
+}
+
+function isUserGrantableCapability(
+  capability: UserBridgeCapability,
+  definitionsByKey: Map<UserBridgeCapability, SageAppCapabilityDefinitionView>,
+): boolean {
+  return definitionsByKey.get(capability)?.flags.userGrantable === true;
+}
+
 function buildCapabilityEntries(
   requestedRequired: UserBridgeCapability[],
   requestedOptional: UserBridgeCapability[],
   grantedCapabilities: UserBridgeCapability[],
+  definitionsByKey: Map<UserBridgeCapability, SageAppCapabilityDefinitionView>,
 ): PermissionEntry[] {
   const grantedSet = new Set<UserBridgeCapability>(grantedCapabilities);
 
-  const requiredEntries: PermissionEntry[] = requestedRequired.map(
-    (capability) => {
+  const requiredEntries: PermissionEntry[] = requestedRequired
+    .filter((capability) =>
+      isUserGrantableCapability(capability, definitionsByKey),
+    )
+    .map((capability) => {
+      const definition = definitionsByKey.get(capability);
       const key = capability;
 
       return {
@@ -122,17 +142,20 @@ function buildCapabilityEntries(
         kind: 'capability',
         key,
         capability,
-        label: formatCapabilityLeafLabel(key),
-        description: null,
+        label: definition?.label ?? formatCapabilityLeafLabel(key),
+        description: definition?.description ?? null,
         required: true,
         granted: true,
         sensitivityRank: capabilitySensitivityRank(key),
       };
-    },
-  );
+    });
 
-  const optionalEntries: PermissionEntry[] = requestedOptional.map(
-    (capability) => {
+  const optionalEntries: PermissionEntry[] = requestedOptional
+    .filter((capability) =>
+      isUserGrantableCapability(capability, definitionsByKey),
+    )
+    .map((capability) => {
+      const definition = definitionsByKey.get(capability);
       const key = capability;
 
       return {
@@ -140,14 +163,13 @@ function buildCapabilityEntries(
         kind: 'capability',
         key,
         capability,
-        label: formatCapabilityLeafLabel(key),
-        description: null,
+        label: definition?.label ?? formatCapabilityLeafLabel(key),
+        description: definition?.description ?? null,
         required: false,
         granted: grantedSet.has(capability),
         sensitivityRank: capabilitySensitivityRank(key),
       };
-    },
-  );
+    });
 
   return [...requiredEntries, ...optionalEntries];
 }
@@ -211,18 +233,12 @@ function sortPermissionEntries(entries: PermissionEntry[]): PermissionEntry[] {
 function groupIcon(node: PermissionGroupNode) {
   const normalized = normalizeKey(node.id);
 
-  if (normalized === 'network') {
-    return <Globe className='h-4 w-4' />;
-  }
-
-  if (normalized === 'persistent_storage') {
+  if (normalized === 'network') return <Globe className='h-4 w-4' />;
+  if (normalized === 'persistent_storage')
     return <HardDrive className='h-4 w-4' />;
-  }
-
   if (normalized.includes('secret') || normalized.includes('wallet')) {
     return <KeyRound className='h-4 w-4' />;
   }
-
   if (normalized.includes('send') || normalized.includes('submit')) {
     return <Radio className='h-4 w-4' />;
   }
@@ -353,9 +369,7 @@ function buildGroupedPermissionTree(
 }
 
 function CapabilityHelp({ description }: { description: string | null }) {
-  if (!description) {
-    return null;
-  }
+  if (!description) return null;
 
   return (
     <Tooltip>
@@ -492,9 +506,7 @@ function PermissionSection({
   onToggleCollapsed?: () => void;
   onToggleEntry: (entry: PermissionEntry, nextGranted: boolean) => void;
 }) {
-  if (groups.length === 0) {
-    return null;
-  }
+  if (groups.length === 0) return null;
 
   const itemCount = groups.reduce(
     (count, group) => count + countNodeEntries(group),
@@ -558,25 +570,78 @@ export function PermissionsEditor({
       : app.common.activeSnapshot.manifest;
 
   const [showOptional, setShowOptional] = useState(false);
+  const [capabilityDefinitions, setCapabilityDefinitions] = useState<
+    SageAppCapabilityDefinitionView[]
+  >([]);
 
-  const grantedCapabilities = grantedPermissions.capabilities ?? [];
-  const grantedNetworkWhitelist = grantedPermissions.network.whitelist ?? [];
+  useEffect(() => {
+    let cancelled = false;
 
-  const requestedRequiredCapabilities =
-    manifest.permissions?.capabilities?.required ?? [];
-  const requestedOptionalCapabilities =
-    manifest.permissions?.capabilities?.optional ?? [];
+    void commands
+      .getUserCapabilityDefinitions()
+      .then((definitions) => {
+        if (!cancelled) {
+          setCapabilityDefinitions(definitions);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load capability definitions:', err);
+      });
 
-  const requestedRequiredNetwork =
-    manifest.permissions?.network?.whitelist?.required ?? [];
-  const requestedOptionalNetwork =
-    manifest.permissions?.network?.whitelist?.optional ?? [];
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const definitionsByKey = useMemo(
+    () => capabilityDefinitionMap(capabilityDefinitions),
+    [capabilityDefinitions],
+  );
+
+  const grantedCapabilities = useMemo(
+    () => grantedPermissions.capabilities ?? [],
+    [grantedPermissions.capabilities],
+  );
+
+  const grantedNetworkWhitelist = useMemo(
+    () => grantedPermissions.network.whitelist ?? [],
+    [grantedPermissions.network.whitelist],
+  );
+
+  const requestedRequiredCapabilities = useMemo(
+    () => manifest.permissions?.capabilities?.required ?? [],
+    [manifest.permissions?.capabilities?.required],
+  );
+
+  const requestedOptionalCapabilities = useMemo(
+    () => manifest.permissions?.capabilities?.optional ?? [],
+    [manifest.permissions?.capabilities?.optional],
+  );
+
+  const requestedRequiredNetwork = useMemo(
+    () => manifest.permissions?.network?.whitelist?.required ?? [],
+    [manifest.permissions?.network?.whitelist?.required],
+  );
+
+  const requestedOptionalNetwork = useMemo(
+    () => manifest.permissions?.network?.whitelist?.optional ?? [],
+    [manifest.permissions?.network?.whitelist?.optional],
+  );
+
+  const userGrantableRequiredCapabilities = useMemo(
+    () =>
+      requestedRequiredCapabilities.filter((capability) =>
+        isUserGrantableCapability(capability, definitionsByKey),
+      ),
+    [requestedRequiredCapabilities, definitionsByKey],
+  );
 
   const requiredEntries = useMemo(() => {
     const capabilityEntries = buildCapabilityEntries(
       requestedRequiredCapabilities,
       [],
       grantedCapabilities,
+      definitionsByKey,
     );
 
     const networkEntries = buildNetworkEntries(
@@ -591,6 +656,7 @@ export function PermissionsEditor({
     grantedCapabilities,
     requestedRequiredNetwork,
     grantedNetworkWhitelist,
+    definitionsByKey,
   ]);
 
   const optionalEntries = useMemo(() => {
@@ -598,6 +664,7 @@ export function PermissionsEditor({
       [],
       requestedOptionalCapabilities,
       grantedCapabilities,
+      definitionsByKey,
     );
 
     const networkEntries = buildNetworkEntries(
@@ -612,16 +679,32 @@ export function PermissionsEditor({
     grantedCapabilities,
     requestedOptionalNetwork,
     grantedNetworkWhitelist,
+    definitionsByKey,
   ]);
+
+  const grantedOptionalEntries = useMemo(
+    () => optionalEntries.filter((entry) => entry.granted),
+    [optionalEntries],
+  );
+
+  const ungrantedOptionalEntries = useMemo(
+    () => optionalEntries.filter((entry) => !entry.granted),
+    [optionalEntries],
+  );
 
   const requiredGroups = useMemo(
     () => buildGroupedPermissionTree(requiredEntries),
     [requiredEntries],
   );
 
-  const optionalGroups = useMemo(
-    () => buildGroupedPermissionTree(optionalEntries),
-    [optionalEntries],
+  const grantedOptionalGroups = useMemo(
+    () => buildGroupedPermissionTree(grantedOptionalEntries),
+    [grantedOptionalEntries],
+  );
+
+  const ungrantedOptionalGroups = useMemo(
+    () => buildGroupedPermissionTree(ungrantedOptionalEntries),
+    [ungrantedOptionalEntries],
   );
 
   function emitGrantedPermissions(next: SageGrantedPermissions) {
@@ -634,9 +717,6 @@ export function PermissionsEditor({
     }
 
     if (entry.kind === 'capability') {
-      const requiredSet = new Set<UserBridgeCapability>(
-        requestedRequiredCapabilities,
-      );
       const nextSet = new Set<UserBridgeCapability>(grantedCapabilities);
 
       if (nextGranted) {
@@ -645,7 +725,7 @@ export function PermissionsEditor({
         nextSet.delete(entry.capability);
       }
 
-      for (const requiredCapability of requiredSet) {
+      for (const requiredCapability of userGrantableRequiredCapabilities) {
         nextSet.add(requiredCapability);
       }
 
@@ -658,28 +738,24 @@ export function PermissionsEditor({
     }
 
     const requiredKeys = new Set<string>(
-      requestedRequiredNetwork.map((item: SageNetworkPermissionTarget) =>
-        networkKey(item),
-      ),
+      requestedRequiredNetwork.map((item) => networkKey(item)),
     );
 
-    const nextOptional = requestedOptionalNetwork.filter(
-      (item: SageNetworkPermissionTarget) => {
-        const key = networkKey(item);
+    const nextOptional = requestedOptionalNetwork.filter((item) => {
+      const key = networkKey(item);
 
-        if (requiredKeys.has(key)) {
-          return false;
-        }
+      if (requiredKeys.has(key)) {
+        return false;
+      }
 
-        if (key !== entry.key) {
-          return grantedNetworkWhitelist.some(
-            (grantedEntry) => networkKey(grantedEntry) === key,
-          );
-        }
+      if (key !== entry.key) {
+        return grantedNetworkWhitelist.some(
+          (grantedEntry) => networkKey(grantedEntry) === key,
+        );
+      }
 
-        return nextGranted;
-      },
-    );
+      return nextGranted;
+    });
 
     emitGrantedPermissions({
       ...grantedPermissions,
@@ -692,7 +768,11 @@ export function PermissionsEditor({
     });
   }
 
-  if (requiredEntries.length === 0 && optionalEntries.length === 0) {
+  if (
+    requiredEntries.length === 0 &&
+    grantedOptionalEntries.length === 0 &&
+    ungrantedOptionalEntries.length === 0
+  ) {
     return (
       <div className='rounded-xl border px-3 py-4 text-sm text-muted-foreground'>
         This app does not request any permissions.
@@ -713,11 +793,21 @@ export function PermissionsEditor({
           />
         ) : null}
 
-        {optionalGroups.length > 0 ? (
+        {grantedOptionalGroups.length > 0 ? (
+          <PermissionSection
+            title='Granted optional permissions'
+            subtitle='These optional permissions are currently enabled.'
+            groups={grantedOptionalGroups}
+            editable={editable}
+            onToggleEntry={handleToggleEntry}
+          />
+        ) : null}
+
+        {ungrantedOptionalGroups.length > 0 ? (
           <PermissionSection
             title='Optional permissions'
             subtitle='You can grant these now or keep them disabled.'
-            groups={optionalGroups}
+            groups={ungrantedOptionalGroups}
             editable={editable}
             collapsed={!showOptional}
             onToggleCollapsed={() => setShowOptional((prev) => !prev)}

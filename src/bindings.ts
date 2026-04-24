@@ -377,6 +377,9 @@ async appsInvokeSystemBridge(request: RustBridgeRequest) : Promise<RustBridgeInv
 async appsResolveBridgeApproval(args: ResolveBridgeApprovalArgs) : Promise<null> {
     return await TAURI_INVOKE("apps_resolve_bridge_approval", { args });
 },
+async getUserCapabilityDefinitions() : Promise<SageAppCapabilityDefinitionView[]> {
+    return await TAURI_INVOKE("get_user_capability_definitions");
+},
 async appsGetSandboxState() : Promise<SandboxStateView> {
     return await TAURI_INVOKE("apps_get_sandbox_state");
 },
