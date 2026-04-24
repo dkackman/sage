@@ -1,5 +1,4 @@
 use std::{
-    collections::BTreeSet,
     fs, io,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
@@ -19,13 +18,13 @@ use crate::lifecycle::{
     write_installed_app_metadata,
 };
 use crate::lifecycle::registry::read_installed_app_by_id;
-use crate::permissions::{normalize_and_validate_requested_permissions, normalize_user_granted_capabilities, resolve_capability_flags, resolve_effective_granted_capabilities, validate_user_granted_capabilities};
+use crate::permissions::{normalize_and_validate_granted_permissions, normalize_and_validate_requested_permissions, resolve_capability_flags, resolve_effective_granted_capabilities};
 use crate::runtime::apps_clear_runtime_browsing_data;
 use crate::types::{
     InstalledSageAppStorage, ListedSageApp, SageAppCommon,
     SageAppPackageManifest, SageAppSnapshot, SageAppUrlPreview,
     UserSageApp, UserSageAppSource, SageGrantedPermissions,
-    SageNetworkPermissionTarget, SageRequestedNetworkPermissions,
+    SageRequestedNetworkPermissions,
     SageRequestedPermissions,
 };
 
@@ -230,73 +229,7 @@ pub fn manifest_icon_file(manifest: &SageAppPackageManifest) -> &str {
     manifest.icon.as_deref().unwrap_or("icon.png")
 }
 
-fn normalize_and_validate_granted_permissions(
-    requested: &SageRequestedPermissions,
-    granted: SageGrantedPermissions,
-) -> AnyResult<SageGrantedPermissions> {
-    validate_user_granted_capabilities(requested, &granted.capabilities)?;
 
-    let whitelist = normalize_and_validate_granted_network_whitelist(
-        &requested.network,
-        &granted.network.whitelist,
-    )?;
-
-    Ok(SageGrantedPermissions {
-        capabilities: normalize_user_granted_capabilities(requested, &granted.capabilities)?,
-        network: crate::types::SageGrantedNetworkPermissions { whitelist },
-    })
-}
-
-pub fn normalize_and_validate_granted_network_whitelist(
-    requested: &SageRequestedNetworkPermissions,
-    granted: &[SageNetworkPermissionTarget],
-) -> AnyResult<Vec<SageNetworkPermissionTarget>> {
-    let mut requested_required = BTreeSet::<(String, String)>::new();
-    let mut requested_optional = BTreeSet::<(String, String)>::new();
-
-    for entry in &requested.whitelist.required {
-        requested_required.insert(crate::permissions::normalize_network_key(
-            &entry.scheme,
-            &entry.host,
-        )?);
-    }
-
-    for entry in &requested.whitelist.optional {
-        let key = crate::permissions::normalize_network_key(&entry.scheme, &entry.host)?;
-        if !requested_required.contains(&key) {
-            requested_optional.insert(key);
-        }
-    }
-
-    let mut granted_keys = BTreeSet::<(String, String)>::new();
-
-    for entry in granted {
-        let key = crate::permissions::normalize_network_key(&entry.scheme, &entry.host)?;
-        if !requested_required.contains(&key) && !requested_optional.contains(&key) {
-            return Err(anyhow!(
-                "granted network whitelist entry not requested in manifest: {}://{}",
-                key.0,
-                key.1
-            ));
-        }
-        granted_keys.insert(key);
-    }
-
-    let mut result = BTreeSet::<SageNetworkPermissionTarget>::new();
-
-    for (scheme, host) in &requested_required {
-        result.insert(SageNetworkPermissionTarget {
-            scheme: scheme.clone(),
-            host: host.clone(),
-        });
-    }
-
-    for (scheme, host) in granted_keys {
-        result.insert(SageNetworkPermissionTarget { scheme, host });
-    }
-
-    Ok(result.into_iter().collect())
-}
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 async fn allocate_new_storage(
@@ -658,6 +591,7 @@ mod tests {
     use crate::lifecycle::{
         write_retired_app_origins,
     };
+    use crate::permissions::normalize_and_validate_granted_network_whitelist;
     use crate::types::{InstalledSageAppStorage, RetiredAppOriginEntry, SageAppCapabilityFlags, SageAppManifestFile, SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedCapabilities, SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist, SageRequestedPermissions};
 
     fn sample_manifest() -> SageAppPackageManifest {

@@ -18,117 +18,6 @@ pub struct CapabilitySummary {
     pub persistent_storage: bool,
 }
 
-fn normalize_capability_keys(
-    capabilities: &SageRequestedCapabilities,
-) -> AnyResult<SageRequestedCapabilities> {
-    let mut required = BTreeSet::new();
-    let mut optional = BTreeSet::new();
-
-    for capability in &capabilities.required {
-        let definition = get_user_capability_definition(*capability)
-            .ok_or_else(|| anyhow!("unknown capability: {}", capability.key()))?;
-
-        if !definition.flags.requestable_by_app {
-            return Err(anyhow!(
-                "capability is not requestable by apps: {}",
-                capability.key()
-            ));
-        }
-
-        required.insert(*capability);
-    }
-
-    for capability in &capabilities.optional {
-        let definition = get_user_capability_definition(*capability)
-            .ok_or_else(|| anyhow!("unknown capability: {}", capability.key()))?;
-
-        if !definition.flags.requestable_by_app {
-            return Err(anyhow!(
-                "capability is not requestable by apps: {}",
-                capability.key()
-            ));
-        }
-
-        if !required.contains(capability) {
-            optional.insert(*capability);
-        }
-    }
-
-    Ok(SageRequestedCapabilities {
-        required: required.into_iter().collect(),
-        optional: optional.into_iter().collect(),
-    })
-}
-
-pub fn normalize_network_key(scheme: &str, host: &str) -> AnyResult<(String, String)> {
-    let scheme = scheme.trim().to_ascii_lowercase();
-    let host = host.trim().to_ascii_lowercase();
-
-    if scheme.is_empty() {
-        return Err(anyhow!("network whitelist entry is missing scheme"));
-    }
-
-    if host.is_empty() {
-        return Err(anyhow!("network whitelist entry is missing host"));
-    }
-
-    Ok((scheme, host))
-}
-
-fn normalize_requested_network_entries(
-    entries: &[SageNetworkPermissionTarget],
-) -> AnyResult<Vec<SageNetworkPermissionTarget>> {
-    let mut seen = BTreeSet::new();
-    let mut normalized = Vec::new();
-
-    for entry in entries {
-        let (scheme, host) = normalize_network_key(&entry.scheme, &entry.host)?;
-        if seen.insert((scheme.clone(), host.clone())) {
-            normalized.push(SageNetworkPermissionTarget { scheme, host });
-        }
-    }
-
-    normalized.sort_by(|a, b| {
-        let a_key = format!("{}://{}", a.scheme, a.host);
-        let b_key = format!("{}://{}", b.scheme, b.host);
-        a_key.cmp(&b_key)
-    });
-
-    Ok(normalized)
-}
-
-fn normalize_requested_network_permissions(
-    permissions: &SageRequestedNetworkPermissions,
-) -> AnyResult<SageRequestedNetworkPermissions> {
-    let required = normalize_requested_network_entries(&permissions.whitelist.required)?;
-
-    let required_keys: BTreeSet<_> = required
-        .iter()
-        .map(|entry| (entry.scheme.clone(), entry.host.clone()))
-        .collect();
-
-    let optional = normalize_requested_network_entries(&permissions.whitelist.optional)?
-        .into_iter()
-        .filter(|entry| !required_keys.contains(&(entry.scheme.clone(), entry.host.clone())))
-        .collect();
-
-    Ok(SageRequestedNetworkPermissions {
-        whitelist: crate::types::SageRequestedNetworkWhitelist { required, optional },
-    })
-}
-
-pub fn normalize_and_validate_requested_permissions(
-    permissions: &SageRequestedPermissions,
-) -> AnyResult<SageRequestedPermissions> {
-    let normalized = SageRequestedPermissions {
-        network: normalize_requested_network_permissions(&permissions.network)?,
-        capabilities: normalize_capability_keys(&permissions.capabilities)?,
-    };
-
-    validate_requested_permission_policy(&normalized)?;
-    Ok(normalized)
-}
-
 pub fn resolve_effective_granted_capabilities(
     permissions: &SageRequestedPermissions,
     user_granted: &[UserBridgeCapability],
@@ -315,7 +204,7 @@ pub fn clear_storage_may_contain_secrets(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::permissions::user_registry;
+    use crate::permissions::{normalize_and_validate_requested_permissions, user_registry};
     use crate::types::{
         SageRequestedCapabilities, SageRequestedNetworkPermissions,
         SageRequestedNetworkWhitelist, SageRequestedPermissions,
