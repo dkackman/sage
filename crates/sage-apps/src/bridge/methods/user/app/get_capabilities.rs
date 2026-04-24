@@ -3,7 +3,8 @@ use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::UserBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
-use crate::permissions::resolve_shared_capabilities;
+use crate::permissions::{resolve_effective_granted_capabilities, resolve_shared_capabilities};
+use crate::types::SageApp;
 
 #[derive(Debug, Clone, Copy)]
 pub struct AppGetCapabilities;
@@ -24,9 +25,16 @@ impl BridgeMethod for AppGetCapabilities {
         _tools: BridgeTools<'_>,
         request: &RustBridgeRequest,
     ) -> RustBridgeResponse {
-        let capabilities =
-            resolve_shared_capabilities(&ctx.app.granted_permissions().capabilities)
-                .unwrap_or_default();
+        let effective_capabilities = match ctx.app {
+            SageApp::User(user_app) => resolve_effective_granted_capabilities(
+                &user_app.common.requested_permissions,
+                &user_app.common.granted_permissions.capabilities,
+            )
+                .unwrap_or_default(),
+            SageApp::System(_) => ctx.app.granted_permissions().capabilities.clone(),
+        };
+
+        let capabilities = resolve_shared_capabilities(&effective_capabilities).unwrap_or_default();
 
         match serde_json::to_value(&capabilities) {
             Ok(value) => success(&request.channel, &request.id, value),

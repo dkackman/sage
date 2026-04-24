@@ -21,7 +21,7 @@ use crate::lifecycle::{
 use crate::lifecycle::registry::read_installed_app_by_id;
 use crate::permissions::{
     normalize_and_validate_requested_permissions, resolve_capability_flags,
-    validate_granted_capabilities,
+    resolve_effective_granted_capabilities, validate_user_granted_capabilities,
 };
 use crate::runtime::apps_clear_runtime_browsing_data;
 use crate::types::{
@@ -237,7 +237,7 @@ fn normalize_and_validate_granted_permissions(
     requested: &SageRequestedPermissions,
     granted: SageGrantedPermissions,
 ) -> AnyResult<SageGrantedPermissions> {
-    validate_granted_capabilities(requested, &granted.capabilities)?;
+    validate_user_granted_capabilities(requested, &granted.capabilities)?;
 
     let whitelist = normalize_and_validate_granted_network_whitelist(
         &requested.network,
@@ -458,7 +458,11 @@ pub async fn install_app_zip(
         let granted_permissions =
             normalize_and_validate_granted_permissions(&manifest.permissions, granted_permissions)?;
 
-        let permission_flags = resolve_capability_flags(&granted_permissions.capabilities, None)?;
+        let effective_capabilities = resolve_effective_granted_capabilities(
+            &manifest.permissions,
+            &granted_permissions.capabilities,
+        )?;
+        let permission_flags = resolve_capability_flags(&effective_capabilities, None)?;
 
         let (app_id, app_dir, existing_app) = resolve_zip_install_target(&root, &manifest.name)?;
         let storage = resolve_storage_for_install(&app, &base_path, existing_app.as_ref()).await?;
@@ -519,7 +523,15 @@ pub async fn install_app_url(
                 io::Error::other(format!("invalid granted permissions for URL app {}: {err}", app_url))
             })?;
 
-    let permission_flags = resolve_capability_flags(&granted_permissions.capabilities, None)
+    let effective_capabilities = resolve_effective_granted_capabilities(
+        &preview.manifest.permissions,
+        &granted_permissions.capabilities,
+    )
+        .map_err(|err| {
+            io::Error::other(format!("invalid granted permission policy for URL app {}: {err}", app_url))
+        })?;
+
+    let permission_flags = resolve_capability_flags(&effective_capabilities, None)
         .map_err(|err| {
             io::Error::other(format!("invalid granted permission policy for URL app {}: {err}", app_url))
         })?;

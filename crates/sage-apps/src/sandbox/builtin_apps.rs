@@ -6,10 +6,7 @@ use tauri::command;
 
 use crate::host::Result;
 use crate::lifecycle::{manifest_entry_file, manifest_icon_file};
-use crate::permissions::{
-    normalize_and_validate_requested_permissions, resolve_capability_flags,
-    validate_granted_capabilities,
-};
+use crate::permissions::{normalize_and_validate_requested_permissions, resolve_capability_flags, resolve_effective_granted_capabilities, validate_user_granted_capabilities};
 use crate::types::{InstalledSageAppStorage, SageApp, SageAppCommon, SageAppSnapshot, SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions, UserSageAppSource, UserSageApp};
 
 pub const BUILTIN_STORAGE_ISOLATION_PERSISTENT_ID: &str =
@@ -180,24 +177,42 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<SageApp>> {
     manifest.permissions =
         normalize_and_validate_requested_permissions(&manifest.permissions)?;
 
-    let mut requested_capabilities = manifest.permissions.capabilities.required.clone();
-    requested_capabilities.extend(manifest.permissions.capabilities.optional.clone());
-    requested_capabilities.sort();
-    requested_capabilities.dedup();
+    let mut user_granted_capabilities = Vec::new();
+
+    for capability in manifest
+        .permissions
+        .capabilities
+        .required
+        .iter()
+        .chain(manifest.permissions.capabilities.optional.iter())
+    {
+        let definition = crate::permissions::require_user_capability_definition(*capability)?;
+
+        if definition.flags.user_grantable {
+            user_granted_capabilities.push(*capability);
+        }
+    }
+
+    user_granted_capabilities.sort();
+    user_granted_capabilities.dedup();
 
     let granted_permissions = SageGrantedPermissions {
-        capabilities: requested_capabilities,
+        capabilities: user_granted_capabilities,
         network: SageGrantedNetworkPermissions {
             whitelist: manifest.permissions.network.whitelist.required.clone(),
         },
     };
 
-    validate_granted_capabilities(
+    validate_user_granted_capabilities(
         &manifest.permissions,
         &granted_permissions.capabilities,
     )?;
-    let permission_flags =
-        resolve_capability_flags(&granted_permissions.capabilities, None)?;
+    let effective_capabilities = resolve_effective_granted_capabilities(
+        &manifest.permissions,
+        &granted_permissions.capabilities,
+    )?;
+
+    let capability_flags = resolve_capability_flags(&effective_capabilities, None)?;
 
     let entry_file_name = manifest_entry_file(&manifest).to_string();
     let icon_file_name = manifest_icon_file(&manifest).to_string();
@@ -231,7 +246,7 @@ pub fn build_builtin_test_app(app_id: &str) -> AnyResult<Option<SageApp>> {
             icon_file: icon_file_name,
             requested_permissions: manifest.permissions.clone(),
             granted_permissions,
-            capability_flags: permission_flags,
+            capability_flags,
             storage: builtin_storage(spec.app_id),
             active_snapshot: SageAppSnapshot {
                 manifest_hash: format!("builtin:{}", spec.app_id),

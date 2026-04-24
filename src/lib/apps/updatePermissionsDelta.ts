@@ -14,6 +14,21 @@ import {
   sortNetwork,
 } from '@/lib/apps/permissionCollections';
 
+const AUTO_GRANTED_CAPABILITIES = new Set<UserBridgeCapability>([
+  'bridge.send',
+  'app.get_capabilities',
+  'app.get_info',
+  'app.lifecycle.ready_to_stop',
+  'app.lifecycle.set_before_stop_listener',
+  'app.request_capability_grant',
+  'app.request_network_whitelist_grant',
+  'wallet.send_xch_auto_submit',
+]);
+
+function isAutoGrantedCapability(key: UserBridgeCapability) {
+  return AUTO_GRANTED_CAPABILITIES.has(key);
+}
+
 function getRequestedCapabilities(permissions: SageRequestedPermissions) {
   return {
     required: permissions.capabilities.required ?? [],
@@ -110,7 +125,10 @@ export function getAppUpdatePermissionsDelta(
   };
 
   const requiredCapabilitiesToGrant = sortCapabilities(
-    nextCaps.required.filter((key) => !oldGrantedCapabilitiesSet.has(key)),
+    nextCaps.required.filter(
+      (key) =>
+        !oldGrantedCapabilitiesSet.has(key) && !isAutoGrantedCapability(key),
+    ),
   );
 
   const requiredNetworkToGrant = sortNetwork(
@@ -138,12 +156,15 @@ export function getAppUpdatePermissionsDelta(
     ),
   );
 
-  const retainedGrantedCapabilities = oldGrantedCapabilities.filter((key) =>
-    nextAllowedCapsSet.has(key),
+  const retainedGrantedCapabilities = oldGrantedCapabilities.filter(
+    (key) => nextAllowedCapsSet.has(key) && !isAutoGrantedCapability(key),
   );
 
   const nextGrantedCapabilities = sortCapabilities(
-    new Set([...retainedGrantedCapabilities, ...nextCaps.required]),
+    new Set([
+      ...retainedGrantedCapabilities,
+      ...nextCaps.required.filter((key) => !isAutoGrantedCapability(key)),
+    ]),
   );
 
   const retainedGrantedNetwork = oldGrantedNetwork.filter((entry) =>

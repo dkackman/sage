@@ -5,10 +5,7 @@ use tauri::command;
 use crate::bridge::capabilities::SystemBridgeCapability;
 use crate::host::Result;
 use crate::lifecycle::{manifest_entry_file, manifest_icon_file};
-use crate::permissions::{
-    normalize_and_validate_requested_permissions, resolve_capability_flags,
-    validate_granted_capabilities,
-};
+use crate::permissions::{normalize_and_validate_requested_permissions, resolve_capability_flags, validate_user_granted_capabilities};
 use crate::types::{InstalledSageAppStorage, SageApp, SageAppCommon, SageAppPackageManifest, SageAppSnapshot, SageGrantedNetworkPermissions, SageGrantedPermissions, SageGrantedSystemPermissions, SystemAppPresentation, SystemSageApp};
 
 pub const SYSTEM_APP_TASK_MANAGER_ID: &str = "task-manager";
@@ -137,7 +134,7 @@ pub fn build_builtin_system_app(app_id: &str) -> AnyResult<Option<SageApp>> {
         },
     };
 
-    validate_granted_capabilities(
+    validate_user_granted_capabilities(
         &manifest.permissions,
         &granted_permissions.capabilities,
     )?;

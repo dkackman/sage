@@ -21,10 +21,7 @@ use crate::lifecycle::{
 use crate::lifecycle::registry::{
     parse_network_permission_target, read_installed_app_by_id, write_installed_app_metadata,
 };
-use crate::permissions::{
-    clear_storage_may_contain_secrets, mark_storage_may_contain_secrets,
-    resolve_capability_flags, validate_granted_capabilities,
-};
+use crate::permissions::{clear_storage_may_contain_secrets, mark_storage_may_contain_secrets, resolve_capability_flags, resolve_effective_granted_capabilities, validate_user_granted_capabilities};
 use crate::types::{
     SageAppUrlPreview, SageGrantedNetworkPermissions, SageGrantedPermissions,
     SageNetworkPermissionTarget, UserSageApp, UserSageAppPendingUpdate,
@@ -67,11 +64,6 @@ pub enum GrantNetworkWhitelistOutcome {
         entry: SageNetworkPermissionTarget,
         change: GrantedNetworkWhitelistChange,
     },
-}
-
-fn sort_unique_strings(values: impl IntoIterator<Item = String>) -> Vec<String> {
-    let set: BTreeSet<String> = values.into_iter().collect();
-    set.into_iter().collect()
 }
 
 fn sort_unique_network(
@@ -156,7 +148,12 @@ pub fn update_app_permissions_internal(
 ) -> AnyResult<UserSageApp> {
     let mut app = read_installed_app_by_id(base_path, app_id)?;
 
-    validate_granted_capabilities(
+    validate_user_granted_capabilities(
+        &app.common.requested_permissions,
+        &granted_permissions.capabilities,
+    )?;
+
+    let effective_capabilities = resolve_effective_granted_capabilities(
         &app.common.requested_permissions,
         &granted_permissions.capabilities,
     )?;
@@ -167,7 +164,7 @@ pub fn update_app_permissions_internal(
     )?;
 
     let mut permission_flags = resolve_capability_flags(
-        &granted_permissions.capabilities,
+        &effective_capabilities,
         Some(&app.common.capability_flags),
     )?;
 
@@ -182,8 +179,13 @@ pub fn update_app_permissions_internal(
         },
     };
 
-    app.common.capability_flags = resolve_capability_flags(
+    let effective_capabilities = resolve_effective_granted_capabilities(
+        &app.common.requested_permissions,
         &app.common.granted_permissions.capabilities,
+    )?;
+
+    app.common.capability_flags = resolve_capability_flags(
+        &effective_capabilities,
         Some(&permission_flags),
     )?;
 
@@ -204,6 +206,14 @@ pub fn grant_requested_capability_internal(
     if !requested.contains(&capability) {
         anyhow::bail!(
             "Capability was not requested by app manifest: {}",
+            capability.key()
+        );
+    }
+    let definition = crate::permissions::require_user_capability_definition(capability)?;
+
+    if !definition.flags.user_grantable {
+        anyhow::bail!(
+            "Capability is not user-grantable and cannot be persisted as a user grant: {}",
             capability.key()
         );
     }
@@ -452,7 +462,7 @@ pub async fn apply_app_update(
         .clone()
         .ok_or_else(|| io::Error::other(format!("app {} has no pending update", app_id)))?;
 
-    validate_granted_capabilities(
+    validate_user_granted_capabilities(
         &pending.manifest.permissions,
         &granted_permissions.capabilities,
     )
@@ -466,8 +476,16 @@ pub async fn apply_app_update(
             io::Error::other(format!("invalid granted network whitelist for update: {err}"))
         })?;
 
-    let permission_flags = resolve_capability_flags(
+    let effective_capabilities = resolve_effective_granted_capabilities(
+        &pending.manifest.permissions,
         &granted_permissions.capabilities,
+    )
+        .map_err(|err| {
+            io::Error::other(format!("invalid granted permission policy for update: {err}"))
+        })?;
+
+    let permission_flags = resolve_capability_flags(
+        &effective_capabilities,
         Some(&app.common.capability_flags),
     )
         .map_err(|err| {
