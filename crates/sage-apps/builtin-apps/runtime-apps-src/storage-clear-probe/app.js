@@ -1,5 +1,5 @@
 import './bridge.js';
-import { createSageClient } from './sdk.js';
+import { getSageClient } from './sdk.js';
 
 const log = (...args) => console.log('[storage-clear-probe]', ...args);
 
@@ -130,8 +130,8 @@ async function report(sage, data) {
 (async () => {
   log('start', window.location.href);
 
-  const sage = await createSageClient();
-  log('createSageClient ok');
+  const sage = await getSageClient();
+  log('getSageClient ok');
 
   const ping = await sage.app.bridgePing();
   log('bridgePing ok', ping);
@@ -197,7 +197,7 @@ async function report(sage, data) {
   log('fatal', err instanceof Error ? err.message : String(err));
 
   try {
-    const sage = await createSageClient();
+    const sage = await getSageClient();
     const params = new URLSearchParams(window.location.search);
 
     await report(sage, {
