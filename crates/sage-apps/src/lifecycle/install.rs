@@ -14,7 +14,7 @@ use crate::lifecycle::{
     apps_root, derive_manifest_url, download_url_snapshot, enqueue_pending_storage_cleanup,
     enqueue_retired_app_origin, fetch_url_manifest, list_installed_apps_internal,
     prepare_zip_snapshot, read_manifest, read_retired_app_origins,
-    retry_pending_storage_cleanup, unzip_to_dir, validate_package_structure,
+    unzip_to_dir, validate_package_structure,
     write_installed_app_metadata,
 };
 use crate::lifecycle::registry::read_installed_app_by_id;
@@ -24,8 +24,6 @@ use crate::types::{
     InstalledSageAppStorage, ListedSageApp, SageAppCommon,
     SageAppPackageManifest, SageAppSnapshot, SageAppUrlPreview,
     UserSageApp, UserSageAppSource, SageGrantedPermissions,
-    SageRequestedNetworkPermissions,
-    SageRequestedPermissions,
 };
 
 pub fn current_millis() -> u128 {
@@ -573,13 +571,6 @@ pub async fn uninstall_app(
     }
 
     Ok(())
-}
-
-pub async fn retry_pending_storage_cleanup_on_startup(
-    app: &AppHandle,
-    base_path: &Path,
-) -> AnyResult<()> {
-    retry_pending_storage_cleanup(app, base_path).await
 }
 
 #[cfg(test)]

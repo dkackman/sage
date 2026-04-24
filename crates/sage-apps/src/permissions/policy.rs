@@ -4,11 +4,7 @@ use std::collections::BTreeSet;
 use crate::bridge::capabilities::UserBridgeCapability;
 use crate::{
     permissions::{get_user_capability_definition},
-    types::{
-        SageAppCapabilityFlags, SageNetworkPermissionTarget,
-        SageRequestedCapabilities, SageRequestedNetworkPermissions,
-        SageRequestedPermissions,
-    },
+    types::{SageAppCapabilityFlags, SageRequestedPermissions},
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -205,10 +201,7 @@ pub fn clear_storage_may_contain_secrets(
 mod tests {
     use super::*;
     use crate::permissions::{normalize_and_validate_requested_permissions, user_registry};
-    use crate::types::{
-        SageRequestedCapabilities, SageRequestedNetworkPermissions,
-        SageRequestedNetworkWhitelist, SageRequestedPermissions,
-    };
+    use crate::types::{SageNetworkPermissionTarget, SageRequestedCapabilities, SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist, SageRequestedPermissions};
 
     fn empty_requested_permissions() -> SageRequestedPermissions {
         SageRequestedPermissions {

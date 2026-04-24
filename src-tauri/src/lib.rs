@@ -253,7 +253,7 @@ pub fn run() {
             let cleanup_base_path = path.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(err) =
-                    apps::lifecycle::retry_pending_storage_cleanup_on_startup(
+                    apps::lifecycle::retry_pending_storage_cleanup(
                             &app_handle,
                             &cleanup_base_path,
                     )
