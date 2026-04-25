@@ -6,6 +6,7 @@ pub mod capabilities;
 pub mod commands;
 pub mod app_comms;
 pub mod event_emit;
+pub mod state;
 
 pub use types::{
     ResolveBridgeApprovalArgs, RustBridgeApprovalEvent, RustBridgeApprovalRequest,
