@@ -103,5 +103,6 @@ pub(crate) async fn hide_runtime(
     record.last_active_at = unix_timestamp_ms();
 
     write_runtime_record(apps_state, record.clone()).await?;
+    emit_runtime_manager_runtimes_changed(app, apps_state).await;
     Ok(record)
 }
