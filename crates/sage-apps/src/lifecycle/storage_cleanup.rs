@@ -9,28 +9,13 @@ use crate::lifecycle::{
     write_pending_storage_cleanup_entries, write_retired_app_origins,
 };
 use crate::runtime::clear_app_storage_by_target;
+use crate::storage::cleanup_target_from_storage;
 use crate::types::{
-    InstalledSageAppStorage, PendingStorageCleanupEntry,
-    PendingStorageCleanupTarget, RetiredAppOriginEntry, UserSageApp,
+    PendingStorageCleanupEntry,
+    RetiredAppOriginEntry, UserSageApp,
     UserSageAppSource,
 };
 use crate::utils::unix_timestamp_ms;
-
-fn target_from_storage(storage: &InstalledSageAppStorage) -> PendingStorageCleanupTarget {
-    match storage {
-        InstalledSageAppStorage::AppleDataStore { identifier_hex } => {
-            PendingStorageCleanupTarget::AppleDataStore {
-                identifier_hex: identifier_hex.clone(),
-            }
-        }
-        InstalledSageAppStorage::WindowsProfile { directory_name } => {
-            PendingStorageCleanupTarget::WindowsProfile {
-                directory_name: directory_name.clone(),
-            }
-        }
-        InstalledSageAppStorage::Unmanaged => PendingStorageCleanupTarget::Unmanaged,
-    }
-}
 
 pub fn enqueue_pending_storage_cleanup(
     base_path: &Path,
@@ -39,7 +24,7 @@ pub fn enqueue_pending_storage_cleanup(
 ) -> AnyResult<()> {
     let mut entries = read_pending_storage_cleanup_entries(base_path)?;
 
-    let target = target_from_storage(&app.common.storage);
+    let target = cleanup_target_from_storage(&app.common.storage);
     let existing = entries.iter_mut().find(|entry| entry.target == target);
 
     let now = unix_timestamp_ms();
@@ -129,11 +114,12 @@ pub fn enqueue_retired_app_origin(
 
 #[cfg(test)]
 mod tests {
+    use crate::types::{PendingStorageCleanupTarget, InstalledSageAppStorage};
     use super::*;
 
     #[test]
     fn target_from_storage_maps_apple_data_store() {
-        let target = target_from_storage(&InstalledSageAppStorage::AppleDataStore {
+        let target = cleanup_target_from_storage(&InstalledSageAppStorage::AppleDataStore {
             identifier_hex: "abc123".into(),
         });
 
@@ -147,7 +133,7 @@ mod tests {
 
     #[test]
     fn target_from_storage_maps_windows_profile() {
-        let target = target_from_storage(&InstalledSageAppStorage::WindowsProfile {
+        let target = cleanup_target_from_storage(&InstalledSageAppStorage::WindowsProfile {
             directory_name: "profile-1".into(),
         });
 
@@ -161,7 +147,7 @@ mod tests {
 
     #[test]
     fn target_from_storage_maps_unmanaged() {
-        let target = target_from_storage(&InstalledSageAppStorage::Unmanaged);
+        let target = cleanup_target_from_storage(&InstalledSageAppStorage::Unmanaged);
         assert_eq!(target, PendingStorageCleanupTarget::Unmanaged);
     }
 }

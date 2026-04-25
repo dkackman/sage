@@ -7,17 +7,17 @@ use tokio::time::timeout;
 use uuid::Uuid;
 
 use crate::state::AppsHostState;
-use crate::types::{InstalledSageAppStorage, PendingStorageCleanupTarget};
+use crate::storage::cleanup_target_from_storage;
+#[cfg(target_os = "windows")]
+use crate::storage::data_directory_for;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+use crate::storage::parse_data_store_id;
+use crate::types::{PendingStorageCleanupTarget};
 
 use super::{apps_create_inline_runtime, emit_runtime_manager_runtimes_changed};
 use super::inline::CreateInlineRuntimeArgs;
 use super::resolve::{resolve_app, runtime_kind_for_app};
 use super::records::{inline_label_for, SageLifecycleBeforeStopDetail};
-
-#[cfg(target_os = "windows")]
-fn data_directory_for(directory_name: &str) -> std::path::PathBuf {
-    std::path::PathBuf::from("profiles").join(directory_name)
-}
 
 const BEFORE_STOP_TIMEOUT_MS: u64 = 5_000;
 
@@ -26,23 +26,6 @@ fn debug_test_apps_enabled() -> bool {
         && std::env::var("SAGE_DEBUG_TEST_APPS")
         .map(|v| v == "1")
         .unwrap_or(false)
-}
-
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-fn parse_data_store_id(identifier_hex: &str) -> Result<[u8; 16], String> {
-    let bytes = hex::decode(identifier_hex)
-        .map_err(|err| format!("invalid data store identifier hex: {err}"))?;
-
-    if bytes.len() != 16 {
-        return Err(format!(
-            "invalid data store identifier length {}, expected 16 bytes",
-            bytes.len()
-        ));
-    }
-
-    let mut out = [0_u8; 16];
-    out.copy_from_slice(&bytes);
-    Ok(out)
 }
 
 pub async fn clear_app_storage_by_target(
@@ -95,22 +78,6 @@ pub async fn clear_app_storage_by_target(
     Ok(())
 }
 
-fn pending_target_from_storage(storage: &InstalledSageAppStorage) -> PendingStorageCleanupTarget {
-    match storage {
-        InstalledSageAppStorage::AppleDataStore { identifier_hex } => {
-            PendingStorageCleanupTarget::AppleDataStore {
-                identifier_hex: identifier_hex.clone(),
-            }
-        }
-        InstalledSageAppStorage::WindowsProfile { directory_name } => {
-            PendingStorageCleanupTarget::WindowsProfile {
-                directory_name: directory_name.clone(),
-            }
-        }
-        InstalledSageAppStorage::Unmanaged => PendingStorageCleanupTarget::Unmanaged,
-    }
-}
-
 #[tauri::command]
 #[specta::specta]
 pub async fn apps_clear_runtime_browsing_data(
@@ -132,7 +99,7 @@ pub async fn apps_clear_runtime_browsing_data(
         }
     }
 
-    let target = pending_target_from_storage(resolved.storage());
+    let target = cleanup_target_from_storage(resolved.storage());
 
     clear_app_storage_by_target(&app, &target).await
 }
