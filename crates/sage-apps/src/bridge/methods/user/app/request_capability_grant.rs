@@ -8,9 +8,10 @@ use crate::bridge::{
     RustBridgeRequest, RustBridgeResponse,
 };
 use crate::bridge::capabilities::UserBridgeCapability;
-use crate::bridge::events::emit_granted_capabilities_change_for_app;
+use crate::bridge::comms::app::events::emit_bridge_event_to_app_id;
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::bridge::methods::user::app::{encode_request_success, resolve_app_base_path};
+use crate::bridge::methods::user::app::events::EventForApp;
 use crate::bridge::types::RustBridgeApprovalBody;
 use crate::lifecycle::{grant_requested_capability_internal, GrantCapabilityOutcome};
 use crate::permissions::{get_user_capability_definition, user_capability_definition_view};
@@ -126,13 +127,11 @@ impl BridgeMethod for AppRequestCapabilityGrant {
             Ok(GrantCapabilityOutcome::Granted { capability, change }) => {
                 let full_granted_capabilities = change.full.clone();
 
-                let _ = emit_granted_capabilities_change_for_app(
+                let _ = emit_bridge_event_to_app_id(
                     tools.app_handle,
                     ctx.app.id(),
-                    &request.channel,
-                    change,
-                )
-                    .await;
+                    EventForApp::from_capabilities_change(&request.channel, change)
+                ).await;
 
                 encode_request_success(
                     request,

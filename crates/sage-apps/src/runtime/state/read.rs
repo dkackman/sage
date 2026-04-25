@@ -2,7 +2,7 @@ use tauri::State;
 use crate::AppsHostState;
 use crate::runtime::state::types::SageAppRuntimeRecord;
 
-pub async fn get_runtime_id_by_app_id_optional(
+pub async fn find_runtime_id_by_app_id_optional(
     apps_state: &State<'_, AppsHostState>,
     app_id: &str
 ) -> Option<String> {
@@ -14,11 +14,11 @@ pub async fn get_runtime_id_by_app_id(
     apps_state: &State<'_, AppsHostState>,
     app_id: &str
 ) -> Result<String, String> {
-    get_runtime_id_by_app_id_optional(apps_state, app_id).await
+    find_runtime_id_by_app_id_optional(apps_state, app_id).await
         .ok_or_else(|| format!("runtime not found for app id: {app_id}"))
 }
 
-pub async fn get_runtime_by_runtime_id_optional(
+pub async fn find_runtime_by_runtime_id_optional(
     apps_state: &State<'_, AppsHostState>,
     runtime_id: &str
 ) -> Option<SageAppRuntimeRecord> {
@@ -30,16 +30,26 @@ pub async fn get_runtime_by_runtime_id(
     apps_state: &State<'_, AppsHostState>,
     runtime_id: &str
 ) -> Result<SageAppRuntimeRecord, String> {
-    get_runtime_by_runtime_id_optional(apps_state, runtime_id).await
+    find_runtime_by_runtime_id_optional(apps_state, runtime_id).await
         .ok_or_else(|| format!("runtime record not found for runtime id: {runtime_id}"))
+}
+
+pub async fn find_runtime_by_app_id_optional(
+    apps_state: &State<'_, AppsHostState>,
+    app_id: &str,
+) -> Option<SageAppRuntimeRecord> {
+    let Some(runtime_id) = find_runtime_id_by_app_id_optional(apps_state, app_id).await else {
+        return None;
+    };
+    find_runtime_by_runtime_id_optional(apps_state, &runtime_id).await
 }
 
 pub async fn get_runtime_by_app_id(
     apps_state: &State<'_, AppsHostState>,
     app_id: &str,
 ) -> Result<SageAppRuntimeRecord, String> {
-    let runtime_id = get_runtime_id_by_app_id(apps_state, app_id).await?;
-    get_runtime_by_runtime_id(apps_state, &runtime_id).await
+    find_runtime_by_app_id_optional(apps_state, app_id).await
+        .ok_or_else(|| format!("runtime record not found for app id: {app_id}"))
 }
 
 pub async fn list_runtimes(

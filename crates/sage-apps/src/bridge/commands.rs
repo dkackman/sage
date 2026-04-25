@@ -1,7 +1,7 @@
 use tauri::{AppHandle, State, Webview};
 use crate::AppsHostState;
 use crate::bridge::{registry, response_channel_for_runtime_kind, ResolveBridgeApprovalArgs, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
-use crate::bridge::events::emit_bridge_response_to_source;
+use crate::bridge::comms::app::events::emit_bridge_response_to_source;
 use crate::bridge::invoke::{execute_bridge_request, invoke};
 use crate::host::AppState;
 use crate::permissions::{user_capability_definition_view, user_registry};

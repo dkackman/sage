@@ -7,7 +7,7 @@ use tokio::time::timeout;
 use uuid::Uuid;
 use crate::AppsHostState;
 use crate::runtime::{emit_runtime_manager_runtimes_changed};
-use crate::runtime::state::read::{get_runtime_by_app_id, get_runtime_by_runtime_id_optional, get_runtime_id_by_app_id_optional};
+use crate::runtime::state::read::{get_runtime_by_app_id, find_runtime_by_runtime_id_optional, find_runtime_id_by_app_id_optional};
 use crate::runtime::state::remove::{remove_before_stop_listeners_by_app_id, remove_pending_stop_ready, remove_runtime_by_runtime_id, remove_runtime_id_by_app_id};
 use crate::runtime::state::types::{SageAppRuntimeRecord, SageLifecycleBeforeStopDetail};
 use crate::runtime::state::write::write_pending_stop_ready;
@@ -51,10 +51,10 @@ pub async fn close_runtime_internal_with_reason(
     app_id: &str,
     reason: &str,
 ) -> Result<(), String> {
-    let Some(runtime_id) = get_runtime_id_by_app_id_optional(apps_state, app_id).await else {
+    let Some(runtime_id) = find_runtime_id_by_app_id_optional(apps_state, app_id).await else {
         return Ok(());
     };
-    let Some(runtime) = get_runtime_by_runtime_id_optional(apps_state, &runtime_id).await else {
+    let Some(runtime) = find_runtime_by_runtime_id_optional(apps_state, &runtime_id).await else {
         remove_runtime_id_by_app_id(apps_state, app_id).await;
         return Ok(());
     };

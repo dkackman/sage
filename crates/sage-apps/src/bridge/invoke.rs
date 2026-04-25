@@ -3,7 +3,7 @@ use uuid::Uuid;
 use crate::AppsHostState;
 use crate::bridge::{registry, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::{BridgeCapability, SystemBridgeCapability, UserBridgeCapability};
-use crate::bridge::events::emit_approval_requested;
+use crate::bridge::comms::sage::events::emit_approval_requested;
 use crate::bridge::methods::{BridgeContext, BridgeTools};
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::bridge::registry::BridgeRegistry;

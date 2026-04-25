@@ -5,7 +5,6 @@ pub mod ts_exports;
 pub mod capabilities;
 pub mod invoke;
 pub mod commands;
-pub mod events;
 pub mod comms;
 
 pub use types::{
@@ -15,8 +14,8 @@ pub use types::{
 };
 use crate::runtime::state::types::SageAppRuntimeKind;
 
-const USER_BRIDGE_CHANNEL: &str = "sage-bridge";
-const SYSTEM_BRIDGE_CHANNEL: &str = "sage-system-bridge";
+pub const USER_BRIDGE_CHANNEL: &str = "sage-bridge";
+pub const SYSTEM_BRIDGE_CHANNEL: &str = "sage-system-bridge";
 
 fn response_channel_for_runtime_kind(runtime_kind: SageAppRuntimeKind) -> &'static str {
     match runtime_kind {

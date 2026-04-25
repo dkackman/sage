@@ -9,7 +9,9 @@ use tauri::{State, command};
 use tauri::AppHandle;
 
 use crate::bridge::capabilities::UserBridgeCapability;
-use crate::bridge::events::{emit_granted_capabilities_change_for_app, emit_granted_network_whitelist_change_for_app};
+use crate::bridge::comms::app::events::emit_bridge_event_to_app_id;
+use crate::bridge::methods::user::app::events::EventForApp;
+use crate::bridge::USER_BRIDGE_CHANNEL;
 use crate::host::{AppState, Result};
 use crate::lifecycle::{
     download_url_snapshot, manifest_entry_file, manifest_icon_file,
@@ -561,23 +563,19 @@ pub async fn apps_update_permissions(
             .map_err(|err| io::Error::other(format!("failed to update app permissions: {err}")))?;
 
     if !capability_change.added.is_empty() || !capability_change.removed.is_empty() {
-        let _ = emit_granted_capabilities_change_for_app(
+        let _ = emit_bridge_event_to_app_id(
             &app,
             &app_id,
-            "sage-bridge",
-            capability_change,
-        )
-            .await;
+            EventForApp::from_capabilities_change(USER_BRIDGE_CHANNEL, capability_change)
+        ).await;
     }
 
     if !network_change.added.is_empty() || !network_change.removed.is_empty() {
-        let _ = emit_granted_network_whitelist_change_for_app(
+        let _ = emit_bridge_event_to_app_id(
             &app,
             &app_id,
-            "sage-bridge",
-            network_change,
-        )
-            .await;
+            EventForApp::from_network_whitelist_change(USER_BRIDGE_CHANNEL, network_change)
+        ).await;
     }
 
     Ok(())
