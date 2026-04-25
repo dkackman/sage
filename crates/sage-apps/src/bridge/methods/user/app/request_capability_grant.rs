@@ -4,10 +4,11 @@ use specta::Type;
 
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{
-    emit_granted_capabilities_change_for_app, failure, RustBridgeApprovalRequest,
+    RustBridgeApprovalRequest,
     RustBridgeRequest, RustBridgeResponse,
 };
 use crate::bridge::capabilities::UserBridgeCapability;
+use crate::bridge::events::emit_granted_capabilities_change_for_app;
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::bridge::methods::user::app::{encode_request_success, resolve_app_base_path};
 use crate::bridge::types::RustBridgeApprovalBody;
@@ -37,7 +38,7 @@ fn parse_capability_grant_params(
     request: &RustBridgeRequest,
 ) -> Result<RequestCapabilityGrantParams, RustBridgeResponse> {
     let Some(params_json) = request.params_json.clone() else {
-        return Err(failure(
+        return Err(RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",
@@ -46,7 +47,7 @@ fn parse_capability_grant_params(
     };
 
     serde_json::from_str(&params_json).map_err(|err| {
-        failure(
+        RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",
@@ -144,7 +145,7 @@ impl BridgeMethod for AppRequestCapabilityGrant {
                     "sage.requestCapabilityGrant result",
                 )
             }
-            Err(err) => failure(
+            Err(err) => RustBridgeResponse::error(
                 &request.channel,
                 &request.id,
                 "internal_error",

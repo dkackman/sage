@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::methods::system::runtime_manager::{parse_runtime_target_params};
-use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::{SystemBridgeCapability};
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::runtime::focus_runtime;
@@ -39,15 +39,15 @@ impl BridgeMethod for RuntimeManagerFocusRuntime {
             .await
         {
             Ok(record) => match serde_json::to_value(record) {
-                Ok(value) => success(&request.channel, &request.id, value),
-                Err(err) => failure(
+                Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
+                Err(err) => RustBridgeResponse::error(
                     &request.channel,
                     &request.id,
                     "internal_error",
                     format!("failed to encode runtime record: {err}"),
                 ),
             },
-            Err(err) => failure(&request.channel, &request.id, "internal_error", err),
+            Err(err) => RustBridgeResponse::error(&request.channel, &request.id, "internal_error", err),
         }
     }
 }

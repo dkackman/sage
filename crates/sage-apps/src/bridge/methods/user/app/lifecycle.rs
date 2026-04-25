@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::UserBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::runtime::state::types::{ReadyToStopParams, RuntimeAckResult, SetBeforeStopListenerParams};
@@ -17,8 +17,8 @@ fn encode_success(
     context: &str,
 ) -> RustBridgeResponse {
     match serde_json::to_value(RuntimeAckResult { ok: true }) {
-        Ok(value) => success(&request.channel, &request.id, value),
-        Err(err) => failure(
+        Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
+        Err(err) => RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "internal_error",
@@ -31,7 +31,7 @@ fn parse_set_before_stop_listener_params(
     request: &RustBridgeRequest,
 ) -> Result<SetBeforeStopListenerParams, RustBridgeResponse> {
     let Some(params_json) = request.params_json.clone() else {
-        return Err(failure(
+        return Err(RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",
@@ -40,7 +40,7 @@ fn parse_set_before_stop_listener_params(
     };
 
     serde_json::from_str(&params_json).map_err(|err| {
-        failure(
+        RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",
@@ -53,7 +53,7 @@ fn parse_ready_to_stop_params(
     request: &RustBridgeRequest,
 ) -> Result<ReadyToStopParams, RustBridgeResponse> {
     let Some(params_json) = request.params_json.clone() else {
-        return Err(failure(
+        return Err(RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",
@@ -62,7 +62,7 @@ fn parse_ready_to_stop_params(
     };
 
     serde_json::from_str(&params_json).map_err(|err| {
-        failure(
+        RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",

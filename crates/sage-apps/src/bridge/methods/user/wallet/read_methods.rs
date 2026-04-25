@@ -5,7 +5,7 @@ use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::methods::user::app::encode_request_success;
 use crate::bridge::{
-    failure, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
+    RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
 };
 
 use sage_api::{CheckAddress, GetCoins, GetCoinsByIds, GetDerivations, GetKey, GetKeys, GetPendingTransactions, GetSpendableCoinCount, GetSyncStatus, GetTransaction, GetTransactions, GetVersion};
@@ -30,7 +30,7 @@ macro_rules! define_wallet_read_no_params_async_method {
 
                 match sage.$handler($request_ident {}).await {
                     Ok(result) => encode_request_success(request, result, $result_label),
-                    Err(err) => failure(&request.channel, &request.id, "internal_error", format!("failed to execute {}: {err}", $method_name)),
+                    Err(err) => RustBridgeResponse::error(&request.channel, &request.id, "internal_error", format!("failed to execute {}: {err}", $method_name)),
                 }
             }
         }
@@ -57,7 +57,7 @@ macro_rules! define_wallet_read_no_params_sync_method {
 
                 match sage.$handler($request_ident {}) {
                     Ok(result) => encode_request_success(request, result, $result_label),
-                    Err(err) => failure(&request.channel, &request.id, "internal_error", format!("failed to execute {}: {err}", $method_name)),
+                    Err(err) => RustBridgeResponse::error(&request.channel, &request.id, "internal_error", format!("failed to execute {}: {err}", $method_name)),
                 }
             }
         }
@@ -81,13 +81,13 @@ macro_rules! define_wallet_read_params_async_method {
 
             async fn handle(&self, _ctx: BridgeContext<'_>, tools: BridgeTools<'_>, request: &RustBridgeRequest) -> RustBridgeResponse {
                 let Some(params_json) = request.params_json.as_deref() else {
-                    return failure(&request.channel, &request.id, "invalid_request", format!("{} requires params", $method_name));
+                    return RustBridgeResponse::error(&request.channel, &request.id, "invalid_request", format!("{} requires params", $method_name));
                 };
 
                 let params: $request_ty = match serde_json::from_str(params_json) {
                     Ok(params) => params,
                     Err(err) => {
-                        return failure(&request.channel, &request.id, "invalid_request", format!("Failed to decode {} params: {err}", $method_name));
+                        return RustBridgeResponse::error(&request.channel, &request.id, "invalid_request", format!("Failed to decode {} params: {err}", $method_name));
                     }
                 };
 
@@ -95,7 +95,7 @@ macro_rules! define_wallet_read_params_async_method {
 
                 match sage.$handler(params).await {
                     Ok(result) => encode_request_success(request, result, $result_label),
-                    Err(err) => failure(&request.channel, &request.id, "internal_error", format!("failed to execute {}: {err}", $method_name)),
+                    Err(err) => RustBridgeResponse::error(&request.channel, &request.id, "internal_error", format!("failed to execute {}: {err}", $method_name)),
                 }
             }
         }
@@ -119,13 +119,13 @@ macro_rules! define_wallet_read_params_sync_method {
 
             async fn handle(&self, _ctx: BridgeContext<'_>, tools: BridgeTools<'_>, request: &RustBridgeRequest) -> RustBridgeResponse {
                 let Some(params_json) = request.params_json.as_deref() else {
-                    return failure(&request.channel, &request.id, "invalid_request", format!("{} requires params", $method_name));
+                    return RustBridgeResponse::error(&request.channel, &request.id, "invalid_request", format!("{} requires params", $method_name));
                 };
 
                 let params: $request_ty = match serde_json::from_str(params_json) {
                     Ok(params) => params,
                     Err(err) => {
-                        return failure(&request.channel, &request.id, "invalid_request", format!("Failed to decode {} params: {err}", $method_name));
+                        return RustBridgeResponse::error(&request.channel, &request.id, "invalid_request", format!("Failed to decode {} params: {err}", $method_name));
                     }
                 };
 
@@ -133,7 +133,7 @@ macro_rules! define_wallet_read_params_sync_method {
 
                 match sage.$handler(params) {
                     Ok(result) => encode_request_success(request, result, $result_label),
-                    Err(err) => failure(&request.channel, &request.id, "internal_error", format!("failed to execute {}: {err}", $method_name)),
+                    Err(err) => RustBridgeResponse::error(&request.channel, &request.id, "internal_error", format!("failed to execute {}: {err}", $method_name)),
                 }
             }
         }

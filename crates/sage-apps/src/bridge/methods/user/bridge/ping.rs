@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::methods::shared::BridgeMethodCapability;
 
 #[derive(Debug, Clone, Copy)]
@@ -39,8 +39,8 @@ impl BridgeMethod for BridgePing {
         };
 
         match serde_json::to_value(result) {
-            Ok(value) => success(&request.channel, &request.id, value),
-            Err(err) => failure(
+            Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
+            Err(err) => RustBridgeResponse::error(
                 &request.channel,
                 &request.id,
                 "internal_error",

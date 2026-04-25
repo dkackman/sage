@@ -5,7 +5,7 @@ use crate::bridge::capabilities::UserBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{
-    failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
+    RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
 };
 use crate::bridge::types::RustBridgeApprovalBody;
 
@@ -14,7 +14,7 @@ pub struct WalletGetSecretKey;
 
 fn parse_params(request: &RustBridgeRequest) -> Result<GetSecretKey, RustBridgeResponse> {
     let Some(params_json) = request.params_json.as_deref() else {
-        return Err(failure(
+        return Err(RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",
@@ -23,7 +23,7 @@ fn parse_params(request: &RustBridgeRequest) -> Result<GetSecretKey, RustBridgeR
     };
 
     serde_json::from_str(params_json).map_err(|err| {
-        failure(
+        RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",
@@ -77,15 +77,15 @@ impl BridgeMethod for WalletGetSecretKey {
 
         match result {
             Ok(response) => match serde_json::to_value(response) {
-                Ok(value) => success(&request.channel, &request.id, value),
-                Err(err) => failure(
+                Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
+                Err(err) => RustBridgeResponse::error(
                     &request.channel,
                     &request.id,
                     "internal_error",
                     format!("failed to encode wallet.getSecretKey result: {err}"),
                 ),
             },
-            Err(err) => failure(
+            Err(err) => RustBridgeResponse::error(
                 &request.channel,
                 &request.id,
                 "internal_error",

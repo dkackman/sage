@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::SystemBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::runtime::state::read::list_runtimes;
@@ -27,15 +27,15 @@ impl BridgeMethod for RuntimeManagerListRuntimes {
     ) -> RustBridgeResponse {
         match list_runtimes(tools.host_state).await {
             Ok(records) => match serde_json::to_value(records) {
-                Ok(value) => success(&request.channel, &request.id, value),
-                Err(err) => failure(
+                Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
+                Err(err) => RustBridgeResponse::error(
                     &request.channel,
                     &request.id,
                     "internal_error",
                     format!("failed to encode runtimes: {err}"),
                 ),
             },
-            Err(err) => failure(&request.channel, &request.id, "internal_error", err),
+            Err(err) => RustBridgeResponse::error(&request.channel, &request.id, "internal_error", err),
         }
     }
 }

@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::bridge::methods::system::runtime_manager::{parse_runtime_target_params};
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::SystemBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::runtime::stop::{kill_runtime, SystemKillRuntimeResult};
@@ -44,15 +44,15 @@ impl BridgeMethod for RuntimeManagerKillRuntime {
             .await
         {
             Ok(result) => match serde_json::to_value::<SystemKillRuntimeResult>(result) {
-                Ok(value) => success(&request.channel, &request.id, value),
-                Err(err) => failure(
+                Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
+                Err(err) => RustBridgeResponse::error(
                     &request.channel,
                     &request.id,
                     "internal_error",
                     format!("failed to encode system.killRuntime result: {err}"),
                 ),
             },
-            Err(err) => failure(&request.channel, &request.id, "internal_error", err),
+            Err(err) => RustBridgeResponse::error(&request.channel, &request.id, "internal_error", err),
         }
     }
 }

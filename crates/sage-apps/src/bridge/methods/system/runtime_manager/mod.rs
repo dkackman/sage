@@ -11,13 +11,13 @@ pub use list_runtimes::RuntimeManagerListRuntimes;
 pub use events::RuntimeManagerRuntimesChangedEvent;
 
 pub use crate::runtime::{RuntimeTargetParams};
-use crate::bridge::{failure, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{RustBridgeRequest, RustBridgeResponse};
 
 fn parse_runtime_target_params(
     request: &RustBridgeRequest,
 ) -> Result<RuntimeTargetParams, RustBridgeResponse> {
     let Some(params_json) = request.params_json.clone() else {
-        return Err(failure(
+        return Err(RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",
@@ -26,7 +26,7 @@ fn parse_runtime_target_params(
     };
 
     serde_json::from_str(&params_json).map_err(|err| {
-        failure(
+        RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",

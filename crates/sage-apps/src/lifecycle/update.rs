@@ -8,11 +8,8 @@ use anyhow::Result as AnyResult;
 use tauri::{State, command};
 use tauri::AppHandle;
 
-use crate::bridge::{
-    emit_granted_capabilities_change_for_app,
-    emit_granted_network_whitelist_change_for_app,
-};
 use crate::bridge::capabilities::UserBridgeCapability;
+use crate::bridge::events::{emit_granted_capabilities_change_for_app, emit_granted_network_whitelist_change_for_app};
 use crate::host::{AppState, Result};
 use crate::lifecycle::{
     download_url_snapshot, manifest_entry_file, manifest_icon_file,

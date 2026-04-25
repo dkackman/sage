@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::UserBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
 
@@ -28,7 +28,7 @@ fn parse_bridge_send_request(
     request: &RustBridgeRequest,
 ) -> Result<BridgeSendRequest, RustBridgeResponse> {
     let Some(params_json) = request.params_json.clone() else {
-        return Err(failure(
+        return Err(RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",
@@ -37,7 +37,7 @@ fn parse_bridge_send_request(
     };
 
     serde_json::from_str(&params_json).map_err(|err| {
-        failure(
+        RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",
@@ -70,7 +70,7 @@ impl BridgeMethod for BridgeSend {
         let payload_value = match serde_json::to_value(&payload) {
             Ok(value) => value,
             Err(err) => {
-                return failure(
+                return RustBridgeResponse::error(
                     &request.channel,
                     &request.id,
                     "internal_error",
@@ -85,8 +85,8 @@ impl BridgeMethod for BridgeSend {
         let result = BridgeSendResult { ok: true };
 
         match serde_json::to_value(result) {
-            Ok(value) => success(&request.channel, &request.id, value),
-            Err(err) => failure(
+            Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
+            Err(err) => RustBridgeResponse::error(
                 &request.channel,
                 &request.id,
                 "internal_error",

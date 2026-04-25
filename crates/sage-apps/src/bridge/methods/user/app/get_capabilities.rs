@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::UserBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::permissions::{resolve_effective_granted_capabilities, resolve_shared_capabilities};
@@ -37,12 +37,12 @@ impl BridgeMethod for AppGetCapabilities {
         let capabilities = resolve_shared_capabilities(&effective_capabilities).unwrap_or_default();
 
         match serde_json::to_value(&capabilities) {
-            Ok(value) => success(&request.channel, &request.id, value),
-            Err(err) => failure(
+            Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
+            Err(err) => RustBridgeResponse::error(
                 &request.channel,
                 &request.id,
                 "internal_error",
-                format!("failed to encode sage.getCapabilities result: {err}"),
+                format!("failed to encode app.getCapabilities result: {err}"),
             ),
         }
     }

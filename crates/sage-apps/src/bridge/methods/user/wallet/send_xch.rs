@@ -4,7 +4,7 @@ use specta::Type;
 
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{
-    failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
+    RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
 };
 use sage_api::SendXch;
 use crate::bridge::capabilities::UserBridgeCapability;
@@ -30,7 +30,7 @@ fn parse_wallet_send_xch_params(
     request: &RustBridgeRequest,
 ) -> Result<WalletSendXchParams, RustBridgeResponse> {
     let Some(params_json) = request.params_json.clone() else {
-        return Err(failure(
+        return Err(RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",
@@ -39,7 +39,7 @@ fn parse_wallet_send_xch_params(
     };
 
     serde_json::from_str(&params_json).map_err(|err| {
-        failure(
+        RustBridgeResponse::error(
             &request.channel,
             &request.id,
             "invalid_request",
@@ -115,15 +115,15 @@ impl BridgeMethod for WalletSendXch {
 
         match tools.app_state.lock().await.send_xch(req).await {
             Ok(result) => match serde_json::to_value(result) {
-                Ok(value) => success(&request.channel, &request.id, value),
-                Err(err) => failure(
+                Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
+                Err(err) => RustBridgeResponse::error(
                     &request.channel,
                     &request.id,
                     "internal_error",
                     format!("Failed to encode wallet.sendXch result: {err}"),
                 ),
             },
-            Err(err) => failure(
+            Err(err) => RustBridgeResponse::error(
                 &request.channel,
                 &request.id,
                 "internal_error",

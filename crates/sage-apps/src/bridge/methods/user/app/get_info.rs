@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::UserBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::lifecycle::parse_network_permission_target;
@@ -79,8 +79,8 @@ impl BridgeMethod for AppGetInfo {
         };
 
         match serde_json::to_value(result) {
-            Ok(value) => success(&request.channel, &request.id, value),
-            Err(err) => failure(
+            Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
+            Err(err) => RustBridgeResponse::error(
                 &request.channel,
                 &request.id,
                 "internal_error",
@@ -100,7 +100,7 @@ fn required_network_set(
             "{}://{}",
             entry.scheme, entry.host
         ))
-            .map_err(|err| failure("sage-bridge", "app.getInfo", "internal_error", err))?;
+            .map_err(|err| RustBridgeResponse::error("sage-bridge", "app.getInfo", "internal_error", err))?;
 
         out.insert((normalized.scheme, normalized.host));
     }
