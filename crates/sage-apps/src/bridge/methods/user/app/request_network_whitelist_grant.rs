@@ -8,7 +8,7 @@ use crate::bridge::{
     RustBridgeRequest, RustBridgeResponse,
 };
 use crate::bridge::capabilities::UserBridgeCapability;
-use crate::bridge::comms::app::events::emit_bridge_event_to_app_id;
+use crate::bridge::event_emit::emit_bridge_event_to_app_id;
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::bridge::methods::user::app::{encode_request_success, resolve_app_base_path};
 use crate::bridge::methods::user::app::events::EventForApp;

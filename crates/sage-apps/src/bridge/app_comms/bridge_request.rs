@@ -1,9 +1,8 @@
-use tauri::{AppHandle, Manager, State, Webview};
+use tauri::{AppHandle, Emitter, Manager, State, Webview};
 use uuid::Uuid;
 use crate::AppsHostState;
 use crate::bridge::capabilities::{BridgeCapability, SystemBridgeCapability, UserBridgeCapability};
-use crate::bridge::{registry, response_channel_for_registry_kind, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
-use crate::bridge::comms::sage::events::emit_approval_requested;
+use crate::bridge::{registry, response_channel_for_registry_kind, RustBridgeApprovalEvent, RustBridgeApprovalRequest, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::methods::{BridgeContext, BridgeTools};
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::bridge::registry::BridgeRegistry;
@@ -12,6 +11,7 @@ use crate::host::AppState;
 use crate::permissions::{require_system_capability_definition, require_user_capability_definition, resolve_effective_granted_capabilities};
 use crate::runtime::{assert_bridge_origin, resolve_app};
 use crate::runtime::state::types::SageAppRuntimeKind;
+use crate::runtime::webview_locator::get_sage_webview;
 use crate::types::SageApp;
 
 pub async fn process(
@@ -28,9 +28,9 @@ pub async fn process(
         return Ok(RustBridgeInvokeResult::Immediate { response });
     }
 
-    let source_label = webview.label().to_string();
+    let webview_label = webview.label().to_string();
 
-    let (app_id, runtime_kind) = match assert_bridge_origin(app.clone(), source_label.clone()) {
+    let (app_id, runtime_kind) = match assert_bridge_origin(app.clone(), webview_label.clone()) {
         Ok(value) => value,
         Err(err) => {
             return Ok(RustBridgeInvokeResult::Immediate {
@@ -57,12 +57,7 @@ pub async fn process(
         }
     }
 
-    let base_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
-
-    let app_model = resolve_app(&base_path, &app_id)?;
+    let app_model = resolve_app(&app, &app_id)?;
 
     let registry = BridgeRegistry::new(registry_kind);
 
@@ -91,7 +86,7 @@ pub async fn process(
     if let Some(approval) = method.approval_request(
         BridgeContext {
             app: &app_model,
-            source_label: &source_label,
+            source_label: &webview_label,
         },
         &request,
     ) {
@@ -104,13 +99,13 @@ pub async fn process(
                 approval_id.clone(),
                 PendingBridgeApproval {
                     app: app_model.clone(),
-                    source_label: source_label.to_string(),
+                    source_label: webview_label.to_string(),
                     request: request.clone(),
                 },
             );
         }
 
-        emit_approval_requested(&app, approval_id, approval)?;
+        emit_sage_approval_requested(&app, approval_id, approval)?;
         return Ok(RustBridgeInvokeResult::Pending {});
     }
 
@@ -118,7 +113,7 @@ pub async fn process(
         &app,
         &app_state,
         &app_model,
-        &source_label,
+        &webview_label,
         &request,
         registry_kind,
     )
@@ -312,4 +307,20 @@ fn validate_request_basics(
     }
 
     Ok(())
+}
+
+fn emit_sage_approval_requested(
+    app: &AppHandle,
+    approval_id: String,
+    approval: RustBridgeApprovalRequest,
+) -> Result<(), String> {
+    get_sage_webview(app)?
+        .emit(
+            "apps:bridge-approval-requested",
+            RustBridgeApprovalEvent {
+                approval_id,
+                approval,
+            },
+        )
+        .map_err(|err| format!("failed to emit approval request event: {err}"))
 }

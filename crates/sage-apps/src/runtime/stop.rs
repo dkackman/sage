@@ -1,7 +1,7 @@
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use uuid::Uuid;

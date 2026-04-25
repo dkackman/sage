@@ -9,7 +9,7 @@ use tauri::{State, command};
 use tauri::AppHandle;
 
 use crate::bridge::capabilities::UserBridgeCapability;
-use crate::bridge::comms::app::events::emit_bridge_event_to_app_id;
+use crate::bridge::event_emit::emit_bridge_event_to_app_id;
 use crate::bridge::methods::user::app::events::EventForApp;
 use crate::bridge::USER_BRIDGE_CHANNEL;
 use crate::host::{AppState, Result};

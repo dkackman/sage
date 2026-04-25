@@ -4,7 +4,8 @@ pub mod types;
 pub mod ts_exports;
 pub mod capabilities;
 pub mod commands;
-pub mod comms;
+pub mod app_comms;
+pub mod event_emit;
 
 pub use types::{
     ResolveBridgeApprovalArgs, RustBridgeApprovalEvent, RustBridgeApprovalRequest,

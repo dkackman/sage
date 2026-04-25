@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use serde::Deserialize;
 use specta::Type;
-use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, State, WebviewUrl};
+use tauri::{AppHandle, LogicalPosition, LogicalSize, State, WebviewUrl};
 use tauri::webview::NewWindowResponse;
 use crate::{sandbox, AppsHostState};
 use crate::bridge::capabilities::UserBridgeCapability;
@@ -29,12 +29,7 @@ pub async fn create_inline_runtime(
     apps_state: State<'_, AppsHostState>,
     args: CreateInlineRuntimeArgs,
 ) -> Result<SageAppRuntimeRecord, String> {
-    let base_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
-
-    let resolved = resolve_app(&base_path, &args.app_id)?;
+    let resolved = resolve_app(&app, &args.app_id)?;
     let runtime_kind = runtime_kind_for_app(&resolved);
     let webview_label = inline_label_for(resolved.id(), runtime_kind);
     let runtime_id = runtime_id_for(resolved.id(), runtime_kind);
