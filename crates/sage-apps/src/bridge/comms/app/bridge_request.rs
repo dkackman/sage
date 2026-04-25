@@ -1,8 +1,8 @@
 use tauri::{AppHandle, Manager, State, Webview};
 use uuid::Uuid;
 use crate::AppsHostState;
-use crate::bridge::{registry, response_channel_for_registry_kind, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::{BridgeCapability, SystemBridgeCapability, UserBridgeCapability};
+use crate::bridge::{registry, response_channel_for_registry_kind, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::comms::sage::events::emit_approval_requested;
 use crate::bridge::methods::{BridgeContext, BridgeTools};
 use crate::bridge::methods::shared::BridgeMethodCapability;
@@ -14,7 +14,7 @@ use crate::runtime::{assert_bridge_origin, resolve_app};
 use crate::runtime::state::types::SageAppRuntimeKind;
 use crate::types::SageApp;
 
-pub async fn invoke(
+pub async fn process(
     app: AppHandle,
     webview: Webview,
     app_state: State<'_, AppState>,
@@ -126,6 +126,7 @@ pub async fn invoke(
 
     Ok(RustBridgeInvokeResult::Immediate { response })
 }
+
 
 fn authorize_method_capability(
     app: &SageApp,

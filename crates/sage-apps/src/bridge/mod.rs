@@ -3,7 +3,6 @@ pub mod registry;
 pub mod types;
 pub mod ts_exports;
 pub mod capabilities;
-pub mod invoke;
 pub mod commands;
 pub mod comms;
 

@@ -1,8 +1,8 @@
 use tauri::{AppHandle, State, Webview};
 use crate::AppsHostState;
 use crate::bridge::{registry, response_channel_for_runtime_kind, ResolveBridgeApprovalArgs, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::comms::app::bridge_request::{execute_bridge_request, process};
 use crate::bridge::comms::app::events::emit_bridge_response_to_source;
-use crate::bridge::invoke::{execute_bridge_request, invoke};
 use crate::host::AppState;
 use crate::permissions::{user_capability_definition_view, user_registry};
 use crate::runtime::assert_bridge_origin;
@@ -17,7 +17,7 @@ pub async fn apps_invoke_bridge(
     app_state: State<'_, AppState>,
     request: RustBridgeRequest,
 ) -> Result<RustBridgeInvokeResult, String> {
-    invoke(
+    process(
         app,
         webview,
         app_state,
@@ -36,7 +36,7 @@ pub async fn apps_invoke_system_bridge(
     app_state: State<'_, AppState>,
     request: RustBridgeRequest,
 ) -> Result<RustBridgeInvokeResult, String> {
-    invoke(
+    process(
         app,
         webview,
         app_state,
