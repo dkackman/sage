@@ -75,8 +75,8 @@ pub struct PendingStorageCleanupEntry {
     pub app_id: String,
     pub app_name: String,
     pub target: PendingStorageCleanupTarget,
-    pub created_at_ms: u64,
-    pub last_attempt_at_ms: Option<u64>,
+    pub created_at_ms: i64,
+    pub last_attempt_at_ms: Option<i64>,
     pub attempt_count: u32,
     pub last_error: Option<String>,
 }
@@ -88,7 +88,7 @@ pub struct RetiredAppOriginEntry {
     pub app_id: String,
     pub app_name: String,
     pub origin_id: String,
-    pub created_at_ms: u64,
+    pub created_at_ms: i64,
     pub storage_may_contain_secrets: bool,
     pub cleanup_pending: bool,
 }

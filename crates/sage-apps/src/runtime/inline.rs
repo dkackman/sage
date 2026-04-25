@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
 use specta::Type;
@@ -12,7 +11,7 @@ use crate::runtime::emit_runtime_manager_runtimes_changed;
 use crate::sandbox;
 use crate::state::AppsHostState;
 use crate::types::InstalledSageAppStorage;
-
+use crate::utils::unix_timestamp_ms;
 use super::records::{inline_label_for, runtime_id_for, SageAppRuntimeRecord};
 use super::resolve::{
     build_entry_src, is_allowed_app_url, resolve_app, runtime_kind_for_app, should_use_incognito,
@@ -87,13 +86,6 @@ pub struct CreateInlineRuntimeArgs {
     pub query: BTreeMap<String, String>,
 }
 
-fn now_ms() -> Result<i64, String> {
-    Ok(SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| format!("system clock error: {e}"))?
-        .as_millis() as i64)
-}
-
 async fn reuse_existing_inline_runtime(
     apps_state: &State<'_, AppsHostState>,
     webview: &tauri::Webview,
@@ -106,7 +98,7 @@ async fn reuse_existing_inline_runtime(
     visible: bool,
     internal: bool,
 ) -> Result<SageAppRuntimeRecord, String> {
-    let now = now_ms()?;
+    let now = unix_timestamp_ms();
 
     if visible {
         webview
@@ -270,7 +262,7 @@ pub async fn apps_create_inline_runtime(
         )
         .map_err(|e| format!("failed to create child webview: {e}"))?;
 
-    let now = now_ms()?;
+    let now = unix_timestamp_ms();
 
     let record = SageAppRuntimeRecord {
         runtime_id: runtime_id.clone(),

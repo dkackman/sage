@@ -1,7 +1,6 @@
 use std::{
     fs, io,
     path::Path,
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{Context, Result as AnyResult, anyhow};
@@ -24,14 +23,7 @@ use crate::types::{
     SageAppPackageManifest, SageAppSnapshot, SageAppUrlPreview,
     UserSageApp, UserSageAppSource, SageGrantedPermissions,
 };
-use crate::utils::bytes_sha256_hex;
-
-pub fn current_millis() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("time went backwards")
-        .as_millis()
-}
+use crate::utils::{bytes_sha256_hex};
 
 fn slugify_name(name: &str) -> String {
     let mut out = String::new();
@@ -56,7 +48,7 @@ fn slugify_name(name: &str) -> String {
 }
 
 fn generate_zip_app_id(name: &str) -> String {
-    format!("{}-{}", slugify_name(name), current_millis())
+    format!("{}-{}", slugify_name(name), Uuid::new_v4())
 }
 
 fn generate_url_app_id(manifest_url: &str) -> String {
@@ -300,7 +292,7 @@ pub async fn preview_app_url_internal(app_url: String) -> AnyResult<SageAppUrlPr
 #[command]
 #[specta::specta]
 pub async fn preview_app_zip(zip_path: String) -> Result<SageAppPackageManifest> {
-    let unpack_dir = std::env::temp_dir().join(format!(".sage-preview-{}", current_millis()));
+    let unpack_dir = std::env::temp_dir().join(format!(".sage-preview-{}", Uuid::new_v4()));
 
     let result = (|| -> AnyResult<SageAppPackageManifest> {
         unzip_to_dir(Path::new(&zip_path), &unpack_dir)?;
@@ -360,7 +352,7 @@ pub async fn install_app_zip(
         io::Error::other(format!("failed to create apps directory {}: {err}", root.display()))
     })?;
 
-    let unpack_dir = root.join(format!(".tmp-{}", current_millis()));
+    let unpack_dir = root.join(format!(".tmp-{}", Uuid::new_v4()));
     if unpack_dir.exists() {
         fs::remove_dir_all(&unpack_dir).map_err(|err| {
             io::Error::other(format!(

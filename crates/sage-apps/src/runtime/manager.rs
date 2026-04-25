@@ -1,11 +1,9 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, Emitter, Manager, State};
 use crate::bridge::methods::system::RuntimeManagerRuntimesChangedEvent;
 use crate::state::AppsHostState;
-
+use crate::utils::unix_timestamp_ms;
 use super::cleanup::close_runtime_internal_with_reason;
 use super::records::SageAppRuntimeRecord;
 
@@ -20,13 +18,6 @@ pub struct RuntimeTargetParams {
 pub struct SystemKillRuntimeResult {
     pub ok: bool,
     pub app_id: String,
-}
-
-pub(crate) fn now_ms() -> Result<i64, String> {
-    Ok(SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|err| format!("system clock error: {err}"))?
-        .as_millis() as i64)
 }
 
 pub(crate) async fn get_runtime_record_by_app_id(
@@ -153,7 +144,7 @@ pub(crate) async fn focus_runtime_internal(
 
     record.visible = true;
     record.state = "running".into();
-    record.last_active_at = now_ms()?;
+    record.last_active_at = unix_timestamp_ms();
 
     write_runtime_record(apps_state, record.clone()).await?;
     emit_runtime_manager_runtimes_changed(app, apps_state).await;
@@ -181,7 +172,7 @@ pub(crate) async fn hide_runtime_internal(
 
     record.visible = false;
     record.state = "hidden".into();
-    record.last_active_at = now_ms()?;
+    record.last_active_at = unix_timestamp_ms();
 
     write_runtime_record(apps_state, record.clone()).await?;
     Ok(record)

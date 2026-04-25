@@ -1,23 +1,15 @@
 use std::collections::{BTreeMap, HashMap};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::{AppHandle, State};
-
+use uuid::Uuid;
 use crate::runtime;
 use crate::state::AppsHostState;
 
 pub const STORAGE_CLEAR_PROBE_PATH: &str =
     "/__sage/runtime-apps/storage-clear-probe/index.html";
 
-pub fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
-
 pub fn unique_run_id(prefix: &str) -> String {
-    format!("{prefix}-{}", now_ms())
+    format!("{prefix}-{}", Uuid::new_v4())
 }
 
 pub async fn stop_test_apps(
