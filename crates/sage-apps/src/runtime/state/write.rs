@@ -1,14 +1,17 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 use crate::AppsHostState;
+use crate::runtime::emit_runtime_manager_runtimes_changed;
 use crate::runtime::state::types::SageAppRuntimeRecord;
 use crate::types::SageApp;
 
 pub async fn write_runtime(
+    app: &AppHandle,
     apps_state: &State<'_, AppsHostState>,
     record: SageAppRuntimeRecord,
 ) -> Result<(), String> {
     let mut by_runtime_id = apps_state.runtime.runtime_by_runtime_id.lock().await;
     by_runtime_id.insert(record.runtime_id.clone(), record);
+    emit_runtime_manager_runtimes_changed(app, apps_state).await;
     Ok(())
 }
 

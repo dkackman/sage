@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Manager, State, Webview};
 use uuid::Uuid;
 use crate::AppsHostState;
-use crate::bridge::{registry, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{registry, response_channel_for_registry_kind, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::{BridgeCapability, SystemBridgeCapability, UserBridgeCapability};
 use crate::bridge::comms::sage::events::emit_approval_requested;
 use crate::bridge::methods::{BridgeContext, BridgeTools};
@@ -22,10 +22,7 @@ pub async fn invoke(
     expected_runtime_kind: Option<SageAppRuntimeKind>,
     registry_kind: registry::BridgeRegistryKind,
 ) -> Result<RustBridgeInvokeResult, String> {
-    let expected_channel = match registry_kind {
-        registry::BridgeRegistryKind::User => "sage-bridge",
-        registry::BridgeRegistryKind::System => "sage-system-bridge",
-    };
+    let expected_channel = response_channel_for_registry_kind(registry_kind);
 
     if let Err(response) = validate_request_basics(&request, expected_channel) {
         return Ok(RustBridgeInvokeResult::Immediate { response });

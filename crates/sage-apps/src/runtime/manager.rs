@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, Emitter, Manager, State};
 use crate::bridge::methods::system::RuntimeManagerRuntimesChangedEvent;
+use crate::runtime::webview_locator::{find_sage_window, get_webview_in_sage_window};
 use crate::runtime::state::read::{get_runtime_by_app_id, list_runtimes};
 use crate::runtime::state::types::{SageAppRuntimeKind, SageAppRuntimeRecord};
 use crate::runtime::state::write::write_runtime;
@@ -37,12 +38,12 @@ pub(crate) async fn emit_runtime_manager_runtimes_changed(
         runtimes,
     );
 
-    let Some(window) = app.get_window("main") else {
+    let Some(sage_window) = find_sage_window(app) else {
         return;
     };
 
-    for webview_label in system_runtime_webview_labels {
-        if let Some(webview) = window.get_webview(&webview_label) {
+    for system_webview_label in system_runtime_webview_labels {
+        if let Some(webview) = sage_window.get_webview(&system_webview_label) {
             let _ = webview.emit("sage-system-bridge:event", event.clone());
         }
     }
@@ -53,15 +54,8 @@ pub(crate) async fn focus_runtime(
     apps_state: &State<'_, AppsHostState>,
     app_id: &str,
 ) -> Result<SageAppRuntimeRecord, String> {
-    let host_window = app
-        .get_window("main")
-        .ok_or_else(|| "missing main window".to_string())?;
-
-    let mut record = get_runtime_by_app_id(apps_state, app_id).await?;
-
-    let webview = host_window
-        .get_webview(&record.webview_label)
-        .ok_or_else(|| format!("missing webview for label: {}", record.webview_label))?;
+    let mut runtime = get_runtime_by_app_id(apps_state, app_id).await?;
+    let webview = get_webview_in_sage_window(app, &runtime.webview_label)?;
 
     webview
         .show()
@@ -71,13 +65,12 @@ pub(crate) async fn focus_runtime(
         .set_focus()
         .map_err(|err| format!("failed to focus webview: {err}"))?;
 
-    record.visible = true;
-    record.state = "running".into();
-    record.last_active_at = unix_timestamp_ms();
+    runtime.visible = true;
+    runtime.state = "running".into();
+    runtime.last_active_at = unix_timestamp_ms();
 
-    write_runtime(apps_state, record.clone()).await?;
-    emit_runtime_manager_runtimes_changed(app, apps_state).await;
-    Ok(record)
+    write_runtime(app, apps_state, runtime.clone()).await?;
+    Ok(runtime)
 }
 
 pub(crate) async fn hide_runtime(
@@ -85,25 +78,17 @@ pub(crate) async fn hide_runtime(
     apps_state: &State<'_, AppsHostState>,
     app_id: &str,
 ) -> Result<SageAppRuntimeRecord, String> {
-    let host_window = app
-        .get_window("main")
-        .ok_or_else(|| "missing main window".to_string())?;
-
-    let mut record = get_runtime_by_app_id(apps_state, app_id).await?;
-
-    let webview = host_window
-        .get_webview(&record.webview_label)
-        .ok_or_else(|| format!("missing webview for label: {}", record.webview_label))?;
+    let mut runtime = get_runtime_by_app_id(apps_state, app_id).await?;
+    let webview = get_webview_in_sage_window(app, &runtime.webview_label)?;
 
     webview
         .hide()
         .map_err(|err| format!("failed to hide webview: {err}"))?;
 
-    record.visible = false;
-    record.state = "hidden".into();
-    record.last_active_at = unix_timestamp_ms();
+    runtime.visible = false;
+    runtime.state = "hidden".into();
+    runtime.last_active_at = unix_timestamp_ms();
 
-    write_runtime(apps_state, record.clone()).await?;
-    emit_runtime_manager_runtimes_changed(app, apps_state).await;
-    Ok(record)
+    write_runtime(app, apps_state, runtime.clone()).await?;
+    Ok(runtime)
 }

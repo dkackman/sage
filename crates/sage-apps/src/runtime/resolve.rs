@@ -4,6 +4,7 @@ use std::path::Path;
 use tauri::{AppHandle, Manager};
 use url::Url;
 use crate::lifecycle::read_installed_app_by_id;
+use crate::runtime::webview_locator::get_webview_in_sage_window;
 use crate::runtime::state::types::SageAppRuntimeKind;
 use crate::sandbox::build_builtin_test_app;
 use crate::system_apps::build_builtin_system_app;
@@ -81,10 +82,10 @@ pub fn resolve_app(base_path: &Path, app_id: &str) -> Result<SageApp, String> {
 
 pub(crate) fn assert_bridge_origin(
     app: AppHandle,
-    source_label: String,
+    app_webview_label: String,
 ) -> Result<(String, SageAppRuntimeKind), String> {
-    let (runtime_kind, app_id) = app_id_from_inline_label(&source_label)
-        .ok_or_else(|| format!("invalid app runtime label: {source_label}"))?;
+    let (runtime_kind, app_id) = app_id_from_inline_label(&app_webview_label)
+        .ok_or_else(|| format!("invalid app runtime label: {app_webview_label}"))?;
 
     let app_id = app_id.to_string();
 
@@ -98,25 +99,19 @@ pub(crate) fn assert_bridge_origin(
 
     if runtime_kind != expected_runtime_kind {
         return Err(format!(
-            "bridge denied for {source_label}: runtime kind mismatch (label={runtime_kind:?}, app={expected_runtime_kind:?})"
+            "bridge denied for {app_webview_label}: runtime kind mismatch (label={runtime_kind:?}, app={expected_runtime_kind:?})"
         ));
     }
 
-    let host_window = app
-        .get_window("main")
-        .ok_or_else(|| "missing main window".to_string())?;
+    let app_webview = get_webview_in_sage_window(&app, &app_webview_label)?;
 
-    let webview = host_window
-        .get_webview(&source_label)
-        .ok_or_else(|| format!("missing webview for label: {source_label}"))?;
-
-    let current_url = webview
+    let current_url = app_webview
         .url()
         .map_err(|e| format!("failed to read current webview url: {e}"))?;
 
     if !is_allowed_app_url(&current_url, resolved.origin_id(), runtime_kind) {
         return Err(format!(
-            "bridge denied for {source_label}: current url {} is outside {}://{}/...",
+            "bridge denied for {app_webview_label}: current url {} is outside {}://{}/...",
             current_url,
             protocol_scheme_for_runtime_kind(runtime_kind),
             resolved.origin_id()

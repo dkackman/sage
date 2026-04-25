@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Emitter};
 use crate::bridge::{RustBridgeApprovalEvent, RustBridgeApprovalRequest};
-use crate::runtime::locator::{get_sage_webview};
+use crate::runtime::webview_locator::{get_sage_webview};
 
 pub(crate) fn emit_approval_requested(
     app: &AppHandle,

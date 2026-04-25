@@ -5,7 +5,8 @@ use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, State, WebviewUrl}
 use tauri::webview::NewWindowResponse;
 use crate::{sandbox, AppsHostState};
 use crate::bridge::capabilities::UserBridgeCapability;
-use crate::runtime::{build_entry_src, emit_runtime_manager_runtimes_changed, is_allowed_app_url, resolve_app, runtime_kind_for_app};
+use crate::runtime::{build_entry_src, is_allowed_app_url, resolve_app, runtime_kind_for_app};
+use crate::runtime::webview_locator::{find_webview_in_sage_window, get_sage_window, get_webview_in_sage_window};
 use crate::runtime::state::types::{SageAppRuntimeKind, SageAppRuntimeRecord};
 use crate::runtime::state::write::{write_runtime, write_runtime_id_by_app_id};
 use crate::storage::parse_data_store_id;
@@ -38,11 +39,8 @@ pub async fn create_inline_runtime(
     let webview_label = inline_label_for(resolved.id(), runtime_kind);
     let runtime_id = runtime_id_for(resolved.id(), runtime_kind);
     let entry_src = build_entry_src(&resolved, args.path.clone(), args.query.clone());
-    let host_window = app
-        .get_window("main")
-        .ok_or_else(|| "missing main window".to_string())?;
 
-    if let Some(existing) = host_window.get_webview(&webview_label) {
+    if let Some(existing) = find_webview_in_sage_window(&app, &webview_label) {
         return reuse_existing_inline_runtime(
             &apps_state,
             &existing,
@@ -115,7 +113,7 @@ pub async fn create_inline_runtime(
         (0.0, 0.0, 1.0, 1.0)
     };
 
-    host_window
+    get_sage_window(&app)?
         .add_child(
             builder,
             LogicalPosition::new(x, y),
@@ -145,15 +143,11 @@ pub async fn create_inline_runtime(
         internal: args.internal,
     };
 
-    write_runtime(&apps_state, record.clone()).await?;
     write_runtime_id_by_app_id(&apps_state, &resolved, runtime_id).await?;
     if !args.visible {
-        if let Some(webview) = host_window.get_webview(&webview_label) {
-            let _ = webview.hide();
-        }
+        let _ = get_webview_in_sage_window(&app, &webview_label)?.hide();
     }
-
-    emit_runtime_manager_runtimes_changed(&app, &apps_state).await;
+    write_runtime(&app, &apps_state, record.clone()).await?;
 
     Ok(record)
 }

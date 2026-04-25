@@ -11,6 +11,7 @@ use crate::runtime::state::read::{get_runtime_by_app_id, find_runtime_by_runtime
 use crate::runtime::state::remove::{remove_before_stop_listeners_by_app_id, remove_pending_stop_ready, remove_runtime_by_runtime_id, remove_runtime_id_by_app_id};
 use crate::runtime::state::types::{SageAppRuntimeRecord, SageLifecycleBeforeStopDetail};
 use crate::runtime::state::write::write_pending_stop_ready;
+use crate::runtime::webview_locator::find_webview_in_sage_window;
 
 const BEFORE_STOP_TIMEOUT_MS: u64 = 5_000;
 
@@ -61,10 +62,8 @@ pub async fn close_runtime_internal_with_reason(
 
     let _ = wait_for_before_stop_ack(app, apps_state, &runtime, reason).await;
 
-    if let Some(host_window) = app.get_window("main") {
-        if let Some(webview) = host_window.get_webview(&runtime.webview_label) {
-            let _ = webview.close();
-        }
+    if let Some(webview) = find_webview_in_sage_window(&app, &runtime.webview_label) {
+        let _ = webview.close();
     }
 
     remove_runtime_by_runtime_id(apps_state, &runtime_id).await;
@@ -89,12 +88,7 @@ async fn wait_for_before_stop_ack(
     if !has_listener {
         return Ok(());
     }
-
-    let Some(host_window) = app.get_window("main") else {
-        return Ok(());
-    };
-
-    let Some(app_webview) = host_window.get_webview(&runtime.webview_label) else {
+    let Some(app_webview) = find_webview_in_sage_window(app, &runtime.webview_label) else {
         return Ok(());
     };
 

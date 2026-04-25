@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Emitter, Manager, State};
-
+use crate::runtime::webview_locator::get_sage_webview;
 use crate::state::AppsHostState;
 use crate::utils::unix_timestamp_ms;
 use super::probes::{
@@ -16,8 +16,8 @@ async fn emit_state_view(app: &AppHandle, apps_state: &State<'_, AppsHostState>)
     let current_run = apps_state.sandbox.current_run.lock().await.clone();
     let view = build_state_view(&baseline, current_run.as_ref());
 
-    if let Some(window) = app.get_window("main") {
-        let _ = window.emit("apps:sandbox-state-updated", view);
+    if let Ok(webview) = get_sage_webview(app) {
+        let _ = webview.emit("apps:sandbox-state-updated", view);
     }
 }
 
