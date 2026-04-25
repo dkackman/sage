@@ -10,7 +10,7 @@ pub use kill_runtime::RuntimeManagerKillRuntime;
 pub use list_runtimes::RuntimeManagerListRuntimes;
 pub use events::RuntimeManagerRuntimesChangedEvent;
 
-pub use crate::runtime::{RuntimeTargetParams, SystemKillRuntimeResult};
+pub use crate::runtime::{RuntimeTargetParams};
 use crate::bridge::{failure, RustBridgeRequest, RustBridgeResponse};
 
 fn parse_runtime_target_params(

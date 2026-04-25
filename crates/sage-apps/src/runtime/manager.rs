@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, Emitter, Manager, State};
 use crate::bridge::methods::system::RuntimeManagerRuntimesChangedEvent;
+use crate::runtime::{get_runtime_record_by_app_id, list_runtimes_internal, write_runtime_record};
 use crate::state::AppsHostState;
 use crate::utils::unix_timestamp_ms;
 use super::records::SageAppRuntimeRecord;
@@ -10,55 +11,6 @@ use super::records::SageAppRuntimeRecord;
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeTargetParams {
     pub app_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemKillRuntimeResult {
-    pub ok: bool,
-    pub app_id: String,
-}
-
-pub(crate) async fn get_runtime_record_by_app_id(
-    apps_state: &State<'_, AppsHostState>,
-    app_id: &str,
-) -> Result<SageAppRuntimeRecord, String> {
-    let runtime_id = {
-        let runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
-        runtime_by_app_id.get(app_id).cloned()
-    }
-        .ok_or_else(|| format!("runtime not found for app id: {app_id}"))?;
-
-    let record = {
-        let by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
-        by_runtime_id.get(&runtime_id).cloned()
-    }
-        .ok_or_else(|| format!("runtime record not found for runtime id: {runtime_id}"))?;
-
-    Ok(record)
-}
-
-pub(crate) async fn write_runtime_record(
-    apps_state: &State<'_, AppsHostState>,
-    record: SageAppRuntimeRecord,
-) -> Result<(), String> {
-    let mut by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
-    by_runtime_id.insert(record.runtime_id.clone(), record);
-    Ok(())
-}
-
-pub(crate) async fn list_runtimes_internal(
-    apps_state: &State<'_, AppsHostState>,
-) -> Result<Vec<SageAppRuntimeRecord>, String> {
-    let mut records = {
-        let by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
-        by_runtime_id.values().cloned().collect::<Vec<_>>()
-    };
-
-    records.retain(|record| !record.internal);
-    records.sort_by(|a, b| b.started_at.cmp(&a.started_at));
-
-    Ok(records)
 }
 
 pub(crate) async fn emit_runtime_manager_runtimes_changed(

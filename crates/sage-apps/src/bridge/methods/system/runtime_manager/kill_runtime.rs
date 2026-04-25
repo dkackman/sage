@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 
-use crate::bridge::methods::system::runtime_manager::{parse_runtime_target_params, SystemKillRuntimeResult};
+use crate::bridge::methods::system::runtime_manager::{parse_runtime_target_params};
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::SystemBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
-use crate::runtime::stop::kill_runtime_internal;
+use crate::runtime::stop::{kill_runtime_internal, SystemKillRuntimeResult};
 
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeManagerKillRuntime;
