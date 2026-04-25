@@ -8,7 +8,7 @@ use crate::bridge::capabilities::UserBridgeCapability;
 use crate::runtime::{build_entry_src, is_allowed_app_url, resolve_app, runtime_kind_for_app};
 use crate::runtime::webview_locator::{find_webview_in_sage_window, get_sage_window, get_webview_in_sage_window};
 use crate::runtime::state::types::{SageAppRuntimeKind, SageAppRuntimeRecord};
-use crate::runtime::state::write::{write_runtime, write_runtime_id_by_app_id};
+use crate::runtime::state::write::{write_runtime_and_emit_changed, write_runtime_id_by_app_id};
 use crate::storage::parse_data_store_id;
 use crate::types::{InstalledSageAppStorage, SageApp};
 use crate::utils::unix_timestamp_ms;
@@ -147,7 +147,7 @@ pub async fn create_inline_runtime(
     if !args.visible {
         let _ = get_webview_in_sage_window(&app, &webview_label)?.hide();
     }
-    write_runtime(&app, &apps_state, record.clone()).await?;
+    write_runtime_and_emit_changed(&app, &apps_state, record.clone()).await?;
 
     Ok(record)
 }

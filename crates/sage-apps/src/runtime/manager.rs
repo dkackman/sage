@@ -5,7 +5,7 @@ use crate::bridge::methods::system::RuntimeManagerRuntimesChangedEvent;
 use crate::runtime::webview_locator::{find_sage_window, get_webview_in_sage_window};
 use crate::runtime::state::read::{get_runtime_by_app_id, list_runtimes};
 use crate::runtime::state::types::{SageAppRuntimeKind, SageAppRuntimeRecord};
-use crate::runtime::state::write::write_runtime;
+use crate::runtime::state::write::write_runtime_and_emit_changed;
 use crate::state::AppsHostState;
 use crate::utils::unix_timestamp_ms;
 
@@ -69,7 +69,7 @@ pub(crate) async fn focus_runtime(
     runtime.state = "running".into();
     runtime.last_active_at = unix_timestamp_ms();
 
-    write_runtime(app, apps_state, runtime.clone()).await?;
+    write_runtime_and_emit_changed(app, apps_state, runtime.clone()).await?;
     Ok(runtime)
 }
 
@@ -89,6 +89,6 @@ pub(crate) async fn hide_runtime(
     runtime.state = "hidden".into();
     runtime.last_active_at = unix_timestamp_ms();
 
-    write_runtime(app, apps_state, runtime.clone()).await?;
+    write_runtime_and_emit_changed(app, apps_state, runtime.clone()).await?;
     Ok(runtime)
 }
