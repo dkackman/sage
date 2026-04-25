@@ -4,7 +4,9 @@ use specta::Type;
 use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, State, WebviewUrl};
 use tauri::webview::NewWindowResponse;
 use crate::{sandbox, AppsHostState};
-use crate::runtime::{build_entry_src, emit_runtime_manager_runtimes_changed, inline_label_for, is_allowed_app_url, resolve_app, runtime_id_for, runtime_kind_for_app, should_use_incognito, SageAppRuntimeRecord};
+use crate::runtime::{build_entry_src, emit_runtime_manager_runtimes_changed, inline_label_for, is_allowed_app_url, resolve_app, runtime_id_for, runtime_kind_for_app, should_use_incognito};
+use crate::runtime::state::types::{SageAppRuntimeKind, SageAppRuntimeRecord};
+use crate::runtime::state::write::{write_runtime, write_runtime_id_by_app_id};
 use crate::storage::parse_data_store_id;
 use crate::types::InstalledSageAppStorage;
 use crate::utils::unix_timestamp_ms;
@@ -32,32 +34,12 @@ pub async fn create_inline_runtime(
 
     let resolved = resolve_app(&base_path, &args.app_id)?;
     let runtime_kind = runtime_kind_for_app(&resolved);
-    let is_builtin_test_app = resolved.id().starts_with("__sage_test_");
-
-    if !args.internal && !is_builtin_test_app {
-        let baseline = apps_state.sandbox.baseline.lock().await.clone();
-        let current_run = apps_state.sandbox.current_run.lock().await.clone();
-        let effective =
-            sandbox::state_view::build_effective_state(&baseline, current_run.as_ref());
-        let gate = sandbox::evaluate_app_launch_gate(&resolved, &effective);
-
-        if !gate.allowed {
-            return Err(
-                gate.message
-                    .unwrap_or_else(|| "App launch blocked by sandbox policy".into()),
-            );
-        }
-    }
-
-    let is_incognito = should_use_incognito(&resolved);
-
-    let host_window = app
-        .get_window("main")
-        .ok_or_else(|| "missing main window".to_string())?;
-
     let webview_label = inline_label_for(resolved.id(), runtime_kind);
     let runtime_id = runtime_id_for(resolved.id(), runtime_kind);
     let entry_src = build_entry_src(&resolved, args.path.clone(), args.query.clone());
+    let host_window = app
+        .get_window("main")
+        .ok_or_else(|| "missing main window".to_string())?;
 
     if let Some(existing) = host_window.get_webview(&webview_label) {
         return reuse_existing_inline_runtime(
@@ -75,12 +57,27 @@ pub async fn create_inline_runtime(
             .await;
     }
 
+    if !args.internal && !resolved.is_sandbox_test() {
+        let baseline = apps_state.sandbox.baseline.lock().await.clone();
+        let current_run = apps_state.sandbox.current_run.lock().await.clone();
+        let effective =
+            sandbox::state_view::build_effective_state(&baseline, current_run.as_ref());
+        let gate = sandbox::evaluate_app_launch_gate(&resolved, &effective);
+
+        if !gate.allowed {
+            return Err(
+                gate.message
+                    .unwrap_or_else(|| "App launch blocked by sandbox policy".into()),
+            );
+        }
+    }
+
     let origin_id_for_nav = resolved.origin_id().to_string();
     let runtime_kind_for_nav = runtime_kind;
 
     let mut builder = tauri::webview::WebviewBuilder::new(
         &webview_label,
-        WebviewUrl::External(
+        WebviewUrl::CustomProtocol(
             entry_src
                 .parse()
                 .map_err(|e| format!("invalid entry url: {e}"))?,
@@ -91,7 +88,7 @@ pub async fn create_inline_runtime(
         })
         .on_new_window(move |_url, _features| NewWindowResponse::Deny);
 
-    if is_incognito {
+    if should_use_incognito(&resolved) {
         builder = builder.incognito(true);
     } else {
         match resolved.storage() {
@@ -147,16 +144,8 @@ pub async fn create_inline_runtime(
         internal: args.internal,
     };
 
-    {
-        let mut by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
-        by_runtime_id.insert(runtime_id.clone(), record.clone());
-    }
-
-    {
-        let mut runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
-        runtime_by_app_id.insert(resolved.id().to_string(), runtime_id);
-    }
-
+    write_runtime(&apps_state, record.clone()).await?;
+    write_runtime_id_by_app_id(&apps_state, &resolved, runtime_id).await?;
     if !args.visible {
         if let Some(webview) = host_window.get_webview(&webview_label) {
             let _ = webview.hide();
@@ -176,7 +165,7 @@ async fn reuse_existing_inline_runtime(
     app_name: String,
     entry_src: String,
     webview_label: String,
-    runtime_kind: super::records::SageAppRuntimeKind,
+    runtime_kind: SageAppRuntimeKind,
     visible: bool,
     internal: bool,
 ) -> Result<SageAppRuntimeRecord, String> {
@@ -193,7 +182,7 @@ async fn reuse_existing_inline_runtime(
     }
 
     let mut record = {
-        let by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
+        let by_runtime_id = apps_state.runtime.runtime_by_runtime_id.lock().await;
         by_runtime_id.get(&runtime_id).cloned()
     }
         .unwrap_or_else(|| SageAppRuntimeRecord {
@@ -222,12 +211,12 @@ async fn reuse_existing_inline_runtime(
     record.internal = internal;
 
     {
-        let mut by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
+        let mut by_runtime_id = apps_state.runtime.runtime_by_runtime_id.lock().await;
         by_runtime_id.insert(runtime_id.clone(), record.clone());
     }
 
     {
-        let mut runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
+        let mut runtime_by_app_id = apps_state.runtime.runtime_id_by_app_id.lock().await;
         runtime_by_app_id.insert(app_id, runtime_id);
     }
 

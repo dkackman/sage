@@ -4,7 +4,7 @@ use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::SystemBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
-use crate::runtime::list_runtimes;
+use crate::runtime::state::read::list_runtimes;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeManagerListRuntimes;

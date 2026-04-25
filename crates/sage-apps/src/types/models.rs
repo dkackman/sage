@@ -3,6 +3,7 @@ use specta::Type;
 
 use crate::bridge::capabilities::{SystemBridgeCapability, UserBridgeCapability};
 use crate::lifecycle::parse_network_permission_target;
+use crate::sandbox::SANDBOX_TEST_ID_PREFIX;
 
 #[derive(
     Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord,
@@ -325,6 +326,10 @@ impl SageApp {
             Self::System(app) => Some(app),
             Self::User(_) => None,
         }
+    }
+
+    pub fn is_sandbox_test(&self) -> bool {
+        self.id().starts_with(SANDBOX_TEST_ID_PREFIX)
     }
 }
 

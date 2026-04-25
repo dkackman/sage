@@ -4,7 +4,7 @@ use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::UserBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
-use crate::runtime::{ReadyToStopParams, RuntimeAckResult, SetBeforeStopListenerParams};
+use crate::runtime::state::types::{ReadyToStopParams, RuntimeAckResult, SetBeforeStopListenerParams};
 
 #[derive(Debug, Clone, Copy)]
 pub struct AppLifecycleSetBeforeStopListener;

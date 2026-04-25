@@ -6,7 +6,10 @@ use tokio::sync::oneshot;
 use tokio::time::timeout;
 use uuid::Uuid;
 use crate::AppsHostState;
-use crate::runtime::{emit_runtime_manager_runtimes_changed, get_runtime_record_by_app_id, SageAppRuntimeRecord, SageLifecycleBeforeStopDetail};
+use crate::runtime::{emit_runtime_manager_runtimes_changed};
+use crate::runtime::state::read::{get_runtime_by_app_id, get_runtime_by_runtime_id_optional, get_runtime_id_by_app_id_optional};
+use crate::runtime::state::remove::{remove_before_stop_listeners_by_app_id, remove_runtime_by_runtime_id, remove_runtime_id_by_app_id};
+use crate::runtime::state::types::{SageAppRuntimeRecord, SageLifecycleBeforeStopDetail};
 
 const BEFORE_STOP_TIMEOUT_MS: u64 = 5_000;
 
@@ -23,7 +26,7 @@ pub async fn kill_runtime(
     app_id: &str,
     reason: &str,
 ) -> Result<SystemKillRuntimeResult, String> {
-    let _ = get_runtime_record_by_app_id(apps_state, app_id).await?;
+    let _ = get_runtime_by_app_id(apps_state, app_id).await?;
 
     close_runtime_internal_with_reason(app, apps_state, app_id, reason).await?;
 
@@ -47,48 +50,25 @@ pub async fn close_runtime_internal_with_reason(
     app_id: &str,
     reason: &str,
 ) -> Result<(), String> {
-    let runtime_id = {
-        let runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
-        runtime_by_app_id.get(app_id).cloned()
+    let Some(runtime_id) = get_runtime_id_by_app_id_optional(apps_state, app_id).await else {
+        return Ok(());
     };
-
-    let Some(runtime_id) = runtime_id else {
+    let Some(runtime) = get_runtime_by_runtime_id_optional(apps_state, &runtime_id).await else {
+        remove_runtime_id_by_app_id(apps_state, app_id).await;
         return Ok(());
     };
 
-    let record = {
-        let by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
-        by_runtime_id.get(&runtime_id).cloned()
-    };
-
-    let Some(record) = record else {
-        let mut runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
-        runtime_by_app_id.remove(app_id);
-        return Ok(());
-    };
-
-    let _ = wait_for_before_stop_ack(app, apps_state, &record, reason).await;
+    let _ = wait_for_before_stop_ack(app, apps_state, &runtime, reason).await;
 
     if let Some(host_window) = app.get_window("main") {
-        if let Some(webview) = host_window.get_webview(&record.webview_label) {
+        if let Some(webview) = host_window.get_webview(&runtime.webview_label) {
             let _ = webview.close();
         }
     }
 
-    {
-        let mut by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
-        by_runtime_id.remove(&runtime_id);
-    }
-
-    {
-        let mut runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
-        runtime_by_app_id.remove(app_id);
-    }
-
-    {
-        let mut listeners = apps_state.runtime.before_stop_listeners_by_app_id.lock().await;
-        listeners.remove(app_id);
-    }
+    remove_runtime_by_runtime_id(apps_state, &runtime_id).await;
+    remove_runtime_id_by_app_id(apps_state, &app_id).await;
+    remove_before_stop_listeners_by_app_id(apps_state, &app_id).await;
     emit_runtime_manager_runtimes_changed(app, apps_state).await;
 
     Ok(())

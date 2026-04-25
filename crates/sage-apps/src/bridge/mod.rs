@@ -8,7 +8,6 @@ use crate::host::AppState;
 use crate::state::AppsHostState;
 use crate::types::{SageApp, SageAppCapabilityDefinitionView};
 use crate::runtime::{assert_bridge_origin, resolve_app};
-use crate::runtime::records::SageAppRuntimeKind;
 
 pub mod methods;
 pub mod registry;
@@ -30,6 +29,7 @@ use crate::bridge::methods::user::app::{
 };
 use crate::lifecycle::{GrantedCapabilitiesChange, GrantedNetworkWhitelistChange};
 use crate::permissions::{require_system_capability_definition, require_user_capability_definition, resolve_effective_granted_capabilities, user_capability_definition_view, user_registry};
+use crate::runtime::state::types::SageAppRuntimeKind;
 
 #[derive(Debug, Clone)]
 struct PendingBridgeApproval {
@@ -564,7 +564,7 @@ pub(crate) async fn emit_bridge_event_to_app_id(
     let apps_state = app.state::<AppsHostState>();
 
     let runtime_id = {
-        let runtime_by_app_id = apps_state.runtime.runtime_by_app_id.lock().await;
+        let runtime_by_app_id = apps_state.runtime.runtime_id_by_app_id.lock().await;
         runtime_by_app_id.get(app_id).cloned()
     };
 
@@ -573,7 +573,7 @@ pub(crate) async fn emit_bridge_event_to_app_id(
     };
 
     let record = {
-        let by_runtime_id = apps_state.runtime.by_runtime_id.lock().await;
+        let by_runtime_id = apps_state.runtime.runtime_by_runtime_id.lock().await;
         by_runtime_id.get(&runtime_id).cloned()
     };
 

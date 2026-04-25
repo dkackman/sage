@@ -5,11 +5,12 @@ use tauri::{AppHandle, Manager};
 use url::Url;
 use crate::bridge::capabilities::UserBridgeCapability;
 use crate::lifecycle::read_installed_app_by_id;
+use crate::runtime::state::types::SageAppRuntimeKind;
 use crate::sandbox::build_builtin_test_app;
 use crate::system_apps::build_builtin_system_app;
 use crate::types::SageApp;
 
-use super::records::{inline_label_for, SageAppRuntimeKind};
+use super::records::{inline_label_for};
 
 fn app_id_from_inline_label(label: &str) -> Option<(SageAppRuntimeKind, &str)> {
     if let Some(app_id) = label.strip_prefix("app-inline-") {
