@@ -34,8 +34,7 @@ impl BridgeMethod for RuntimeManagerFocusRuntime {
         match focus_runtime(
             tools.app_handle,
             tools.host_state,
-            &params.app_id,
-            true,
+            &params.app_id
         )
             .await
         {

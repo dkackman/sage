@@ -29,7 +29,7 @@ pub async fn apps_focus_runtime(
     apps_state: State<'_, AppsHostState>,
     params: RuntimeTargetParams,
 ) -> Result<SageAppRuntimeRecord, String> {
-    focus_runtime(&app, &apps_state, &params.app_id, false).await
+    focus_runtime(&app, &apps_state, &params.app_id).await
 }
 
 #[tauri::command]

@@ -47,29 +47,10 @@ pub(crate) async fn emit_runtime_manager_runtimes_changed(
     }
 }
 
-async fn emit_route_request(
-    app: &AppHandle,
-    app_id: &str,
-) -> Result<(), String> {
-    let window = app
-        .get_window("main")
-        .ok_or_else(|| "missing main window".to_string())?;
-
-    window
-        .emit(
-            "system:route-to-app",
-            serde_json::json!({
-                "appId": app_id,
-            }),
-        )
-        .map_err(|err| format!("failed to emit route request: {err}"))
-}
-
 pub(crate) async fn focus_runtime(
     app: &AppHandle,
     apps_state: &State<'_, AppsHostState>,
     app_id: &str,
-    emit_route: bool,
 ) -> Result<SageAppRuntimeRecord, String> {
     let host_window = app
         .get_window("main")
@@ -80,10 +61,6 @@ pub(crate) async fn focus_runtime(
     let webview = host_window
         .get_webview(&record.webview_label)
         .ok_or_else(|| format!("missing webview for label: {}", record.webview_label))?;
-
-    if emit_route {
-        emit_route_request(app, app_id).await?;
-    }
 
     webview
         .show()
