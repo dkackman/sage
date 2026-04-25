@@ -1,7 +1,7 @@
 use tauri::{AppHandle, State};
-
-use crate::sandbox::BUILTIN_STORAGE_CLEAR_PERSISTENT_ID;
-use crate::runtime;
+use crate::lifecycle::clear_runtime_browsing_data_internal;
+use crate::runtime::stop::close_runtime_internal;
+use crate::sandbox::{BUILTIN_STORAGE_CLEAR_PERSISTENT_ID};
 use crate::state::AppsHostState;
 
 use super::poll::poll_clear_cycle_phase;
@@ -26,7 +26,7 @@ async fn run_clear_cycle_phase(
 
     let out = poll_clear_cycle_phase(apps_state, run_id, app_id, phase.clone(), 10_000).await;
 
-    let _ = runtime::close_runtime_internal(app, apps_state, app_id).await;
+    let _ = close_runtime_internal(app, apps_state, app_id).await;
 
     out
 }
@@ -78,7 +78,7 @@ pub async fn run_clear_cycle_test(
         ));
     }
 
-    runtime::clear_runtime_browsing_data_internal(app, apps_state, app_id).await?;
+    clear_runtime_browsing_data_internal(app, apps_state, app_id).await?;
 
     let absent = run_clear_cycle_phase(
         app,

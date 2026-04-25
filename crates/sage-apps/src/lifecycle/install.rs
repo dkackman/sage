@@ -8,16 +8,9 @@ use tauri::{AppHandle, State, command};
 use uuid::Uuid;
 
 use crate::host::{AppState, Result};
-use crate::lifecycle::{
-    apps_root, derive_manifest_url, download_url_snapshot, enqueue_pending_storage_cleanup,
-    enqueue_retired_app_origin, fetch_url_manifest, list_installed_apps_internal,
-    prepare_zip_snapshot, read_manifest, read_retired_app_origins,
-    unzip_to_dir, validate_package_structure,
-    write_installed_app_metadata,
-};
+use crate::lifecycle::{apps_clear_runtime_browsing_data, apps_root, derive_manifest_url, download_url_snapshot, enqueue_pending_storage_cleanup, enqueue_retired_app_origin, fetch_url_manifest, list_installed_apps_internal, prepare_zip_snapshot, read_manifest, read_retired_app_origins, unzip_to_dir, validate_package_structure, write_installed_app_metadata};
 use crate::lifecycle::registry::read_installed_app_by_id;
 use crate::permissions::{normalize_and_validate_granted_permissions, normalize_and_validate_requested_permissions, resolve_capability_flags, resolve_effective_granted_capabilities};
-use crate::runtime::apps_clear_runtime_browsing_data;
 use crate::types::{
     InstalledSageAppStorage, ListedSageApp, SageAppCommon,
     SageAppPackageManifest, SageAppSnapshot, SageAppUrlPreview,
