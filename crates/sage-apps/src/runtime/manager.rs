@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, Emitter, Manager, State};
 use crate::bridge::methods::system::RuntimeManagerRuntimesChangedEvent;
-use crate::runtime::stop::close_runtime_internal_with_reason;
+use crate::runtime::stop::{close_runtime_internal_with_reason, kill_runtime_internal};
 use crate::state::AppsHostState;
 use crate::utils::unix_timestamp_ms;
 use super::records::SageAppRuntimeRecord;
@@ -176,23 +176,6 @@ pub(crate) async fn hide_runtime_internal(
 
     write_runtime_record(apps_state, record.clone()).await?;
     Ok(record)
-}
-
-pub(crate) async fn kill_runtime_internal(
-    app: &AppHandle,
-    apps_state: &State<'_, AppsHostState>,
-    app_id: &str,
-    reason: &str,
-) -> Result<SystemKillRuntimeResult, String> {
-    let _ = get_runtime_record_by_app_id(apps_state, app_id).await?;
-
-    close_runtime_internal_with_reason(app, apps_state, app_id, reason).await?;
-    emit_runtime_manager_runtimes_changed(app, apps_state).await;
-
-    Ok(SystemKillRuntimeResult {
-        ok: true,
-        app_id: app_id.to_string(),
-    })
 }
 
 #[tauri::command]

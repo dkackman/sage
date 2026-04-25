@@ -4,9 +4,26 @@ use tokio::sync::oneshot;
 use tokio::time::timeout;
 use uuid::Uuid;
 use crate::AppsHostState;
-use crate::runtime::{emit_runtime_manager_runtimes_changed, SageAppRuntimeRecord, SageLifecycleBeforeStopDetail};
+use crate::runtime::{emit_runtime_manager_runtimes_changed, get_runtime_record_by_app_id, SageAppRuntimeRecord, SageLifecycleBeforeStopDetail, SystemKillRuntimeResult};
 
 const BEFORE_STOP_TIMEOUT_MS: u64 = 5_000;
+
+pub async fn kill_runtime_internal(
+    app: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+    app_id: &str,
+    reason: &str,
+) -> Result<SystemKillRuntimeResult, String> {
+    let _ = get_runtime_record_by_app_id(apps_state, app_id).await?;
+
+    close_runtime_internal_with_reason(app, apps_state, app_id, reason).await?;
+    emit_runtime_manager_runtimes_changed(app, apps_state).await;
+
+    Ok(SystemKillRuntimeResult {
+        ok: true,
+        app_id: app_id.to_string(),
+    })
+}
 
 pub async fn close_runtime_internal(
     app: &AppHandle,
