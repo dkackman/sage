@@ -145,9 +145,6 @@ pub async fn create_inline_runtime(
         last_active_at: now,
         visible: args.visible,
         internal: args.internal,
-        active_batch_count: 0,
-        active_socket_count: 0,
-        in_flight_request_count: 0,
     };
 
     {
@@ -213,9 +210,6 @@ async fn reuse_existing_inline_runtime(
             last_active_at: now,
             visible: false,
             internal,
-            active_batch_count: 0,
-            active_socket_count: 0,
-            in_flight_request_count: 0,
         });
 
     record.visible = visible;

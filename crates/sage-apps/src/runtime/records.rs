@@ -59,9 +59,6 @@ pub struct SageAppRuntimeRecord {
     pub last_active_at: i64,
     pub visible: bool,
     pub internal: bool,
-    pub active_batch_count: u32,
-    pub active_socket_count: u32,
-    pub in_flight_request_count: u32,
 }
 
 #[derive(Default)]
