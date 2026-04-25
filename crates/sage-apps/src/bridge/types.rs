@@ -1,9 +1,7 @@
-use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use specta::Type;
 use tauri_specta::Event;
-use tokio::sync::Mutex;
 use crate::bridge::capabilities::UserBridgeCapability;
 use crate::bridge::methods::user::wallet::send_xch::WalletSendXchParams;
 use crate::types::{SageApp, SageAppCapabilityDefinitionView, SageNetworkPermissionTarget};
@@ -13,11 +11,6 @@ pub struct PendingBridgeApproval {
     pub app_id: String,
     pub app_webview_label: String,
     pub request: RustBridgeRequest,
-}
-
-#[derive(Debug, Default)]
-pub struct BridgeState {
-    pub pending_approvals: Mutex<BTreeMap<String, PendingBridgeApproval>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Type)]

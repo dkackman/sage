@@ -1,4 +1,4 @@
-use crate::bridge::types::BridgeState;
+use crate::bridge::state::BridgeState;
 use crate::runtime::state::types::AppRuntimeState;
 use crate::sandbox::SandboxStateStore;
 

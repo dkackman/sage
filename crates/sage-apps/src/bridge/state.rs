@@ -1,8 +1,15 @@
+use std::collections::BTreeMap;
 use tauri::State;
+use tokio::sync::Mutex;
 use crate::AppsHostState;
 use crate::bridge::RustBridgeRequest;
 use crate::bridge::types::PendingBridgeApproval;
 use crate::types::SageApp;
+
+#[derive(Debug, Default)]
+pub struct BridgeState {
+    pending_approvals: Mutex<BTreeMap<String, PendingBridgeApproval>>,
+}
 
 pub(crate) async fn write_pending_approval(
     apps_state: &State<'_, AppsHostState>,
