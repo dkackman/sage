@@ -6,7 +6,7 @@ use crate::bridge::{response_channel_for_runtime_kind, RustBridgeApprovalEvent, 
 use crate::bridge::methods::{BridgeContext, BridgeTools};
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::bridge::registry::BridgeRegistry;
-use crate::bridge::types::PendingBridgeApproval;
+use crate::bridge::state::write_pending_approval;
 use crate::host::AppState;
 use crate::permissions::{require_system_capability_definition, require_user_capability_definition, resolve_effective_granted_capabilities};
 use crate::runtime::{assert_bridge_origin, resolve_app};
@@ -72,7 +72,7 @@ pub async fn process(
         BridgeMethodCapability::Ungated => {}
         BridgeMethodCapability::Required(capability) => {
             if let Err(response) =
-                authorize_method_capability(&app_model, &request, capability)
+                verify_capability(&app_model, &request, capability)
             {
                 return Ok(RustBridgeInvokeResult::Immediate { response });
             }
@@ -88,18 +88,8 @@ pub async fn process(
     ) {
         let approval_id = Uuid::new_v4().to_string();
 
-        {
-            let apps_state = app.state::<AppsHostState>();
-            let mut pending = apps_state.bridge.pending_approvals.lock().await;
-            pending.insert(
-                approval_id.clone(),
-                PendingBridgeApproval {
-                    app_id: app_model.id().to_string(),
-                    app_webview_label: webview_label.to_string(),
-                    request: request.clone(),
-                },
-            );
-        }
+        let apps_state = app.state::<AppsHostState>();
+        write_pending_approval(&apps_state, &approval_id, &app_model, &webview_label, &request).await;
 
         emit_sage_approval_requested(&app, approval_id, approval)?;
         return Ok(RustBridgeInvokeResult::Pending {});
@@ -117,8 +107,38 @@ pub async fn process(
     Ok(RustBridgeInvokeResult::Immediate { response })
 }
 
+pub(crate) async fn execute_bridge_request(
+    app_handle: &AppHandle,
+    app_state: &State<'_, AppState>,
+    app: &SageApp,
+    source_label: &str,
+    request: &RustBridgeRequest,
+) -> RustBridgeResponse {
+    let registry = BridgeRegistry::new_for_app(&app);
 
-fn authorize_method_capability(
+    let Some(method) = registry.get(&request.method) else {
+        return RustBridgeResponse::error(
+            &request.channel,
+            &request.id,
+            "method_not_found",
+            format!("Unknown bridge method: {}", request.method),
+        );
+    };
+
+    method
+        .handle(
+            BridgeContext { app, source_label },
+            BridgeTools {
+                app_handle,
+                app_state,
+                host_state: &app_handle.state::<AppsHostState>(),
+            },
+            request,
+        )
+        .await
+}
+
+fn verify_capability(
     app: &SageApp,
     request: &RustBridgeRequest,
     capability: BridgeCapability,
@@ -138,7 +158,7 @@ fn authorize_method_capability(
                     )
                 })?;
 
-            authorize_user_capability(
+            verify_user_capability(
                 app,
                 request,
                 capability,
@@ -160,7 +180,7 @@ fn authorize_method_capability(
                     )
                 })?;
 
-            authorize_system_capability(
+            verify_system_capability(
                 app,
                 request,
                 capability,
@@ -170,7 +190,7 @@ fn authorize_method_capability(
     }
 }
 
-fn authorize_user_capability(
+fn verify_user_capability(
     app: &SageApp,
     request: &RustBridgeRequest,
     capability: UserBridgeCapability,
@@ -213,7 +233,7 @@ fn authorize_user_capability(
     Ok(())
 }
 
-fn authorize_system_capability(
+fn verify_system_capability(
     app: &SageApp,
     request: &RustBridgeRequest,
     capability: SystemBridgeCapability,
@@ -243,37 +263,6 @@ fn authorize_system_capability(
     }
 
     Ok(())
-}
-
-pub(crate) async fn execute_bridge_request(
-    app_handle: &AppHandle,
-    app_state: &State<'_, AppState>,
-    app: &SageApp,
-    source_label: &str,
-    request: &RustBridgeRequest,
-) -> RustBridgeResponse {
-    let registry = BridgeRegistry::new_for_app(&app);
-
-    let Some(method) = registry.get(&request.method) else {
-        return RustBridgeResponse::error(
-            &request.channel,
-            &request.id,
-            "method_not_found",
-            format!("Unknown bridge method: {}", request.method),
-        );
-    };
-
-    method
-        .handle(
-            BridgeContext { app, source_label },
-            BridgeTools {
-                app_handle,
-                app_state,
-                host_state: &app_handle.state::<AppsHostState>(),
-            },
-            request,
-        )
-        .await
 }
 
 fn validate_request_basics(
