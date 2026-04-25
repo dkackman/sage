@@ -8,7 +8,7 @@ use crate::lifecycle::{
     read_pending_storage_cleanup_entries, read_retired_app_origins,
     write_pending_storage_cleanup_entries, write_retired_app_origins,
 };
-use crate::runtime::{inline_label_for, resolve_app, runtime_kind_for_app};
+use crate::runtime::{resolve_app};
 use crate::runtime::stop::close_runtime_internal;
 use crate::storage::{cleanup_target_from_storage, parse_data_store_id};
 use crate::types::{PendingStorageCleanupEntry, PendingStorageCleanupTarget, RetiredAppOriginEntry, UserSageApp, UserSageAppSource};
@@ -180,17 +180,10 @@ pub async fn apps_clear_runtime_browsing_data(
         .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
 
     let resolved = resolve_app(&base_path, &app_id)?;
-    let runtime_kind = runtime_kind_for_app(&resolved);
-    let webview_label = inline_label_for(resolved.id(), runtime_kind);
 
-    if let Some(host_window) = app.get_window("main") {
-        if let Some(existing) = host_window.get_webview(&webview_label) {
-            let _ = existing.close();
-        }
-    }
+    close_runtime_internal(&app, &app.state(), &app_id).await?;
 
     let target = cleanup_target_from_storage(resolved.storage());
-
     clear_app_storage_by_target(&app, &target).await
 }
 

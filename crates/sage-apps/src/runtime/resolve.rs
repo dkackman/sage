@@ -10,8 +10,6 @@ use crate::sandbox::build_builtin_test_app;
 use crate::system_apps::build_builtin_system_app;
 use crate::types::SageApp;
 
-use super::records::{inline_label_for};
-
 fn app_id_from_inline_label(label: &str) -> Option<(SageAppRuntimeKind, &str)> {
     if let Some(app_id) = label.strip_prefix("app-inline-") {
         return Some((SageAppRuntimeKind::User, app_id));
@@ -144,8 +142,4 @@ pub(crate) fn assert_bridge_origin(
     }
 
     Ok((app_id, runtime_kind))
-}
-
-pub fn webview_label_for_app(app: &SageApp) -> String {
-    inline_label_for(app.id(), runtime_kind_for_app(app))
 }

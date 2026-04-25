@@ -4,7 +4,7 @@ use specta::Type;
 use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, State, WebviewUrl};
 use tauri::webview::NewWindowResponse;
 use crate::{sandbox, AppsHostState};
-use crate::runtime::{build_entry_src, emit_runtime_manager_runtimes_changed, inline_label_for, is_allowed_app_url, resolve_app, runtime_id_for, runtime_kind_for_app, should_use_incognito};
+use crate::runtime::{build_entry_src, emit_runtime_manager_runtimes_changed, is_allowed_app_url, resolve_app, runtime_kind_for_app, should_use_incognito};
 use crate::runtime::state::types::{SageAppRuntimeKind, SageAppRuntimeRecord};
 use crate::runtime::state::write::{write_runtime, write_runtime_id_by_app_id};
 use crate::storage::parse_data_store_id;
@@ -221,6 +221,20 @@ async fn reuse_existing_inline_runtime(
     }
 
     Ok(record)
+}
+
+fn runtime_id_for(app_id: &str, runtime_kind: SageAppRuntimeKind) -> String {
+    match runtime_kind {
+        SageAppRuntimeKind::User => format!("runtime-{app_id}"),
+        SageAppRuntimeKind::System => format!("system-runtime-{app_id}"),
+    }
+}
+
+fn inline_label_for(app_id: &str, runtime_kind: SageAppRuntimeKind) -> String {
+    match runtime_kind {
+        SageAppRuntimeKind::User => format!("app-inline-{app_id}"),
+        SageAppRuntimeKind::System => format!("system-app-inline-{app_id}"),
+    }
 }
 
 fn fallback_debug_slot(app_id: &str) -> usize {
