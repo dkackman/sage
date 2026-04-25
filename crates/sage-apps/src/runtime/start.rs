@@ -4,11 +4,12 @@ use specta::Type;
 use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, State, WebviewUrl};
 use tauri::webview::NewWindowResponse;
 use crate::{sandbox, AppsHostState};
-use crate::runtime::{build_entry_src, emit_runtime_manager_runtimes_changed, is_allowed_app_url, resolve_app, runtime_kind_for_app, should_use_incognito};
+use crate::bridge::capabilities::UserBridgeCapability;
+use crate::runtime::{build_entry_src, emit_runtime_manager_runtimes_changed, is_allowed_app_url, resolve_app, runtime_kind_for_app};
 use crate::runtime::state::types::{SageAppRuntimeKind, SageAppRuntimeRecord};
 use crate::runtime::state::write::{write_runtime, write_runtime_id_by_app_id};
 use crate::storage::parse_data_store_id;
-use crate::types::InstalledSageAppStorage;
+use crate::types::{InstalledSageAppStorage, SageApp};
 use crate::utils::unix_timestamp_ms;
 
 #[derive(Debug, Deserialize, Type)]
@@ -235,6 +236,23 @@ fn inline_label_for(app_id: &str, runtime_kind: SageAppRuntimeKind) -> String {
         SageAppRuntimeKind::User => format!("app-inline-{app_id}"),
         SageAppRuntimeKind::System => format!("system-app-inline-{app_id}"),
     }
+}
+
+fn should_use_incognito(app: &SageApp) -> bool {
+    let has_persistent_storage = app
+        .granted_permissions()
+        .capabilities
+        .contains(&UserBridgeCapability::PersistentStorage);
+
+    if !has_persistent_storage {
+        return true;
+    }
+
+    if app.capability_flags().storage_may_contain_secrets {
+        return true;
+    }
+
+    false
 }
 
 fn fallback_debug_slot(app_id: &str) -> usize {

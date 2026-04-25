@@ -21,3 +21,13 @@ pub async fn write_runtime_id_by_app_id(
     runtime_by_app_id.insert(app.id().to_string(), runtime_id);
     Ok(())
 }
+
+pub async fn write_pending_stop_ready(
+    apps_state: &State<'_, AppsHostState>,
+    request_id: &String,
+    tx: tokio::sync::oneshot::Sender<()>,
+) -> Result<(), String> {
+    let mut pending = apps_state.runtime.pending_stop_ready.lock().await;
+    pending.insert(request_id.clone(), tx);
+    Ok(())
+}

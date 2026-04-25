@@ -3,7 +3,6 @@ use std::path::Path;
 
 use tauri::{AppHandle, Manager};
 use url::Url;
-use crate::bridge::capabilities::UserBridgeCapability;
 use crate::lifecycle::read_installed_app_by_id;
 use crate::runtime::state::types::SageAppRuntimeKind;
 use crate::sandbox::build_builtin_test_app;
@@ -78,23 +77,6 @@ pub fn resolve_app(base_path: &Path, app_id: &str) -> Result<SageApp, String> {
     build_builtin_test_app(app_id)
         .map_err(|err| format!("failed to resolve builtin sandbox app {app_id}: {err}"))?
         .ok_or_else(|| format!("failed to resolve app {app_id}"))
-}
-
-pub fn should_use_incognito(app: &SageApp) -> bool {
-    let has_persistent_storage = app
-        .granted_permissions()
-        .capabilities
-        .contains(&UserBridgeCapability::PersistentStorage);
-
-    if !has_persistent_storage {
-        return true;
-    }
-
-    if app.capability_flags().storage_may_contain_secrets {
-        return true;
-    }
-
-    false
 }
 
 pub(crate) fn assert_bridge_origin(

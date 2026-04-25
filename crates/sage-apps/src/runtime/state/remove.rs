@@ -24,3 +24,11 @@ pub async fn remove_before_stop_listeners_by_app_id(
     let mut listeners = apps_state.runtime.before_stop_listeners_by_app_id.lock().await;
     listeners.remove(app_id);
 }
+
+pub async fn remove_pending_stop_ready(
+    apps_state: &State<'_, AppsHostState>,
+    request_id: &String,
+) {
+    let mut pending = apps_state.runtime.pending_stop_ready.lock().await;
+    pending.remove(request_id);
+}
