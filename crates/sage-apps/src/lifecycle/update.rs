@@ -15,11 +15,11 @@ use crate::bridge::USER_BRIDGE_CHANNEL;
 use crate::host::{AppState, Result};
 use crate::lifecycle::{
     download_url_snapshot, manifest_entry_file, manifest_icon_file,
-    preview_app_url_internal,
 };
 use crate::lifecycle::registry::{
     parse_network_permission_target, read_installed_app_by_id, write_installed_app_metadata,
 };
+use crate::lifecycle::url::preview_app_url_internal;
 use crate::permissions::{clear_storage_may_contain_secrets, mark_storage_may_contain_secrets, normalize_user_granted_capabilities, resolve_capability_flags, resolve_effective_granted_capabilities, validate_user_granted_capabilities};
 use crate::permissions::validation::normalize_and_validate_granted_network_whitelist;
 use crate::types::{

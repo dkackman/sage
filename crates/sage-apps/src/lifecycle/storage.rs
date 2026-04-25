@@ -1,6 +1,8 @@
 use std::path::Path;
+#[cfg(target_os = "windows")]
+use std::path::PathBuf;
 
-use anyhow::Result as AnyResult;
+use anyhow::{anyhow, Result as AnyResult};
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 use crate::AppsHostState;
@@ -11,8 +13,55 @@ use crate::lifecycle::{
 use crate::runtime::{resolve_app};
 use crate::runtime::stop::close_runtime_internal;
 use crate::storage::{cleanup_target_from_storage, parse_data_store_id};
-use crate::types::{PendingStorageCleanupEntry, PendingStorageCleanupTarget, RetiredAppOriginEntry, UserSageApp, UserSageAppSource};
+use crate::types::{InstalledSageAppStorage, PendingStorageCleanupEntry, PendingStorageCleanupTarget, RetiredAppOriginEntry, UserSageApp, UserSageAppSource};
 use crate::utils::unix_timestamp_ms;
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+pub async fn allocate_new_storage(
+    app: &AppHandle,
+    _base_path: &Path,
+) -> AnyResult<InstalledSageAppStorage> {
+    loop {
+        let identifier = *Uuid::new_v4().as_bytes();
+        let existing_ids = app
+            .fetch_data_store_identifiers()
+            .await
+            .map_err(|err| anyhow!("failed to fetch data store identifiers: {err}"))?;
+
+        if existing_ids.iter().all(|existing| *existing != identifier) {
+            return Ok(InstalledSageAppStorage::AppleDataStore {
+                identifier_hex: hex::encode(identifier),
+            });
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub async fn allocate_new_storage(
+    _app: &AppHandle,
+    base_path: &Path,
+) -> AnyResult<InstalledSageAppStorage> {
+    let profiles_root = base_path.join("profiles");
+    fs::create_dir_all(&profiles_root)
+        .with_context(|| format!("failed to create profiles directory {}", profiles_root.display()))?;
+
+    loop {
+        let directory_name = format!("profile-{}", uuid::Uuid::new_v4());
+        let candidate = profiles_root.join(&directory_name);
+
+        if !candidate.exists() {
+            return Ok(InstalledSageAppStorage::WindowsProfile { directory_name });
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "windows")))]
+pub async fn allocate_new_storage(
+    _app: &AppHandle,
+    _base_path: &Path,
+) -> AnyResult<InstalledSageAppStorage> {
+    Ok(InstalledSageAppStorage::Unmanaged)
+}
 
 pub fn enqueue_pending_storage_cleanup(
     base_path: &Path,

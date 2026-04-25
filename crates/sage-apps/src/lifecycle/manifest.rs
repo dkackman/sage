@@ -13,6 +13,14 @@ use crate::utils::bytes_sha256_hex;
 
 const MANIFEST_FILE_NAME: &str = "sage-manifest.json";
 
+pub fn manifest_entry_file(manifest: &SageAppPackageManifest) -> &str {
+    manifest.entry.as_deref().unwrap_or("index.html")
+}
+
+pub fn manifest_icon_file(manifest: &SageAppPackageManifest) -> &str {
+    manifest.icon.as_deref().unwrap_or("icon.png")
+}
+
 pub fn derive_manifest_url(app_url: &str) -> AnyResult<String> {
     let base = reqwest::Url::parse(app_url)
         .with_context(|| format!("invalid app url: {app_url}"))?;
