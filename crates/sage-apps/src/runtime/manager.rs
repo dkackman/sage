@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, Emitter, Manager, State};
 use crate::bridge::methods::system::RuntimeManagerRuntimesChangedEvent;
-use crate::runtime::stop::{close_runtime_internal_with_reason, kill_runtime_internal};
 use crate::state::AppsHostState;
 use crate::utils::unix_timestamp_ms;
 use super::records::SageAppRuntimeRecord;
@@ -176,42 +175,4 @@ pub(crate) async fn hide_runtime_internal(
 
     write_runtime_record(apps_state, record.clone()).await?;
     Ok(record)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn apps_list_runtimes(
-    apps_state: State<'_, AppsHostState>,
-) -> Result<Vec<SageAppRuntimeRecord>, String> {
-    list_runtimes_internal(&apps_state).await
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn apps_focus_runtime(
-    app: AppHandle,
-    apps_state: State<'_, AppsHostState>,
-    params: RuntimeTargetParams,
-) -> Result<SageAppRuntimeRecord, String> {
-    focus_runtime_internal(&app, &apps_state, &params.app_id, false).await
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn apps_hide_runtime(
-    app: AppHandle,
-    apps_state: State<'_, AppsHostState>,
-    params: RuntimeTargetParams,
-) -> Result<SageAppRuntimeRecord, String> {
-    hide_runtime_internal(&app, &apps_state, &params.app_id).await
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn apps_kill_runtime(
-    app: AppHandle,
-    apps_state: State<'_, AppsHostState>,
-    params: RuntimeTargetParams,
-) -> Result<SystemKillRuntimeResult, String> {
-    kill_runtime_internal(&app, &apps_state, &params.app_id, "user_kill").await
 }

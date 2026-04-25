@@ -167,10 +167,10 @@ pub fn run() {
             apps::lifecycle::apps_clear_runtime_browsing_data,
             apps::sandbox::get_builtin_test_app,
             apps::system_apps::get_builtin_system_app,
-            apps::runtime::manager::apps_list_runtimes,
-            apps::runtime::manager::apps_focus_runtime,
-            apps::runtime::manager::apps_hide_runtime,
-            apps::runtime::manager::apps_kill_runtime,
+            apps::runtime::commands::apps_list_runtimes,
+            apps::runtime::commands::apps_focus_runtime,
+            apps::runtime::commands::apps_hide_runtime,
+            apps::runtime::commands::apps_kill_runtime,
         ])
         .events(collect_events![SyncEvent, RustBridgeApprovalEvent]);
 
