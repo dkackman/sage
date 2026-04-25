@@ -1,7 +1,6 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { InstallAppForm } from '@/components/apps/InstallAppForm';
 import { CorruptedAppCard } from '@/components/apps/CorruptedAppCard';
-import { AppsLaunchpadContextMenu } from '@/components/apps/AppsLaunchpadContextMenu';
 import { Button } from '@/components/ui/button';
 import { formatSandboxLaunchDecision } from '@/lib/apps/sandboxPolicy';
 import {
@@ -30,7 +29,7 @@ import {
 } from '@/lib/apps/sandbox';
 import { Plus } from 'lucide-react';
 import { AppsPageActionsMenu } from '@/components/apps/AppsPageActionsMenu';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PermissionsEditor } from '@/components/apps/permissions/PermissionsEditor.tsx';
 import { AppTile } from '@/components/apps/AppTile';
@@ -42,12 +41,6 @@ type UserInstalledEntry = { kind: 'user' } & UserSageApp;
 type SystemInstalledEntry = { kind: 'system' } & SystemSageApp;
 type InstalledEntry = UserInstalledEntry | SystemInstalledEntry;
 type CorruptedEntry = Extract<ListedSageApp, { kind: 'corrupted' }>;
-
-type AppContextMenuState = {
-  app: InstalledEntry;
-  x: number;
-  y: number;
-} | null;
 
 function isInstalledEntry(entry: ListedSageApp): entry is InstalledEntry {
   return entry.kind === 'user' || entry.kind === 'system';
@@ -67,28 +60,6 @@ type PendingPermissionsRetry = {
   appId: string;
   nextGrantedPermissions: SageGrantedPermissions;
 } | null;
-
-function clampContextMenuPosition(args: {
-  x: number;
-  y: number;
-  containerWidth: number;
-  containerHeight: number;
-}) {
-  const menuWidth = 260;
-  const menuHeight = 260;
-  const padding = 8;
-
-  return {
-    x: Math.max(
-      padding,
-      Math.min(args.x, args.containerWidth - menuWidth - padding),
-    ),
-    y: Math.max(
-      padding,
-      Math.min(args.y, args.containerHeight - menuHeight - padding),
-    ),
-  };
-}
 
 function formatErrorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -115,8 +86,6 @@ function isStorageTaintPermissionError(message: string): boolean {
 export function Apps() {
   const navigate = useNavigate();
   const [installOpen, setInstallOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState<AppContextMenuState>(null);
-  const pageRef = useRef<HTMLDivElement | null>(null);
   const runtimes = useAppRuntimes();
   const [updateCheckStateByAppId, setUpdateCheckStateByAppId] = useState<
     Record<string, 'idle' | 'checking' | 'up_to_date'>
@@ -190,30 +159,6 @@ export function Apps() {
 
   const corruptedApps = useMemo(() => apps.filter(isCorruptedEntry), [apps]);
 
-  const contextMenuPreview = contextMenu
-    ? updateAvailability[contextMenu.app.common.id]
-    : null;
-
-  const contextMenuBusy = contextMenu
-    ? (busyAppIds[contextMenu.app.common.id] ?? false)
-    : false;
-
-  const contextMenuCheckState = contextMenu
-    ? (updateCheckStateByAppId[contextMenu.app.common.id] ?? 'idle')
-    : 'idle';
-
-  const contextMenuAppIsRunning = contextMenu
-    ? runningAppIds.has(contextMenu.app.common.id)
-    : false;
-
-  const contextMenuClearDataBusy = contextMenu
-    ? (clearingDataByAppId[contextMenu.app.common.id] ?? false)
-    : false;
-
-  const contextMenuClearDataError = contextMenu
-    ? (clearDataErrorByAppId[contextMenu.app.common.id] ?? null)
-    : null;
-
   function openUpdateDialog(
     app: UserInstalledEntry,
     preview: SageAppUrlPreview,
@@ -269,25 +214,6 @@ export function Apps() {
     },
     [handleConfirmUpdate],
   );
-
-  const closeContextMenu = useCallback(() => {
-    setContextMenu((prevContextMenu) => {
-      if (prevContextMenu) {
-        setUpdateCheckStateByAppId((prev) => {
-          if (prev[prevContextMenu.app.common.id] !== 'up_to_date') {
-            return prev;
-          }
-
-          return {
-            ...prev,
-            [prevContextMenu.app.common.id]: 'idle',
-          };
-        });
-      }
-
-      return null;
-    });
-  }, []);
 
   async function handleCheckForUpdate(appId: string) {
     setUpdateCheckStateByAppId((prev) => ({
@@ -364,8 +290,6 @@ export function Apps() {
         await clearAppStorage(appId);
 
         if (reopen) {
-          closeContextMenu();
-
           const { restartAppRuntime } =
             await import('@/lib/apps/restartAppRuntime');
 
@@ -392,7 +316,7 @@ export function Apps() {
         );
       }
     },
-    [clearAppStorage, navigate, refresh, closeContextMenu],
+    [clearAppStorage, navigate, refresh],
   );
 
   const handleApplyPermissions = useCallback(
@@ -487,65 +411,6 @@ export function Apps() {
     refresh,
   ]);
 
-  useEffect(() => {
-    if (!contextMenu || contextMenuCheckState !== 'up_to_date') {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setUpdateCheckStateByAppId((prev) => {
-        if (prev[contextMenu.app.common.id] !== 'up_to_date') {
-          return prev;
-        }
-
-        return {
-          ...prev,
-          [contextMenu.app.common.id]: 'idle',
-        };
-      });
-    }, 3000);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [contextMenu, contextMenuCheckState]);
-
-  useEffect(() => {
-    if (!contextMenu) {
-      return;
-    }
-
-    const handleClose = () => {
-      if (clearingDataByAppId[contextMenu.app.common.id]) {
-        return;
-      }
-
-      closeContextMenu();
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (clearingDataByAppId[contextMenu.app.common.id]) {
-          return;
-        }
-
-        closeContextMenu();
-      }
-    };
-
-    window.addEventListener('click', handleClose);
-    window.addEventListener('resize', handleClose);
-    window.addEventListener('scroll', handleClose, true);
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      window.removeEventListener('click', handleClose);
-      window.removeEventListener('resize', handleClose);
-      window.removeEventListener('scroll', handleClose, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [contextMenu, clearingDataByAppId, closeContextMenu]);
-
   if (loading) {
     return (
       <div className='mx-auto w-full max-w-6xl p-4 md:p-6'>
@@ -559,10 +424,7 @@ export function Apps() {
 
   return (
     <>
-      <div
-        ref={pageRef}
-        className='relative flex h-full min-h-0 flex-col overflow-hidden'
-      >
+      <div className='relative flex h-full min-h-0 flex-col overflow-hidden'>
         <div className='mx-auto flex w-full max-w-7xl shrink-0 items-center justify-between gap-4 p-4 md:p-6'>
           <div>
             <h1 className='text-2xl font-semibold tracking-tight'>Apps</h1>
@@ -716,43 +578,37 @@ export function Apps() {
                           title: 'System app',
                           description: 'System apps are managed by Sage.',
                         }
-                      : formatSandboxLaunchDecision(
-                          getLaunchGate(app.common.id),
-                        )
+                      : formatSandboxLaunchDecision(getLaunchGate(app.common.id))
                   }
-                  onOpen={() => {
-                    navigate(`/apps/${app.common.id}`);
+                  busy={busyAppIds[app.common.id] ?? false}
+                  hasUpdate={!!updateAvailability[app.common.id]}
+                  isRunning={runningAppIds.has(app.common.id)}
+                  updateCheckState={updateCheckStateByAppId[app.common.id] ?? 'idle'}
+                  clearDataBusy={clearingDataByAppId[app.common.id] ?? false}
+                  clearDataError={clearDataErrorByAppId[app.common.id] ?? null}
+                  onOpen={() => navigate(`/apps/${app.common.id}`)}
+                  onMenuClose={() => {
+                    setUpdateCheckStateByAppId((prev) => {
+                      if (prev[app.common.id] !== 'up_to_date') return prev;
+                      return { ...prev, [app.common.id]: 'idle' };
+                    });
                   }}
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-
-                    const pageEl = pageRef.current;
-                    if (!pageEl) {
-                      return;
-                    }
-
-                    const pageRect = pageEl.getBoundingClientRect();
-
-                    const localX = event.clientX - pageRect.left;
-                    const localY = event.clientY - pageRect.top;
-
-                    const position = clampContextMenuPosition({
-                      x: localX,
-                      y: localY,
-                      containerWidth: pageRect.width,
-                      containerHeight: pageRect.height,
-                    });
-
-                    setClearDataErrorByAppId((prev) => ({
-                      ...prev,
-                      [app.common.id]: null,
-                    }));
-
-                    setContextMenu({
-                      app,
-                      x: position.x,
-                      y: position.y,
-                    });
+                  onCheckForUpdate={() => {
+                    if (!isUserInstalledEntry(app)) return;
+                    void handleCheckForUpdate(app.common.id);
+                  }}
+                  onUpdate={() => {
+                    const preview = updateAvailability[app.common.id];
+                    if (!preview || !isUserInstalledEntry(app)) return;
+                    void handleReviewOrApplyUpdate(app, preview);
+                  }}
+                  onChangePermissions={() => openPermissionsDialog(app)}
+                  onClearData={() => {
+                    void handleClearData(app, runningAppIds.has(app.common.id));
+                  }}
+                  onUninstall={() => {
+                    if (!isUserInstalledEntry(app)) return;
+                    void uninstallApp(app.common.id);
                   }}
                 />
               ))}
@@ -782,84 +638,6 @@ export function Apps() {
             </div>
           ) : null}
         </div>
-
-        <AppsLaunchpadContextMenu
-          open={!!contextMenu}
-          x={contextMenu?.x ?? 0}
-          y={contextMenu?.y ?? 0}
-          busy={contextMenuBusy}
-          hasUpdate={!!contextMenuPreview}
-          isRunning={contextMenuAppIsRunning}
-          updateCheckState={contextMenuCheckState}
-          clearDataBusy={contextMenuClearDataBusy}
-          clearDataError={contextMenuClearDataError}
-          onClose={closeContextMenu}
-          onOpen={() => {
-            if (!contextMenu) {
-              return;
-            }
-
-            setUpdateCheckStateByAppId((prev) => ({
-              ...prev,
-              [contextMenu.app.common.id]: 'idle',
-            }));
-            navigate(`/apps/${contextMenu.app.common.id}`);
-            closeContextMenu();
-          }}
-          onCheckForUpdate={() => {
-            if (!contextMenu || !isUserInstalledEntry(contextMenu.app)) {
-              return;
-            }
-
-            void handleCheckForUpdate(contextMenu.app.common.id);
-          }}
-          onUpdate={() => {
-            if (
-              !contextMenu ||
-              !contextMenuPreview ||
-              !isUserInstalledEntry(contextMenu.app)
-            ) {
-              return;
-            }
-
-            const app = contextMenu.app;
-            const preview = contextMenuPreview;
-
-            closeContextMenu();
-            void handleReviewOrApplyUpdate(app, preview);
-          }}
-          onChangePermissions={() => {
-            if (!contextMenu) {
-              return;
-            }
-
-            openPermissionsDialog(contextMenu.app);
-          }}
-          onClearData={() => {
-            if (!contextMenu) {
-              return;
-            }
-
-            const targetApp = contextMenu.app;
-            const shouldReopen = runningAppIds.has(targetApp.common.id);
-
-            void handleClearData(targetApp, shouldReopen);
-          }}
-          onUninstall={() => {
-            if (!contextMenu || !isUserInstalledEntry(contextMenu.app)) {
-              return;
-            }
-
-            setUpdateCheckStateByAppId((prev) => ({
-              ...prev,
-              [contextMenu.app.common.id]: 'idle',
-            }));
-
-            void uninstallApp(contextMenu.app.common.id).finally(() => {
-              closeContextMenu();
-            });
-          }}
-        />
       </div>
 
       <Dialog
