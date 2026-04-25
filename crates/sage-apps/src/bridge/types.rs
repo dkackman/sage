@@ -10,8 +10,8 @@ use crate::types::{SageApp, SageAppCapabilityDefinitionView, SageNetworkPermissi
 
 #[derive(Debug, Clone)]
 pub struct PendingBridgeApproval {
-    pub app: SageApp,
-    pub source_label: String,
+    pub app_id: String,
+    pub app_webview_label: String,
     pub request: RustBridgeRequest,
 }
 

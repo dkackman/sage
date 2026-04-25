@@ -69,7 +69,7 @@ pub(crate) async fn focus_runtime(
     runtime.state = "running".into();
     runtime.last_active_at = unix_timestamp_ms();
 
-    write_runtime_and_emit_changed(app, apps_state, runtime.clone()).await?;
+    write_runtime_and_emit_changed(app, apps_state, runtime.clone()).await;
     Ok(runtime)
 }
 
@@ -89,6 +89,6 @@ pub(crate) async fn hide_runtime(
     runtime.state = "hidden".into();
     runtime.last_active_at = unix_timestamp_ms();
 
-    write_runtime_and_emit_changed(app, apps_state, runtime.clone()).await?;
+    write_runtime_and_emit_changed(app, apps_state, runtime.clone()).await;
     Ok(runtime)
 }

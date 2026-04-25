@@ -1,13 +1,14 @@
 use tauri::{AppHandle, State, Webview};
 use crate::AppsHostState;
-use crate::bridge::{registry, response_channel_for_runtime_kind, ResolveBridgeApprovalArgs, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{response_channel_for_runtime_kind, ResolveBridgeApprovalArgs, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::app_comms::bridge_request::{execute_bridge_request, process};
 use crate::bridge::event_emit::emit_bridge_response_to_source;
+use crate::bridge::state::{get_pending_approval, remove_pending_approval};
 use crate::host::AppState;
 use crate::permissions::{user_capability_definition_view, user_registry};
-use crate::runtime::assert_bridge_origin;
+use crate::runtime::{assert_bridge_origin, resolve_app};
 use crate::runtime::state::types::SageAppRuntimeKind;
-use crate::types::{SageApp, SageAppCapabilityDefinitionView};
+use crate::types::{SageAppCapabilityDefinitionView};
 
 #[tauri::command]
 #[specta::specta]
@@ -22,8 +23,7 @@ pub async fn apps_invoke_bridge(
         webview,
         app_state,
         request,
-        None,
-        registry::BridgeRegistryKind::User,
+        SageAppRuntimeKind::User,
     )
         .await
 }
@@ -41,8 +41,7 @@ pub async fn apps_invoke_system_bridge(
         webview,
         app_state,
         request,
-        Some(SageAppRuntimeKind::System),
-        registry::BridgeRegistryKind::System,
+        SageAppRuntimeKind::System,
     )
         .await
 }
@@ -55,24 +54,11 @@ pub async fn apps_resolve_bridge_approval(
     apps_state: State<'_, AppsHostState>,
     args: ResolveBridgeApprovalArgs,
 ) -> Result<(), String> {
-    let pending = {
-        let mut pending = apps_state.bridge.pending_approvals.lock().await;
-        pending.remove(&args.approval_id)
-    }
-        .ok_or_else(|| format!("unknown approval id: {}", args.approval_id))?;
+    let pending = get_pending_approval(&apps_state, &args.approval_id).await?;
+    remove_pending_approval(&apps_state, &args.approval_id).await;
 
-    let runtime_kind = match assert_bridge_origin(app.clone(), pending.source_label.clone()) {
-        Ok((_, runtime_kind)) => runtime_kind,
-        Err(_) => match pending.app {
-            SageApp::System(_) => SageAppRuntimeKind::System,
-            SageApp::User(_) => SageAppRuntimeKind::User,
-        },
-    };
-
-    let registry_kind = match runtime_kind {
-        SageAppRuntimeKind::User => registry::BridgeRegistryKind::User,
-        SageAppRuntimeKind::System => registry::BridgeRegistryKind::System,
-    };
+    let (app_id, runtime_kind) = assert_bridge_origin(app.clone(), pending.app_webview_label.clone())?;
+    let app_model = resolve_app(&app, &app_id)?;
 
     let response = if !args.approved {
         RustBridgeResponse::error(
@@ -86,15 +72,14 @@ pub async fn apps_resolve_bridge_approval(
         execute_bridge_request(
             &app,
             &app_state,
-            &pending.app,
-            &pending.source_label,
+            &app_model,
+            &pending.app_webview_label,
             &pending.request,
-            registry_kind,
         )
             .await
     };
 
-    emit_bridge_response_to_source(&app, &pending.source_label, runtime_kind, &response)?;
+    emit_bridge_response_to_source(&app, &pending.app_webview_label, &response)?;
     Ok(())
 }
 

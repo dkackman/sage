@@ -95,7 +95,7 @@ async fn wait_for_before_stop_ack(
     let request_id = Uuid::new_v4().to_string();
     let (tx, rx) = oneshot::channel();
 
-    write_pending_stop_ready(apps_state, &request_id, tx).await?;
+    write_pending_stop_ready(apps_state, &request_id, tx).await;
 
     let detail = SageLifecycleBeforeStopDetail {
         request_id: request_id.clone(),

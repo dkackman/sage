@@ -9,7 +9,7 @@ use crate::sandbox::build_builtin_test_app;
 use crate::system_apps::build_builtin_system_app;
 use crate::types::SageApp;
 
-fn app_id_from_webview_label(label: &str) -> Option<(SageAppRuntimeKind, &str)> {
+pub fn app_id_from_webview_label(label: &str) -> Option<(SageAppRuntimeKind, &str)> {
     if let Some(app_id) = label.strip_prefix("app-inline-") {
         return Some((SageAppRuntimeKind::User, app_id));
     }

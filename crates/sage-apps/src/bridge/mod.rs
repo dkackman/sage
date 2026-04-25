@@ -13,7 +13,6 @@ pub use types::{
     RustBridgeErrorPayload, RustBridgeErrorResponse, RustBridgeInvokeResult,
     RustBridgeRequest, RustBridgeResponse, RustBridgeSuccessResponse,
 };
-use crate::bridge::registry::BridgeRegistryKind;
 use crate::runtime::state::types::SageAppRuntimeKind;
 
 pub const USER_BRIDGE_CHANNEL: &str = "sage-bridge";
@@ -23,12 +22,5 @@ pub(crate) fn response_channel_for_runtime_kind(runtime_kind: SageAppRuntimeKind
     match runtime_kind {
         SageAppRuntimeKind::User => USER_BRIDGE_CHANNEL,
         SageAppRuntimeKind::System => SYSTEM_BRIDGE_CHANNEL,
-    }
-}
-
-pub(crate) fn response_channel_for_registry_kind(registry_kind: BridgeRegistryKind) -> &'static str {
-    match registry_kind {
-        BridgeRegistryKind::User => USER_BRIDGE_CHANNEL,
-        BridgeRegistryKind::System => SYSTEM_BRIDGE_CHANNEL,
     }
 }

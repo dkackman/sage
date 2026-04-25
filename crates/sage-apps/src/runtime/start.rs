@@ -138,11 +138,11 @@ pub async fn create_inline_runtime(
         internal: args.internal,
     };
 
-    write_runtime_id_by_app_id(&apps_state, &resolved, runtime_id).await?;
     if !args.visible {
         let _ = get_webview_in_sage_window(&app, &webview_label)?.hide();
     }
-    write_runtime_and_emit_changed(&app, &apps_state, record.clone()).await?;
+    write_runtime_id_by_app_id(&apps_state, &resolved, runtime_id).await;
+    write_runtime_and_emit_changed(&app, &apps_state, record.clone()).await;
 
     Ok(record)
 }

@@ -2,7 +2,7 @@ use tauri::{AppHandle, Emitter, Manager, State, Webview};
 use uuid::Uuid;
 use crate::AppsHostState;
 use crate::bridge::capabilities::{BridgeCapability, SystemBridgeCapability, UserBridgeCapability};
-use crate::bridge::{registry, response_channel_for_registry_kind, RustBridgeApprovalEvent, RustBridgeApprovalRequest, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
+use crate::bridge::{response_channel_for_runtime_kind, RustBridgeApprovalEvent, RustBridgeApprovalRequest, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::methods::{BridgeContext, BridgeTools};
 use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::bridge::registry::BridgeRegistry;
@@ -19,10 +19,9 @@ pub async fn process(
     webview: Webview,
     app_state: State<'_, AppState>,
     request: RustBridgeRequest,
-    expected_runtime_kind: Option<SageAppRuntimeKind>,
-    registry_kind: registry::BridgeRegistryKind,
+    expected_runtime_kind: SageAppRuntimeKind,
 ) -> Result<RustBridgeInvokeResult, String> {
-    let expected_channel = response_channel_for_registry_kind(registry_kind);
+    let expected_channel = response_channel_for_runtime_kind(expected_runtime_kind);
 
     if let Err(response) = validate_request_basics(&request, expected_channel) {
         return Ok(RustBridgeInvokeResult::Immediate { response });
@@ -44,22 +43,19 @@ pub async fn process(
         }
     };
 
-    if let Some(expected_runtime_kind) = expected_runtime_kind {
-        if runtime_kind != expected_runtime_kind {
-            return Ok(RustBridgeInvokeResult::Immediate {
-                response: RustBridgeResponse::error(
-                    expected_channel,
-                    &request.id,
-                    "permission_denied",
-                    "This bridge is not available for this runtime kind",
-                ),
-            });
-        }
+    if runtime_kind != expected_runtime_kind {
+        return Ok(RustBridgeInvokeResult::Immediate {
+            response: RustBridgeResponse::error(
+                expected_channel,
+                &request.id,
+                "permission_denied",
+                "This bridge is not available for this runtime kind",
+            ),
+        });
     }
 
     let app_model = resolve_app(&app, &app_id)?;
-
-    let registry = BridgeRegistry::new(registry_kind);
+    let registry = BridgeRegistry::new_for_app(&app_model);
 
     let Some(method) = registry.get(&request.method) else {
         return Ok(RustBridgeInvokeResult::Immediate {
@@ -98,8 +94,8 @@ pub async fn process(
             pending.insert(
                 approval_id.clone(),
                 PendingBridgeApproval {
-                    app: app_model.clone(),
-                    source_label: webview_label.to_string(),
+                    app_id: app_model.id().to_string(),
+                    app_webview_label: webview_label.to_string(),
                     request: request.clone(),
                 },
             );
@@ -115,7 +111,6 @@ pub async fn process(
         &app_model,
         &webview_label,
         &request,
-        registry_kind,
     )
         .await;
 
@@ -256,9 +251,8 @@ pub(crate) async fn execute_bridge_request(
     app: &SageApp,
     source_label: &str,
     request: &RustBridgeRequest,
-    registry_kind: registry::BridgeRegistryKind,
 ) -> RustBridgeResponse {
-    let registry = BridgeRegistry::new(registry_kind);
+    let registry = BridgeRegistry::new_for_app(&app);
 
     let Some(method) = registry.get(&request.method) else {
         return RustBridgeResponse::error(

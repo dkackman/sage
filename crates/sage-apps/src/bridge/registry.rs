@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-
+use crate::types::SageApp;
 use super::methods::BridgeMethod;
 use super::methods::system::runtime_manager::{
     RuntimeManagerFocusRuntime, RuntimeManagerHideRuntime,
@@ -34,6 +34,13 @@ impl BridgeRegistry {
             BridgeRegistryKind::System => Self {
                 methods: build_system_methods(),
             },
+        }
+    }
+
+    pub fn new_for_app(app: &SageApp) -> Self {
+        match app {
+            SageApp::User(_) => Self::new(BridgeRegistryKind::User),
+            SageApp::System(_) => Self::new(BridgeRegistryKind::System),
         }
     }
 
