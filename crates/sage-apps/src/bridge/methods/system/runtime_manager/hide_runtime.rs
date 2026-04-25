@@ -5,7 +5,7 @@ use crate::bridge::methods::system::runtime_manager::{parse_runtime_target_param
 use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::SystemBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
-use crate::runtime::hide_runtime_internal;
+use crate::runtime::hide_runtime;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeManagerHideRuntime;
@@ -32,7 +32,7 @@ impl BridgeMethod for RuntimeManagerHideRuntime {
             Err(response) => return response,
         };
 
-        match hide_runtime_internal(
+        match hide_runtime(
             tools.app_handle,
             tools.host_state,
             &params.app_id,

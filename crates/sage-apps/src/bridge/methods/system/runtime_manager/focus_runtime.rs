@@ -5,7 +5,7 @@ use crate::bridge::methods::system::runtime_manager::{parse_runtime_target_param
 use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::{SystemBridgeCapability};
 use crate::bridge::methods::shared::BridgeMethodCapability;
-use crate::runtime::focus_runtime_internal;
+use crate::runtime::focus_runtime;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeManagerFocusRuntime;
@@ -31,7 +31,7 @@ impl BridgeMethod for RuntimeManagerFocusRuntime {
             Err(response) => return response,
         };
 
-        match focus_runtime_internal(
+        match focus_runtime(
             tools.app_handle,
             tools.host_state,
             &params.app_id,

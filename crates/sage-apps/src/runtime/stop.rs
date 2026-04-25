@@ -17,7 +17,7 @@ pub struct SystemKillRuntimeResult {
     pub app_id: String,
 }
 
-pub async fn kill_runtime_internal(
+pub async fn kill_runtime(
     app: &AppHandle,
     apps_state: &State<'_, AppsHostState>,
     app_id: &str,

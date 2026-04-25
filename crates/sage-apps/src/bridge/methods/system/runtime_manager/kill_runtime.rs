@@ -5,7 +5,7 @@ use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
 use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::SystemBridgeCapability;
 use crate::bridge::methods::shared::BridgeMethodCapability;
-use crate::runtime::stop::{kill_runtime_internal, SystemKillRuntimeResult};
+use crate::runtime::stop::{kill_runtime, SystemKillRuntimeResult};
 
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeManagerKillRuntime;
@@ -35,7 +35,7 @@ impl BridgeMethod for RuntimeManagerKillRuntime {
             Err(response) => return response,
         };
 
-        match kill_runtime_internal(
+        match kill_runtime(
             tools.app_handle,
             tools.host_state,
             &params.app_id,

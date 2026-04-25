@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, Emitter, Manager, State};
 use crate::bridge::methods::system::RuntimeManagerRuntimesChangedEvent;
-use crate::runtime::{get_runtime_record_by_app_id, list_runtimes_internal, write_runtime_record};
+use crate::runtime::{get_runtime_record_by_app_id, list_runtimes, write_runtime_record};
 use crate::state::AppsHostState;
 use crate::utils::unix_timestamp_ms;
 use super::records::SageAppRuntimeRecord;
@@ -17,7 +17,7 @@ pub(crate) async fn emit_runtime_manager_runtimes_changed(
     app: &AppHandle,
     apps_state: &State<'_, AppsHostState>,
 ) {
-    let Ok(runtimes) = list_runtimes_internal(apps_state).await else {
+    let Ok(runtimes) = list_runtimes(apps_state).await else {
         return;
     };
 
@@ -65,7 +65,7 @@ async fn emit_route_request(
         .map_err(|err| format!("failed to emit route request: {err}"))
 }
 
-pub(crate) async fn focus_runtime_internal(
+pub(crate) async fn focus_runtime(
     app: &AppHandle,
     apps_state: &State<'_, AppsHostState>,
     app_id: &str,
@@ -102,7 +102,7 @@ pub(crate) async fn focus_runtime_internal(
     Ok(record)
 }
 
-pub(crate) async fn hide_runtime_internal(
+pub(crate) async fn hide_runtime(
     app: &AppHandle,
     apps_state: &State<'_, AppsHostState>,
     app_id: &str,

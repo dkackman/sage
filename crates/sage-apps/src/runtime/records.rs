@@ -120,7 +120,7 @@ pub async fn write_runtime_record(
     Ok(())
 }
 
-pub async fn list_runtimes_internal(
+pub async fn list_runtimes(
     apps_state: &State<'_, AppsHostState>,
 ) -> Result<Vec<SageAppRuntimeRecord>, String> {
     let mut records = {
