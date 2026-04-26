@@ -26,19 +26,6 @@ pub fn sample_manifest_file(path: &str, size: u64) -> SageAppManifestFile {
     }
 }
 
-pub fn sample_manifest(name: &str) -> SageAppPackageManifest {
-    SageAppPackageManifest {
-        name: name.to_string(),
-        version: "1.0.0".to_string(),
-        permissions: empty_permissions(),
-        files: vec![sample_manifest_file("index.html", 1)],
-        entry: Some("index.html".to_string()),
-        icon: Some("icon.png".to_string()),
-        author: None,
-        donation: None,
-    }
-}
-
 pub fn sample_installed_app(base: &Path, app_id: &str, name: &str) -> UserSageApp {
     let app_dir = app_dir(base, app_id);
     fs::create_dir_all(&app_dir).unwrap();

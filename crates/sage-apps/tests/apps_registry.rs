@@ -2,7 +2,7 @@ mod common;
 
 use std::fs;
 
-use common::{sample_installed_app, sample_manifest};
+use common::{sample_installed_app};
 use sage_apps::lifecycle::registry::{
     app_dir, apps_root, list_installed_apps_internal, parse_network_permission_target,
     read_installed_app_by_id, read_installed_app_by_origin_id,
@@ -10,11 +10,9 @@ use sage_apps::lifecycle::registry::{
     write_installed_app_metadata, write_pending_storage_cleanup_entries,
     write_retired_app_origins,
 };
-use sage_apps::types::{
-    ListedSageApp, PendingStorageCleanupEntry, PendingStorageCleanupTarget,
-    RetiredAppOriginEntry, SageNetworkPermissionTarget, UserSageAppPendingUpdate,
-};
+use sage_apps::types::{ListedSageApp, PendingStorageCleanupEntry, PendingStorageCleanupTarget, RetiredAppOriginEntry, SageAppPackageManifest, SageNetworkPermissionTarget, UserSageAppPendingUpdate};
 use tempfile::tempdir;
+use crate::common::{empty_permissions, sample_manifest_file};
 
 #[test]
 fn installed_app_metadata_roundtrips() {
@@ -333,4 +331,17 @@ fn retired_app_origins_roundtrip() {
     write_retired_app_origins(base.path(), &entries).unwrap();
     let loaded = read_retired_app_origins(base.path()).unwrap();
     assert_eq!(loaded, entries);
+}
+
+fn sample_manifest(name: &str) -> SageAppPackageManifest {
+    SageAppPackageManifest {
+        name: name.to_string(),
+        version: "1.0.0".to_string(),
+        permissions: empty_permissions(),
+        files: vec![sample_manifest_file("index.html", 1)],
+        entry: Some("index.html".to_string()),
+        icon: Some("icon.png".to_string()),
+        author: None,
+        donation: None,
+    }
 }

@@ -1,16 +1,19 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result as AnyResult, anyhow};
+use anyhow::{anyhow, Context, Result as AnyResult};
 use async_trait::async_trait;
-use uuid::Uuid;
 use url::Url;
+use uuid::Uuid;
 
-use crate::lifecycle::{derive_manifest_url, download_url_snapshot, fetch_url_manifest, read_retired_app_origins, AppInstallSource};
+use super::AppInstallSource;
+use crate::lifecycle::{
+    derive_manifest_url, download_url_snapshot, fetch_url_manifest, read_retired_app_origins,
+    write_retired_app_origins,
+};
 use crate::lifecycle::registry::read_installed_app_by_id;
 use crate::permissions::normalize_and_validate_requested_permissions;
 use crate::types::{
-    SageAppPackageManifest, SageAppSnapshot, SageAppUrlPreview,
-    UserSageApp, UserSageAppSource,
+    SageAppPackageManifest, SageAppSnapshot, SageAppUrlPreview, UserSageApp, UserSageAppSource,
 };
 use crate::utils::bytes_sha256_hex;
 
@@ -84,6 +87,15 @@ impl AppInstallSource for UrlInstallSource {
             Ok(default_url_origin_id(app_id))
         }
     }
+
+    fn after_origin_selected(
+        &self,
+        base_path: &Path,
+        app_id: &str,
+        origin_id: &str,
+    ) -> AnyResult<()> {
+        clear_pending_cleanup_for_reused_url_origin(base_path, app_id, origin_id)
+    }
 }
 
 pub async fn preview_app_url_internal(app_url: String) -> AnyResult<SageAppUrlPreview> {
@@ -153,12 +165,34 @@ pub fn generate_rotated_url_origin_id(app_id: &str) -> String {
     format!("r{}-{}", &suffix[..12], app_id)
 }
 
-pub fn should_rotate_url_origin_on_install(
+pub fn should_rotate_url_origin_on_install(base_path: &Path, app_id: &str) -> AnyResult<bool> {
+    let retired = read_retired_app_origins(base_path)?;
+
+    Ok(retired
+        .iter()
+        .any(|entry| entry.app_id == app_id && entry.storage_may_contain_secrets))
+}
+
+pub fn clear_pending_cleanup_for_reused_url_origin(
     base_path: &Path,
     app_id: &str,
-) -> AnyResult<bool> {
-    let retired = read_retired_app_origins(base_path)?;
-    Ok(retired.iter().any(|entry| entry.app_id == app_id))
+    origin_id: &str,
+) -> AnyResult<()> {
+    let mut retired = read_retired_app_origins(base_path)?;
+    let mut changed = false;
+
+    for entry in &mut retired {
+        if entry.app_id == app_id && entry.origin_id == origin_id && entry.cleanup_pending {
+            entry.cleanup_pending = false;
+            changed = true;
+        }
+    }
+
+    if changed {
+        write_retired_app_origins(base_path, &retired)?;
+    }
+
+    Ok(())
 }
 
 pub fn resolve_url_install_target(
@@ -214,5 +248,387 @@ fn slugify_name(name: &str) -> String {
         "app".to_string()
     } else {
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bridge::capabilities::UserBridgeCapability;
+    use crate::lifecycle::write_retired_app_origins;
+    use crate::types::{
+        InstalledSageAppStorage, RetiredAppOriginEntry, SageAppCapabilityFlags, SageAppCommon,
+        SageAppManifestFile, SageGrantedNetworkPermissions, SageGrantedPermissions,
+        SageNetworkPermissionTarget, SageRequestedCapabilities, SageRequestedNetworkPermissions,
+        SageRequestedNetworkWhitelist, SageRequestedPermissions,
+    };
+    use tempfile::tempdir;
+
+    fn sample_manifest() -> SageAppPackageManifest {
+        SageAppPackageManifest {
+            name: "Test App".into(),
+            version: "1.0.0".into(),
+            permissions: SageRequestedPermissions {
+                network: SageRequestedNetworkPermissions {
+                    whitelist: SageRequestedNetworkWhitelist {
+                        required: vec![],
+                        optional: vec![],
+                    },
+                },
+                capabilities: SageRequestedCapabilities {
+                    required: vec![],
+                    optional: vec![],
+                },
+            },
+            files: vec![SageAppManifestFile {
+                path: "index.html".into(),
+                sha256: "a".repeat(64),
+                size: 123,
+            }],
+            entry: Some("index.html".into()),
+            icon: Some("icon.png".into()),
+            author: None,
+            donation: None,
+        }
+    }
+
+    fn sample_app(app_id: &str, origin_id: &str) -> UserSageApp {
+        let dir = tempdir().unwrap();
+        let app_dir = dir.path().join(app_id);
+        std::fs::create_dir_all(&app_dir).unwrap();
+
+        UserSageApp {
+            common: SageAppCommon {
+                id: app_id.into(),
+                origin_id: origin_id.into(),
+                name: "Test App".into(),
+                version: "1.0.0".into(),
+                app_dir: app_dir.to_string_lossy().to_string(),
+                entry_file: "index.html".into(),
+                icon_file: "icon.png".into(),
+                requested_permissions: sample_manifest().permissions.clone(),
+                granted_permissions: SageGrantedPermissions {
+                    capabilities: vec![UserBridgeCapability::PersistentStorage],
+                    network: SageGrantedNetworkPermissions {
+                        whitelist: vec![SageNetworkPermissionTarget {
+                            scheme: "https".into(),
+                            host: "api.example.com".into(),
+                        }],
+                    },
+                },
+                capability_flags: SageAppCapabilityFlags::default(),
+                storage: InstalledSageAppStorage::Unmanaged,
+                active_snapshot: SageAppSnapshot {
+                    manifest_hash: "hash".into(),
+                    snapshot_dir: app_dir.to_string_lossy().to_string(),
+                    total_bytes: 123,
+                    manifest: sample_manifest(),
+                },
+            },
+            source: UserSageAppSource::Url {
+                app_url: "https://example.com/app/".into(),
+                manifest_url: "https://example.com/app/sage-manifest.json".into(),
+            },
+            pending_update: None,
+        }
+    }
+
+    #[test]
+    fn normalize_app_url_keeps_https_and_adds_trailing_slash() {
+        let out = normalize_app_url("https://example.com/app").unwrap();
+        assert_eq!(out, "https://example.com/app/");
+    }
+
+    #[test]
+    fn normalize_app_url_strips_query_and_fragment() {
+        let out = normalize_app_url("https://example.com/app?x=1#frag").unwrap();
+        assert_eq!(out, "https://example.com/app/");
+    }
+
+    #[test]
+    fn normalize_app_url_allows_localhost_http() {
+        let out = normalize_app_url("http://localhost:4173").unwrap();
+        assert_eq!(out, "http://localhost:4173/");
+    }
+
+    #[test]
+    fn normalize_app_url_rejects_non_local_http() {
+        let err = normalize_app_url("http://example.com/app")
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("requires HTTPS"));
+    }
+
+    #[test]
+    fn generate_url_app_id_is_stable_for_same_manifest_url() {
+        let a = generate_url_app_id("https://example.com/app/sage-manifest.json");
+        let b = generate_url_app_id("https://example.com/app/sage-manifest.json");
+
+        assert_eq!(a, b);
+        assert!(a.starts_with("url-example-com-"));
+    }
+
+    #[test]
+    fn default_url_origin_id_is_same_as_app_id() {
+        assert_eq!(default_url_origin_id("url-abc123"), "url-abc123");
+    }
+
+    #[test]
+    fn rotated_url_origin_id_differs_from_app_id() {
+        let origin = generate_rotated_url_origin_id("url-abc123");
+
+        assert_ne!(origin, "url-abc123");
+        assert!(origin.ends_with("url-abc123"));
+        assert!(origin.starts_with('r'));
+    }
+
+    #[test]
+    fn should_rotate_url_origin_on_install_is_false_without_retired_entry() {
+        let dir = tempdir().unwrap();
+
+        assert!(!should_rotate_url_origin_on_install(dir.path(), "url-abc123").unwrap());
+    }
+
+    #[test]
+    fn should_not_rotate_url_origin_for_pending_cleanup_without_secrets() {
+        let dir = tempdir().unwrap();
+
+        write_retired_app_origins(
+            dir.path(),
+            &[RetiredAppOriginEntry {
+                id: "retired-1".into(),
+                app_id: "url-abc123".into(),
+                app_name: "Test App".into(),
+                origin_id: "url-abc123".into(),
+                created_at_ms: 1,
+                storage_may_contain_secrets: false,
+                cleanup_pending: true,
+            }],
+        )
+            .unwrap();
+
+        assert!(!should_rotate_url_origin_on_install(dir.path(), "url-abc123").unwrap());
+    }
+
+    #[test]
+    fn should_not_rotate_url_origin_for_clean_retired_origin() {
+        let dir = tempdir().unwrap();
+
+        write_retired_app_origins(
+            dir.path(),
+            &[RetiredAppOriginEntry {
+                id: "retired-1".into(),
+                app_id: "url-abc123".into(),
+                app_name: "Test App".into(),
+                origin_id: "url-abc123".into(),
+                created_at_ms: 1,
+                storage_may_contain_secrets: false,
+                cleanup_pending: false,
+            }],
+        )
+            .unwrap();
+
+        assert!(!should_rotate_url_origin_on_install(dir.path(), "url-abc123").unwrap());
+    }
+
+    #[test]
+    fn should_rotate_url_origin_when_retired_storage_may_contain_secrets() {
+        let dir = tempdir().unwrap();
+
+        write_retired_app_origins(
+            dir.path(),
+            &[RetiredAppOriginEntry {
+                id: "retired-1".into(),
+                app_id: "url-abc123".into(),
+                app_name: "Test App".into(),
+                origin_id: "url-abc123".into(),
+                created_at_ms: 1,
+                storage_may_contain_secrets: true,
+                cleanup_pending: false,
+            }],
+        )
+            .unwrap();
+
+        assert!(should_rotate_url_origin_on_install(dir.path(), "url-abc123").unwrap());
+    }
+
+    #[test]
+    fn should_rotate_url_origin_when_retired_storage_may_contain_secrets_even_if_cleanup_pending() {
+        let dir = tempdir().unwrap();
+
+        write_retired_app_origins(
+            dir.path(),
+            &[RetiredAppOriginEntry {
+                id: "retired-1".into(),
+                app_id: "url-abc123".into(),
+                app_name: "Test App".into(),
+                origin_id: "url-abc123".into(),
+                created_at_ms: 1,
+                storage_may_contain_secrets: true,
+                cleanup_pending: true,
+            }],
+        )
+            .unwrap();
+
+        assert!(should_rotate_url_origin_on_install(dir.path(), "url-abc123").unwrap());
+    }
+
+    #[test]
+    fn url_origin_id_reuses_existing_origin() {
+        let dir = tempdir().unwrap();
+        let existing = sample_app("url-abc123", "existing-origin");
+
+        let source = UrlInstallSource {
+            app_url: "https://example.com/app/".into(),
+        };
+
+        let origin = source
+            .origin_id(dir.path(), "url-abc123", Some(&existing))
+            .unwrap();
+
+        assert_eq!(origin, "existing-origin");
+    }
+
+    #[test]
+    fn url_origin_id_defaults_to_app_id_without_retired_origin() {
+        let dir = tempdir().unwrap();
+
+        let source = UrlInstallSource {
+            app_url: "https://example.com/app/".into(),
+        };
+
+        let origin = source.origin_id(dir.path(), "url-abc123", None).unwrap();
+
+        assert_eq!(origin, "url-abc123");
+    }
+
+    #[test]
+    fn url_origin_id_reuses_default_origin_for_pending_cleanup_without_secrets() {
+        let dir = tempdir().unwrap();
+
+        write_retired_app_origins(
+            dir.path(),
+            &[RetiredAppOriginEntry {
+                id: "retired-1".into(),
+                app_id: "url-abc123".into(),
+                app_name: "Test App".into(),
+                origin_id: "url-abc123".into(),
+                created_at_ms: 1,
+                storage_may_contain_secrets: false,
+                cleanup_pending: true,
+            }],
+        )
+            .unwrap();
+
+        let source = UrlInstallSource {
+            app_url: "https://example.com/app/".into(),
+        };
+
+        let origin = source.origin_id(dir.path(), "url-abc123", None).unwrap();
+
+        assert_eq!(origin, "url-abc123");
+    }
+
+    #[test]
+    fn url_origin_id_rotates_with_retired_secret_storage() {
+        let dir = tempdir().unwrap();
+
+        write_retired_app_origins(
+            dir.path(),
+            &[RetiredAppOriginEntry {
+                id: "retired-1".into(),
+                app_id: "url-abc123".into(),
+                app_name: "Test App".into(),
+                origin_id: "url-abc123".into(),
+                created_at_ms: 1,
+                storage_may_contain_secrets: true,
+                cleanup_pending: true,
+            }],
+        )
+            .unwrap();
+
+        let source = UrlInstallSource {
+            app_url: "https://example.com/app/".into(),
+        };
+
+        let origin = source.origin_id(dir.path(), "url-abc123", None).unwrap();
+
+        assert_ne!(origin, "url-abc123");
+        assert!(origin.ends_with("url-abc123"));
+        assert!(origin.starts_with('r'));
+    }
+
+    #[test]
+    fn reused_url_origin_clears_pending_cleanup_after_origin_selected() {
+        let dir = tempdir().unwrap();
+
+        write_retired_app_origins(
+            dir.path(),
+            &[RetiredAppOriginEntry {
+                id: "retired-1".into(),
+                app_id: "url-abc123".into(),
+                app_name: "Test App".into(),
+                origin_id: "url-abc123".into(),
+                created_at_ms: 1,
+                storage_may_contain_secrets: false,
+                cleanup_pending: true,
+            }],
+        )
+            .unwrap();
+
+        let before = read_retired_app_origins(dir.path()).unwrap();
+        assert!(before[0].cleanup_pending);
+
+        let source = UrlInstallSource {
+            app_url: "https://example.com/app/".into(),
+        };
+
+        let origin = source.origin_id(dir.path(), "url-abc123", None).unwrap();
+        assert_eq!(origin, "url-abc123");
+
+        source
+            .after_origin_selected(dir.path(), "url-abc123", &origin)
+            .unwrap();
+
+        let after = read_retired_app_origins(dir.path()).unwrap();
+        assert_eq!(after.len(), 1);
+        assert!(!after[0].cleanup_pending);
+        assert!(!after[0].storage_may_contain_secrets);
+    }
+
+    #[test]
+    fn rotated_url_origin_does_not_clear_pending_cleanup_for_old_origin() {
+        let dir = tempdir().unwrap();
+
+        write_retired_app_origins(
+            dir.path(),
+            &[RetiredAppOriginEntry {
+                id: "retired-1".into(),
+                app_id: "url-abc123".into(),
+                app_name: "Test App".into(),
+                origin_id: "url-abc123".into(),
+                created_at_ms: 1,
+                storage_may_contain_secrets: true,
+                cleanup_pending: true,
+            }],
+        )
+            .unwrap();
+
+        let source = UrlInstallSource {
+            app_url: "https://example.com/app/".into(),
+        };
+
+        let rotated = source.origin_id(dir.path(), "url-abc123", None).unwrap();
+        assert_ne!(rotated, "url-abc123");
+
+        source
+            .after_origin_selected(dir.path(), "url-abc123", &rotated)
+            .unwrap();
+
+        let retired = read_retired_app_origins(dir.path()).unwrap();
+        assert_eq!(retired.len(), 1);
+        assert!(retired[0].cleanup_pending);
+        assert!(retired[0].storage_may_contain_secrets);
     }
 }

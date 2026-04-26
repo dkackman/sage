@@ -167,7 +167,7 @@ pub struct UserSageAppPendingUpdate {
     pub manifest: SageAppPackageManifest,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum UserSageAppSource {
     Zip,
