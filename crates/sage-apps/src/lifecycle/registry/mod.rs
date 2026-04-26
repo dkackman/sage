@@ -1,12 +1,13 @@
+pub mod types;
+
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
 use anyhow::{Context, Result as AnyResult};
-use serde::{Deserialize, Serialize};
-
-use crate::types::{CorruptedInstalledSageApp, ListedSageApp, PendingStorageCleanupEntry, RetiredAppOriginEntry, SageAppAuthor, SageAppCommon, SageAppDonation, SageAppManifestFile, SageAppPackageManifest, SageAppSnapshot, SageAppCapabilityFlags, SageGrantedPermissions, SageNetworkPermissionTarget, SageRequestedCapabilities, SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist, SageRequestedPermissions, UserSageApp, UserSageAppPendingUpdate, UserSageAppSource, InstalledSageAppStorage, SageApp};
+use crate::lifecycle::types::PersistedUserSageApp;
+use crate::types::{CorruptedInstalledSageApp, ListedSageApp, PendingStorageCleanupEntry, RetiredAppOriginEntry, SageNetworkPermissionTarget, UserSageApp, SageApp};
 use crate::system_apps::list_builtin_system_apps;
 
 const INSTALLED_METADATA_FILE: &str = ".sage-installed.json";
@@ -31,79 +32,6 @@ pub fn pending_storage_cleanup_path(base_path: &Path) -> PathBuf {
 
 pub fn retired_app_origins_path(base_path: &Path) -> PathBuf {
     apps_root(base_path).join(RETIRED_APP_ORIGINS_FILE)
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PersistedStringListBucket {
-    required: Vec<String>,
-    optional: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PersistedRequestedNetworkPermissions {
-    whitelist: PersistedStringListBucket,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PersistedRequestedPermissions {
-    network: PersistedRequestedNetworkPermissions,
-    capabilities: SageRequestedCapabilities,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PersistedSageAppPackageManifest {
-    name: String,
-    version: String,
-    permissions: PersistedRequestedPermissions,
-    files: Vec<SageAppManifestFile>,
-    entry: Option<String>,
-    icon: Option<String>,
-    author: Option<SageAppAuthor>,
-    donation: Option<SageAppDonation>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PersistedSageAppSnapshot {
-    manifest_hash: String,
-    snapshot_dir: String,
-    total_bytes: u64,
-    manifest: PersistedSageAppPackageManifest,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PersistedUserSageAppPendingUpdate {
-    app_url: String,
-    manifest_url: String,
-    manifest_hash: String,
-    manifest: PersistedSageAppPackageManifest,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-enum PersistedUserSageAppSource {
-    Zip,
-    Url {
-        app_url: String,
-        manifest_url: String,
-    },
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PersistedUserSageApp {
-    id: String,
-    origin_id: String,
-    name: String,
-    version: String,
-    app_dir: String,
-    entry_file: String,
-    icon_file: String,
-    requested_permissions: PersistedRequestedPermissions,
-    granted_permissions: SageGrantedPermissions,
-    capability_flags: SageAppCapabilityFlags,
-    storage: InstalledSageAppStorage,
-    active_snapshot: PersistedSageAppSnapshot,
-    source: PersistedUserSageAppSource,
-    pending_update: Option<PersistedUserSageAppPendingUpdate>,
 }
 
 fn format_network_target(value: &SageNetworkPermissionTarget) -> String {
@@ -141,215 +69,13 @@ pub fn parse_network_permission_target(
     })
 }
 
-fn to_persisted_requested_permissions(
-    value: &SageRequestedPermissions,
-) -> PersistedRequestedPermissions {
-    PersistedRequestedPermissions {
-        network: PersistedRequestedNetworkPermissions {
-            whitelist: PersistedStringListBucket {
-                required: value
-                    .network
-                    .whitelist
-                    .required
-                    .iter()
-                    .map(format_network_target)
-                    .collect(),
-                optional: value
-                    .network
-                    .whitelist
-                    .optional
-                    .iter()
-                    .map(format_network_target)
-                    .collect(),
-            },
-        },
-        capabilities: value.capabilities.clone(),
-    }
-}
-
-fn from_persisted_requested_permissions(
-    value: PersistedRequestedPermissions,
-) -> AnyResult<SageRequestedPermissions> {
-    let required = value
-        .network
-        .whitelist
-        .required
-        .into_iter()
-        .map(|entry| parse_network_permission_target(&entry))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| anyhow::anyhow!("failed to parse persisted required network entry: {err}"))?;
-
-    let optional = value
-        .network
-        .whitelist
-        .optional
-        .into_iter()
-        .map(|entry| parse_network_permission_target(&entry))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| anyhow::anyhow!("failed to parse persisted optional network entry: {err}"))?;
-
-    Ok(SageRequestedPermissions {
-        network: SageRequestedNetworkPermissions {
-            whitelist: SageRequestedNetworkWhitelist { required, optional },
-        },
-        capabilities: value.capabilities,
-    })
-}
-
-fn to_persisted_manifest(
-    value: &SageAppPackageManifest,
-) -> PersistedSageAppPackageManifest {
-    PersistedSageAppPackageManifest {
-        name: value.name.clone(),
-        version: value.version.clone(),
-        permissions: to_persisted_requested_permissions(&value.permissions),
-        files: value.files.clone(),
-        entry: value.entry.clone(),
-        icon: value.icon.clone(),
-        author: value.author.clone(),
-        donation: value.donation.clone(),
-    }
-}
-
-fn from_persisted_manifest(
-    value: PersistedSageAppPackageManifest,
-) -> AnyResult<SageAppPackageManifest> {
-    Ok(SageAppPackageManifest {
-        name: value.name,
-        version: value.version,
-        permissions: from_persisted_requested_permissions(value.permissions)?,
-        files: value.files,
-        entry: value.entry,
-        icon: value.icon,
-        author: value.author,
-        donation: value.donation,
-    })
-}
-
-fn to_persisted_snapshot(value: &SageAppSnapshot) -> PersistedSageAppSnapshot {
-    PersistedSageAppSnapshot {
-        manifest_hash: value.manifest_hash.clone(),
-        snapshot_dir: value.snapshot_dir.clone(),
-        total_bytes: value.total_bytes,
-        manifest: to_persisted_manifest(&value.manifest),
-    }
-}
-
-fn from_persisted_snapshot(
-    value: PersistedSageAppSnapshot,
-) -> AnyResult<SageAppSnapshot> {
-    Ok(SageAppSnapshot {
-        manifest_hash: value.manifest_hash,
-        snapshot_dir: value.snapshot_dir,
-        total_bytes: value.total_bytes,
-        manifest: from_persisted_manifest(value.manifest)?,
-    })
-}
-
-fn to_persisted_pending_update(
-    value: &UserSageAppPendingUpdate,
-) -> PersistedUserSageAppPendingUpdate {
-    PersistedUserSageAppPendingUpdate {
-        app_url: value.app_url.clone(),
-        manifest_url: value.manifest_url.clone(),
-        manifest_hash: value.manifest_hash.clone(),
-        manifest: to_persisted_manifest(&value.manifest),
-    }
-}
-
-fn from_persisted_pending_update(
-    value: PersistedUserSageAppPendingUpdate,
-) -> AnyResult<UserSageAppPendingUpdate> {
-    Ok(UserSageAppPendingUpdate {
-        app_url: value.app_url,
-        manifest_url: value.manifest_url,
-        manifest_hash: value.manifest_hash,
-        manifest: from_persisted_manifest(value.manifest)?,
-    })
-}
-
-fn to_persisted_source(value: &UserSageAppSource) -> PersistedUserSageAppSource {
-    match value {
-        UserSageAppSource::Zip => PersistedUserSageAppSource::Zip,
-        UserSageAppSource::Url {
-            app_url,
-            manifest_url,
-        } => PersistedUserSageAppSource::Url {
-            app_url: app_url.clone(),
-            manifest_url: manifest_url.clone(),
-        },
-    }
-}
-
-fn from_persisted_source(value: PersistedUserSageAppSource) -> UserSageAppSource {
-    match value {
-        PersistedUserSageAppSource::Zip => UserSageAppSource::Zip,
-        PersistedUserSageAppSource::Url {
-            app_url,
-            manifest_url,
-        } => UserSageAppSource::Url {
-            app_url,
-            manifest_url,
-        },
-    }
-}
-
-fn to_persisted_user_app(app: &UserSageApp) -> PersistedUserSageApp {
-    PersistedUserSageApp {
-        id: app.common.id.clone(),
-        origin_id: app.common.origin_id.clone(),
-        name: app.common.name.clone(),
-        version: app.common.version.clone(),
-        app_dir: app.common.app_dir.clone(),
-        entry_file: app.common.entry_file.clone(),
-        icon_file: app.common.icon_file.clone(),
-        requested_permissions: to_persisted_requested_permissions(
-            &app.common.requested_permissions,
-        ),
-        granted_permissions: app.common.granted_permissions.clone(),
-        capability_flags: app.common.capability_flags,
-        storage: app.common.storage.clone(),
-        active_snapshot: to_persisted_snapshot(&app.common.active_snapshot),
-        source: to_persisted_source(&app.source),
-        pending_update: app.pending_update.as_ref().map(to_persisted_pending_update),
-    }
-}
-
-fn from_persisted_user_app(
-    app: PersistedUserSageApp,
-) -> AnyResult<UserSageApp> {
-    Ok(UserSageApp {
-        common: SageAppCommon {
-            id: app.id,
-            origin_id: app.origin_id,
-            name: app.name,
-            version: app.version,
-            app_dir: app.app_dir,
-            entry_file: app.entry_file,
-            icon_file: app.icon_file,
-            requested_permissions: from_persisted_requested_permissions(
-                app.requested_permissions,
-            )?,
-            granted_permissions: app.granted_permissions,
-            capability_flags: app.capability_flags,
-            storage: app.storage,
-            active_snapshot: from_persisted_snapshot(app.active_snapshot)?,
-        },
-        source: from_persisted_source(app.source),
-        pending_update: app
-            .pending_update
-            .map(from_persisted_pending_update)
-            .transpose()?,
-    })
-}
-
-pub fn read_installed_app_from_dir(dir: &Path) -> AnyResult<UserSageApp> {
+pub fn read_installed_user_app_from_dir(dir: &Path) -> AnyResult<UserSageApp> {
     let path = installed_metadata_path(dir);
     let text =
         fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
     let persisted: PersistedUserSageApp =
         serde_json::from_str(&text).context("failed to parse installed app metadata")?;
-    from_persisted_user_app(persisted)
+    persisted.try_into()
 }
 
 pub fn write_installed_app_metadata(
@@ -357,7 +83,7 @@ pub fn write_installed_app_metadata(
     app_dir: &Path,
 ) -> AnyResult<()> {
     let path = installed_metadata_path(app_dir);
-    let persisted = to_persisted_user_app(app);
+    let persisted: PersistedUserSageApp = app.into();
     let text = serde_json::to_string_pretty(&persisted)
         .map_err(|err| anyhow::anyhow!("failed to serialize installed app metadata: {err}"))?;
     fs::write(path, format!("{text}\n"))?;
@@ -369,7 +95,7 @@ pub fn read_installed_app_by_id(
     app_id: &str,
 ) -> AnyResult<UserSageApp> {
     let dir = app_dir(base_path, app_id);
-    read_installed_app_from_dir(&dir)
+    read_installed_user_app_from_dir(&dir)
 }
 
 pub fn list_installed_apps_internal(root: &Path) -> AnyResult<Vec<ListedSageApp>> {
@@ -409,7 +135,7 @@ pub fn list_installed_apps_internal(root: &Path) -> AnyResult<Vec<ListedSageApp>
             continue;
         }
 
-        match read_installed_app_from_dir(&path) {
+        match read_installed_user_app_from_dir(&path) {
             Ok(app) => apps.push(ListedSageApp::User(app)),
             Err(err) => apps.push(ListedSageApp::Corrupted(CorruptedInstalledSageApp {
                 id,
@@ -513,7 +239,7 @@ pub fn write_retired_app_origins(
     Ok(())
 }
 
-pub fn read_installed_app_by_origin_id(
+pub fn read_installed_user_app_by_origin_id(
     base_path: &Path,
     origin_id: &str,
 ) -> AnyResult<UserSageApp> {
@@ -618,14 +344,14 @@ mod tests {
         write_installed_app_metadata(&app_a, Path::new(&app_a.common.app_dir)).unwrap();
         write_installed_app_metadata(&app_b, Path::new(&app_b.common.app_dir)).unwrap();
 
-        let found = read_installed_app_by_origin_id(dir.path(), "origin-b").unwrap();
+        let found = read_installed_user_app_by_origin_id(dir.path(), "origin-b").unwrap();
         assert_eq!(found.common.id, "app-b");
     }
 
     #[test]
     fn read_installed_app_by_origin_id_errors_when_missing() {
         let dir = tempdir().unwrap();
-        let err = read_installed_app_by_origin_id(dir.path(), "missing").unwrap_err();
+        let err = read_installed_user_app_by_origin_id(dir.path(), "missing").unwrap_err();
         assert!(err.to_string().contains("no installed app found for origin id"));
     }
 }

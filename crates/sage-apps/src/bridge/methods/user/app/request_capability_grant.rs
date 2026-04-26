@@ -13,8 +13,8 @@ use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::bridge::methods::user::app::{encode_request_success, resolve_app_base_path};
 use crate::bridge::methods::user::app::events::EventForApp;
 use crate::bridge::types::RustBridgeApprovalBody;
+use crate::lifecycle::update::permissions::grant_requested_capability_internal;
 use crate::lifecycle::update::types::GrantCapabilityOutcome;
-use crate::lifecycle::update::utils::grant_requested_capability_internal;
 use crate::permissions::{get_user_capability_definition, user_capability_definition_view};
 
 #[derive(Debug, Clone, Copy)]

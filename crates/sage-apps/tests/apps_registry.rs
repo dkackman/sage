@@ -5,7 +5,7 @@ use std::fs;
 use common::{sample_installed_app};
 use sage_apps::lifecycle::registry::{
     app_dir, apps_root, list_installed_apps_internal, parse_network_permission_target,
-    read_installed_app_by_id, read_installed_app_by_origin_id,
+    read_installed_app_by_id, read_installed_user_app_by_origin_id,
     read_pending_storage_cleanup_entries, read_retired_app_origins,
     write_installed_app_metadata, write_pending_storage_cleanup_entries,
     write_retired_app_origins,
@@ -281,14 +281,14 @@ fn read_installed_app_by_origin_id_finds_matching_app() {
     beta.common.app_dir = beta_dir.to_string_lossy().to_string();
     write_installed_app_metadata(&beta, &beta_dir).unwrap();
 
-    let found = read_installed_app_by_origin_id(base.path(), "origin-b").unwrap();
+    let found = read_installed_user_app_by_origin_id(base.path(), "origin-b").unwrap();
     assert_eq!(found.common.id, "b");
 }
 
 #[test]
 fn read_installed_app_by_origin_id_errors_when_missing() {
     let base = tempdir().unwrap();
-    let err = read_installed_app_by_origin_id(base.path(), "missing").unwrap_err();
+    let err = read_installed_user_app_by_origin_id(base.path(), "missing").unwrap_err();
     assert!(err
         .to_string()
         .contains("no installed app found for origin id"));

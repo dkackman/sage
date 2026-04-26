@@ -8,7 +8,7 @@ use crate::bridge::USER_BRIDGE_CHANNEL;
 use crate::host::AppState;
 use crate::lifecycle::{download_url_snapshot, manifest_entry_file, manifest_icon_file, read_installed_app_by_id, write_installed_app_metadata};
 use crate::lifecycle::install::url::preview_app_url_internal;
-use crate::lifecycle::update::utils::update_app_permissions_with_change_internal;
+use crate::lifecycle::update::permissions::update_app_permissions_with_change_internal;
 use crate::permissions::{normalize_and_validate_granted_network_whitelist, normalize_user_granted_capabilities, resolve_capability_flags, resolve_effective_granted_capabilities, validate_user_granted_capabilities};
 use crate::types::{SageAppUrlPreview, SageGrantedNetworkPermissions, SageGrantedPermissions, UserSageApp, UserSageAppPendingUpdate, UserSageAppSource};
 

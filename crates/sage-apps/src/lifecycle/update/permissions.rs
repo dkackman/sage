@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use crate::bridge::capabilities::UserBridgeCapability;
@@ -21,7 +20,7 @@ fn requested_capability_set(app: &UserSageApp) -> BTreeSet<UserBridgeCapability>
     out
 }
 
-fn requested_network_set(app: &UserSageApp) -> Result<BTreeSet<(String, String)>> {
+fn requested_network_set(app: &UserSageApp) -> anyhow::Result<BTreeSet<(String, String)>> {
     let mut out = BTreeSet::new();
 
     for entry in &app.common.requested_permissions.network.whitelist.required {
@@ -86,7 +85,7 @@ pub fn update_app_permissions_internal(
     app_id: &str,
     granted_permissions: SageGrantedPermissions,
     clear_storage_taint: bool,
-) -> Result<UserSageApp> {
+) -> anyhow::Result<UserSageApp> {
     let mut app = read_installed_app_by_id(base_path, app_id)?;
 
     validate_user_granted_capabilities(
@@ -145,7 +144,7 @@ pub fn grant_requested_capability_internal(
     base_path: &Path,
     app_id: &str,
     capability: UserBridgeCapability,
-) -> Result<GrantCapabilityOutcome> {
+) -> anyhow::Result<GrantCapabilityOutcome> {
     let app = read_installed_app_by_id(base_path, app_id)?;
 
     let requested = requested_capability_set(&app);
@@ -200,7 +199,7 @@ pub fn grant_requested_network_whitelist_entry_internal(
     base_path: &Path,
     app_id: &str,
     entry: &SageNetworkPermissionTarget,
-) -> Result<GrantNetworkWhitelistOutcome> {
+) -> anyhow::Result<GrantNetworkWhitelistOutcome> {
     let app = read_installed_app_by_id(base_path, app_id)?;
 
     let normalized = parse_network_permission_target(&format!(
@@ -270,7 +269,7 @@ pub fn update_app_permissions_with_change_internal(
     app_id: &str,
     granted_permissions: SageGrantedPermissions,
     clear_storage_taint: bool,
-) -> Result<(
+) -> anyhow::Result<(
     UserSageApp,
     GrantedCapabilitiesChange,
     GrantedNetworkWhitelistChange,

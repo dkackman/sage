@@ -15,8 +15,8 @@ use sage_apps::types::{
 };
 use tempfile::tempdir;
 use sage_apps::bridge::capabilities::UserBridgeCapability;
+use sage_apps::lifecycle::update::permissions::{grant_requested_capability_internal, grant_requested_network_whitelist_entry_internal, update_app_permissions_internal};
 use sage_apps::lifecycle::update::types::{GrantCapabilityOutcome, GrantNetworkWhitelistOutcome};
-use sage_apps::lifecycle::update::utils::{grant_requested_capability_internal, grant_requested_network_whitelist_entry_internal, update_app_permissions_internal};
 
 fn sample_app(base: &Path, app_id: &str) -> UserSageApp {
     let mut app = sample_installed_app(base, app_id, "Test App");
