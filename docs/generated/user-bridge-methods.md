@@ -112,6 +112,14 @@
 |---|---|
 | Capability | `wallet.get_keys` |
 
+## `wallet.getNetwork`
+
+
+
+| Field | Value |
+|---|---|
+| Capability | `wallet.get_network` |
+
 ## `wallet.getPendingTransactions`
 
 

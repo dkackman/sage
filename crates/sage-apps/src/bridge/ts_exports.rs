@@ -1,6 +1,6 @@
 use specta::TypeCollection;
 use specta_typescript::{BigIntExportBehavior, Typescript};
-use sage_api::{CheckAddress, CheckAddressResponse, GetCoins, GetCoinsByIds, GetCoinsByIdsResponse, GetCoinsResponse, GetDerivations, GetDerivationsResponse, GetKey, GetKeyResponse, GetKeys, GetKeysResponse, GetPendingTransactions, GetPendingTransactionsResponse, GetSecretKey, GetSecretKeyResponse, GetSpendableCoinCount, GetSpendableCoinCountResponse, GetSyncStatus, GetSyncStatusResponse, GetTransaction, GetTransactionResponse, GetTransactions, GetTransactionsResponse, GetVersion, GetVersionResponse, TransactionResponse};
+use sage_api::{CheckAddress, CheckAddressResponse, GetCoins, GetCoinsByIds, GetCoinsByIdsResponse, GetCoinsResponse, GetDerivations, GetDerivationsResponse, GetKey, GetKeyResponse, GetKeys, GetKeysResponse, GetNetwork, GetNetworkResponse, GetPendingTransactions, GetPendingTransactionsResponse, GetSecretKey, GetSecretKeyResponse, GetSpendableCoinCount, GetSpendableCoinCountResponse, GetSyncStatus, GetSyncStatusResponse, GetTransaction, GetTransactionResponse, GetTransactions, GetTransactionsResponse, GetVersion, GetVersionResponse, TransactionResponse};
 use crate::bridge::methods::system::runtime_manager::RuntimeTargetParams;
 use crate::bridge::methods::system::RuntimeManagerRuntimesChangedEvent;
 use crate::bridge::methods::user::app::get_info::{AppGetInfoResult, SageNetworkPermissionInfo};
@@ -45,6 +45,8 @@ pub fn export_user_bridge_typescript() -> Result<String, String> {
     types.register::<SetBeforeStopListenerParams>();
     types.register::<ReadyToStopParams>();
     types.register::<RuntimeAckResult>();
+    types.register::<GetNetwork>();
+    types.register::<GetNetworkResponse>();
     types.register::<GetKeys>();
     types.register::<GetKeysResponse>();
     types.register::<GetKey>();

@@ -67,6 +67,8 @@ export type SageWalletClient = {
     input: Generated.GetTransactions,
   ): Promise<Generated.GetTransactionsResponse>;
 
+  getNetwork(): Promise<Generated.GetNetworkResponse>;
+
   sendXch(
     input: Generated.WalletSendXchParams,
   ): Promise<Generated.TransactionResponse>;

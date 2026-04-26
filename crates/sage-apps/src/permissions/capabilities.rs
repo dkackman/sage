@@ -200,6 +200,13 @@ pub fn get_user_capability_definition(
             flags: read_wallet_flags(),
         },
 
+        UserBridgeCapability::WalletGetNetwork => UserCapabilityDefinition {
+            capability,
+            label: "Read network",
+            description: "Allows the app to detect whether Sage is connected to mainnet or testnet.",
+            flags: read_wallet_flags(),
+        },
+
         UserBridgeCapability::WalletGetVersion => UserCapabilityDefinition {
             capability,
             label: "Read wallet version",

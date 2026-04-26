@@ -63,6 +63,7 @@ define_bridge_capabilities! {
         BridgeSend => "bridge.send",
         AppGetCapabilities => "app.get_capabilities",
         AppGetInfo => "app.get_info",
+        WalletGetNetwork => "wallet.get_network",
         AppLifecycleReadyToStop => "app.lifecycle.ready_to_stop",
         AppLifecycleSetBeforeStopListener => "app.lifecycle.set_before_stop_listener",
         AppRequestCapabilityGrant => "app.request_capability_grant",

@@ -56,6 +56,20 @@ Allows the app to read its Sage app identity and permission information.
 | Externally observable | `false` |
 | Accesses sensitive secret | `false` |
 
+## `wallet.get_network`
+
+**Read network**
+
+Allows the app to detect whether Sage is connected to mainnet or testnet.
+
+| Flag | Value |
+|---|---|
+| Requestable by app | `true` |
+| User grantable | `true` |
+| Shared with app | `true` |
+| Externally observable | `false` |
+| Accesses sensitive secret | `false` |
+
 ## `app.lifecycle.ready_to_stop`
 
 **Acknowledge app shutdown**

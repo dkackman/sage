@@ -437,6 +437,10 @@ export function initSageRuntimeBridge(): boolean {
         );
       },
 
+      async getNetwork() {
+        return await callHost<Generated.GetNetworkResponse>('wallet.getNetwork');
+      },
+
       async sendXch(input: Generated.WalletSendXchParams) {
         return await callHost<Generated.TransactionResponse>(
           'wallet.sendXch',

@@ -8,7 +8,7 @@ use crate::bridge::{
     failure, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
 };
 
-use sage_api::{CheckAddress, GetCoins, GetCoinsByIds, GetDerivations, GetKey, GetKeys, GetPendingTransactions, GetSpendableCoinCount, GetSyncStatus, GetTransaction, GetTransactions, GetVersion};
+use sage_api::{CheckAddress, GetCoins, GetCoinsByIds, GetDerivations, GetKey, GetKeys, GetNetwork, GetPendingTransactions, GetSpendableCoinCount, GetSyncStatus, GetTransaction, GetTransactions, GetVersion};
 
 macro_rules! define_wallet_read_no_params_async_method {
     ($struct_name:ident, $capability:ident, $method_name:expr, $request_ident:ident, $result_label:expr, $handler:ident) => {
@@ -148,6 +148,15 @@ define_wallet_read_no_params_sync_method!(
     GetKeys,
     "wallet.getKeys result",
     get_keys
+);
+
+define_wallet_read_no_params_sync_method!(
+    WalletGetNetwork,
+    WalletGetNetwork,
+    "wallet.getNetwork",
+    GetNetwork,
+    "wallet.getNetwork result",
+    get_network
 );
 
 define_wallet_read_params_sync_method!(

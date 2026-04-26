@@ -121,7 +121,7 @@ impl Sage {
         Ok(self.network_list.clone())
     }
 
-    pub fn get_network(&mut self, _req: GetNetwork) -> Result<GetNetworkResponse> {
+    pub fn get_network(&self, _req: GetNetwork) -> Result<GetNetworkResponse> {
         let network = self.network();
 
         Ok(GetNetworkResponse {

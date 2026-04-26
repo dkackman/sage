@@ -23,6 +23,7 @@ pub use wallet::{
 
     WalletGetKey,
     WalletGetKeys,
+    WalletGetNetwork,
     WalletGetSyncStatus,
     WalletGetVersion,
     WalletGetPendingTransactions,

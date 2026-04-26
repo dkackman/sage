@@ -10,7 +10,7 @@ use super::methods::user::{
     AppLifecycleSetBeforeStopListener, AppRequestCapabilityGrant,
     AppRequestNetworkWhitelistGrant, BridgePing, BridgeSend, WalletCheckAddress,
     WalletGetCoins, WalletGetCoinsByIds, WalletGetDerivations, WalletGetKey,
-    WalletGetKeys, WalletGetPendingTransactions, WalletGetSecretKey,
+    WalletGetKeys, WalletGetNetwork, WalletGetPendingTransactions, WalletGetSecretKey,
     WalletGetSpendableCoinCount, WalletGetSyncStatus, WalletGetTransaction,
     WalletGetTransactions, WalletGetVersion, WalletSendXch,
 };
@@ -72,6 +72,7 @@ fn build_user_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
     // Wallet keys / secrets
     methods.insert("wallet.getKeys", Box::new(WalletGetKeys));
     methods.insert("wallet.getKey", Box::new(WalletGetKey));
+    methods.insert("wallet.getNetwork", Box::new(WalletGetNetwork));
     methods.insert("wallet.getSecretKey", Box::new(WalletGetSecretKey));
 
     // Wallet XCH
