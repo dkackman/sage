@@ -6381,6 +6381,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "erased-serde",
  "hex",
  "mime_guess",
  "reqwest 0.12.24",

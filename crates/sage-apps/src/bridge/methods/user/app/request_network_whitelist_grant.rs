@@ -2,18 +2,17 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{
-    RustBridgeApprovalRequest,
-    RustBridgeRequest, RustBridgeResponse,
-};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest};
 use crate::bridge::capabilities::UserBridgeCapability;
 use crate::bridge::event_emit::emit_bridge_event_to_app_id;
-use crate::bridge::methods::shared::BridgeMethodCapability;
-use crate::bridge::methods::user::app::{encode_request_success, resolve_app_base_path};
+use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
+use crate::bridge::methods::shared::{
+    parse_required_params, BridgeHandleResult, BridgeMethodCapability, BridgeMethodHandleError,
+};
+use crate::bridge::methods::user::app::resolve_app_base_path;
 use crate::bridge::methods::user::app::events::EventForApp;
 use crate::bridge::types::RustBridgeApprovalBody;
-use crate::lifecycle::{parse_network_permission_target};
+use crate::lifecycle::parse_network_permission_target;
 use crate::lifecycle::update::permissions::grant_requested_network_whitelist_entry_internal;
 use crate::lifecycle::update::types::GrantNetworkWhitelistOutcome;
 use crate::types::SageNetworkPermissionTarget;
@@ -37,42 +36,12 @@ pub struct RequestNetworkWhitelistGrantResult {
     pub full_granted_network_whitelist: Vec<SageNetworkPermissionTarget>,
 }
 
-fn parse_network_whitelist_grant_params(
-    request: &RustBridgeRequest,
-) -> Result<RequestNetworkWhitelistGrantParams, RustBridgeResponse> {
-    let Some(params_json) = request.params_json.clone() else {
-        return Err(RustBridgeResponse::error(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            "sage.requestNetworkWhitelistGrant requires params",
-        ));
-    };
-
-    let mut params: RequestNetworkWhitelistGrantParams =
-        serde_json::from_str(&params_json).map_err(|err| {
-            RustBridgeResponse::error(
-                &request.channel,
-                &request.id,
-                "invalid_request",
-                format!(
-                    "Failed to decode sage.requestNetworkWhitelistGrant params: {err}"
-                ),
-            )
-        })?;
-
-    let normalized = parse_network_permission_target(&format!(
-        "{}://{}",
-        params.entry.scheme, params.entry.host
-    ))
-        .map_err(|err| RustBridgeResponse::error(&request.channel, &request.id, "invalid_request", err))?;
-
-    params.entry = normalized;
-    Ok(params)
-}
-
 #[async_trait]
 impl BridgeMethod for AppRequestNetworkWhitelistGrant {
+    fn name(&self) -> &'static str {
+        "app.requestNetworkWhitelistGrant"
+    }
+
     fn capability(&self) -> BridgeMethodCapability {
         BridgeMethodCapability::user(UserBridgeCapability::AppRequestNetworkWhitelistGrant)
     }
@@ -82,9 +51,17 @@ impl BridgeMethod for AppRequestNetworkWhitelistGrant {
         ctx: BridgeContext<'_>,
         request: &RustBridgeRequest,
     ) -> Option<RustBridgeApprovalRequest> {
-        let Ok(params) = parse_network_whitelist_grant_params(request) else {
-            return None;
-        };
+        let mut params: RequestNetworkWhitelistGrantParams =
+            parse_required_params(self, request).ok()?;
+
+        // normalize (still needed)
+        let normalized = parse_network_permission_target(&format!(
+            "{}://{}",
+            params.entry.scheme, params.entry.host
+        ))
+            .ok()?;
+
+        params.entry = normalized;
 
         if ctx
             .app
@@ -112,18 +89,20 @@ impl BridgeMethod for AppRequestNetworkWhitelistGrant {
         ctx: BridgeContext<'_>,
         tools: BridgeTools<'_>,
         request: &RustBridgeRequest,
-    ) -> RustBridgeResponse {
-        let params = match parse_network_whitelist_grant_params(request) {
-            Ok(params) => params,
-            Err(err) => return err,
-        };
+    ) -> BridgeHandleResult {
+        let mut params: RequestNetworkWhitelistGrantParams =
+            parse_required_params(self, request)?;
 
-        let base_path = match resolve_app_base_path(&tools, request) {
-            Ok(path) => path,
-            Err(err) => return err,
-        };
+        // normalize
+        params.entry = parse_network_permission_target(&format!(
+            "{}://{}",
+            params.entry.scheme, params.entry.host
+        ))
+            .map_err(BridgeMethodHandleError::invalid_request)?;
 
-        match grant_requested_network_whitelist_entry_internal(
+        let base_path = resolve_app_base_path(&tools)?;
+
+        let result = match grant_requested_network_whitelist_entry_internal(
             &base_path,
             &ctx.app.id(),
             &params.entry,
@@ -131,42 +110,38 @@ impl BridgeMethod for AppRequestNetworkWhitelistGrant {
             Ok(GrantNetworkWhitelistOutcome::AlreadyGranted {
                    entry,
                    full_granted_network_whitelist,
-               }) => encode_request_success(
-                request,
-                RequestNetworkWhitelistGrantResult {
-                    granted: true,
-                    already_granted: Some(true),
-                    entry,
-                    full_granted_network_whitelist,
-                },
-                "sage.requestNetworkWhitelistGrant result",
-            ),
+               }) => RequestNetworkWhitelistGrantResult {
+                granted: true,
+                already_granted: Some(true),
+                entry,
+                full_granted_network_whitelist,
+            },
+
             Ok(GrantNetworkWhitelistOutcome::Granted { entry, change }) => {
-                let full_granted_network_whitelist = change.full.clone();
+                let full = change.full.clone();
 
                 let _ = emit_bridge_event_to_app_id(
                     tools.app_handle,
                     ctx.app.id(),
-                    EventForApp::from_network_whitelist_change(&request.channel, change)
-                ).await;
-
-                encode_request_success(
-                    request,
-                    RequestNetworkWhitelistGrantResult {
-                        granted: true,
-                        already_granted: None,
-                        entry,
-                        full_granted_network_whitelist,
-                    },
-                    "sage.requestNetworkWhitelistGrant result",
+                    EventForApp::from_network_whitelist_change(&request.channel, change),
                 )
+                    .await;
+
+                RequestNetworkWhitelistGrantResult {
+                    granted: true,
+                    already_granted: None,
+                    entry,
+                    full_granted_network_whitelist: full,
+                }
             }
-            Err(err) => RustBridgeResponse::error(
-                &request.channel,
-                &request.id,
-                "internal_error",
-                format!("failed to grant requested network whitelist entry: {err}"),
-            ),
-        }
+
+            Err(err) => {
+                return Err(BridgeMethodHandleError::internal_error(format!(
+                    "failed to grant requested network whitelist entry: {err}"
+                )));
+            }
+        };
+
+        Ok(Box::new(result))
     }
 }

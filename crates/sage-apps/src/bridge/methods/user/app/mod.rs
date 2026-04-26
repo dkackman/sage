@@ -6,7 +6,7 @@ pub mod request_capability_grant;
 pub mod request_network_whitelist_grant;
 
 use std::path::PathBuf;
-use serde::Serialize;
+
 use tauri::Manager;
 
 pub use events::{
@@ -20,39 +20,19 @@ pub use lifecycle::{
 pub use request_capability_grant::AppRequestCapabilityGrant;
 pub use request_network_whitelist_grant::AppRequestNetworkWhitelistGrant;
 
+use crate::bridge::methods::shared::BridgeMethodHandleError;
 use crate::bridge::methods::BridgeTools;
-use crate::bridge::{RustBridgeRequest, RustBridgeResponse};
 
 pub fn resolve_app_base_path(
     tools: &BridgeTools<'_>,
-    request: &RustBridgeRequest,
-) -> Result<PathBuf, RustBridgeResponse> {
+) -> Result<PathBuf, BridgeMethodHandleError> {
     tools
         .app_handle
         .path()
         .app_data_dir()
         .map_err(|err| {
-            RustBridgeResponse::error(
-                &request.channel,
-                &request.id,
-                "internal_error",
-                format!("failed to resolve app data dir: {err}"),
-            )
+            BridgeMethodHandleError::internal_error(format!(
+                "failed to resolve app data dir: {err}"
+            ))
         })
-}
-
-pub fn encode_request_success<T: Serialize>(
-    request: &RustBridgeRequest,
-    value: T,
-    context: &str,
-) -> RustBridgeResponse {
-    match serde_json::to_value(value) {
-        Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
-        Err(err) => RustBridgeResponse::error(
-            &request.channel,
-            &request.id,
-            "internal_error",
-            format!("failed to encode {context}: {err}"),
-        ),
-    }
 }

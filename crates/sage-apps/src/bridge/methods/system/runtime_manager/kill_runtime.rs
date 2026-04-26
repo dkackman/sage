@@ -1,17 +1,24 @@
 use async_trait::async_trait;
 
-use crate::bridge::methods::system::runtime_manager::{parse_runtime_target_params};
-use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::SystemBridgeCapability;
-use crate::bridge::methods::shared::BridgeMethodCapability;
-use crate::runtime::stop::{kill_runtime, SystemKillRuntimeResult};
+use crate::bridge::methods::shared::{
+    parse_required_params, BridgeHandleResult, BridgeMethodCapability,
+    BridgeMethodHandleError,
+};
+use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest};
+use crate::runtime::stop::kill_runtime;
+use crate::bridge::methods::system::runtime_manager::RuntimeTargetParams;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeManagerKillRuntime;
 
 #[async_trait]
 impl BridgeMethod for RuntimeManagerKillRuntime {
+    fn name(&self) -> &'static str {
+        "runtimeManager.killRuntime"
+    }
+
     fn capability(&self) -> BridgeMethodCapability {
         BridgeMethodCapability::system(SystemBridgeCapability::RuntimeManagerKillRuntime)
     }
@@ -19,7 +26,7 @@ impl BridgeMethod for RuntimeManagerKillRuntime {
     fn approval_request(
         &self,
         _ctx: BridgeContext<'_>,
-        _request: &RustBridgeRequest
+        _request: &RustBridgeRequest,
     ) -> Option<RustBridgeApprovalRequest> {
         None
     }
@@ -29,30 +36,18 @@ impl BridgeMethod for RuntimeManagerKillRuntime {
         _ctx: BridgeContext<'_>,
         tools: BridgeTools<'_>,
         request: &RustBridgeRequest,
-    ) -> RustBridgeResponse {
-        let params = match parse_runtime_target_params(request) {
-            Ok(value) => value,
-            Err(response) => return response,
-        };
+    ) -> BridgeHandleResult {
+        let params: RuntimeTargetParams = parse_required_params(self, request)?;
 
-        match kill_runtime(
+        let result = kill_runtime(
             tools.app_handle,
             tools.host_state,
             &params.app_id,
             "user_kill",
         )
             .await
-        {
-            Ok(result) => match serde_json::to_value::<SystemKillRuntimeResult>(result) {
-                Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
-                Err(err) => RustBridgeResponse::error(
-                    &request.channel,
-                    &request.id,
-                    "internal_error",
-                    format!("failed to encode system.killRuntime result: {err}"),
-                ),
-            },
-            Err(err) => RustBridgeResponse::error(&request.channel, &request.id, "internal_error", err),
-        }
+            .map_err(BridgeMethodHandleError::internal_error)?;
+
+        Ok(Box::new(result))
     }
 }

@@ -1,10 +1,14 @@
 use async_trait::async_trait;
 
-use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::UserBridgeCapability;
-use crate::bridge::methods::shared::BridgeMethodCapability;
-use crate::runtime::state::types::{ReadyToStopParams, RuntimeAckResult, SetBeforeStopListenerParams};
+use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
+use crate::bridge::methods::shared::{
+    parse_required_params, BridgeHandleResult, BridgeMethodCapability,
+};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest};
+use crate::runtime::state::types::{
+    ReadyToStopParams, RuntimeAckResult, SetBeforeStopListenerParams,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct AppLifecycleSetBeforeStopListener;
@@ -12,72 +16,21 @@ pub struct AppLifecycleSetBeforeStopListener;
 #[derive(Debug, Clone, Copy)]
 pub struct AppLifecycleReadyToStop;
 
-fn encode_success(
-    request: &RustBridgeRequest,
-    context: &str,
-) -> RustBridgeResponse {
-    match serde_json::to_value(RuntimeAckResult { ok: true }) {
-        Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
-        Err(err) => RustBridgeResponse::error(
-            &request.channel,
-            &request.id,
-            "internal_error",
-            format!("failed to encode {context}: {err}"),
-        ),
-    }
-}
-
-fn parse_set_before_stop_listener_params(
-    request: &RustBridgeRequest,
-) -> Result<SetBeforeStopListenerParams, RustBridgeResponse> {
-    let Some(params_json) = request.params_json.clone() else {
-        return Err(RustBridgeResponse::error(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            "app.lifecycle.setBeforeStopListener requires params",
-        ));
-    };
-
-    serde_json::from_str(&params_json).map_err(|err| {
-        RustBridgeResponse::error(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            format!("Failed to decode app.lifecycle.setBeforeStopListener params: {err}"),
-        )
-    })
-}
-
-fn parse_ready_to_stop_params(
-    request: &RustBridgeRequest,
-) -> Result<ReadyToStopParams, RustBridgeResponse> {
-    let Some(params_json) = request.params_json.clone() else {
-        return Err(RustBridgeResponse::error(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            "app.lifecycle.readyToStop requires params",
-        ));
-    };
-
-    serde_json::from_str(&params_json).map_err(|err| {
-        RustBridgeResponse::error(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            format!("Failed to decode app.lifecycle.readyToStop params: {err}"),
-        )
-    })
-}
-
 #[async_trait]
 impl BridgeMethod for AppLifecycleSetBeforeStopListener {
+    fn name(&self) -> &'static str {
+        "app.lifecycle.setBeforeStopListener"
+    }
+
     fn capability(&self) -> BridgeMethodCapability {
         BridgeMethodCapability::user(UserBridgeCapability::AppLifecycleSetBeforeStopListener)
     }
 
-    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+    fn approval_request(
+        &self,
+        _ctx: BridgeContext<'_>,
+        _request: &RustBridgeRequest,
+    ) -> Option<RustBridgeApprovalRequest> {
         None
     }
 
@@ -86,11 +39,8 @@ impl BridgeMethod for AppLifecycleSetBeforeStopListener {
         ctx: BridgeContext<'_>,
         tools: BridgeTools<'_>,
         request: &RustBridgeRequest,
-    ) -> RustBridgeResponse {
-        let params = match parse_set_before_stop_listener_params(request) {
-            Ok(value) => value,
-            Err(response) => return response,
-        };
+    ) -> BridgeHandleResult {
+        let params: SetBeforeStopListenerParams = parse_required_params(self, request)?;
 
         let mut listeners = tools
             .host_state
@@ -105,17 +55,25 @@ impl BridgeMethod for AppLifecycleSetBeforeStopListener {
             listeners.remove(ctx.app.id());
         }
 
-        encode_success(request, "app.lifecycle.setBeforeStopListener result")
+        Ok(Box::new(RuntimeAckResult { ok: true }))
     }
 }
 
 #[async_trait]
 impl BridgeMethod for AppLifecycleReadyToStop {
+    fn name(&self) -> &'static str {
+        "app.lifecycle.readyToStop"
+    }
+
     fn capability(&self) -> BridgeMethodCapability {
         BridgeMethodCapability::user(UserBridgeCapability::AppLifecycleReadyToStop)
     }
 
-    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+    fn approval_request(
+        &self,
+        _ctx: BridgeContext<'_>,
+        _request: &RustBridgeRequest,
+    ) -> Option<RustBridgeApprovalRequest> {
         None
     }
 
@@ -124,11 +82,8 @@ impl BridgeMethod for AppLifecycleReadyToStop {
         _ctx: BridgeContext<'_>,
         tools: BridgeTools<'_>,
         request: &RustBridgeRequest,
-    ) -> RustBridgeResponse {
-        let params = match parse_ready_to_stop_params(request) {
-            Ok(value) => value,
-            Err(response) => return response,
-        };
+    ) -> BridgeHandleResult {
+        let params: ReadyToStopParams = parse_required_params(self, request)?;
 
         let sender = {
             let mut pending = tools.host_state.runtime.pending_stop_ready.lock().await;
@@ -139,6 +94,6 @@ impl BridgeMethod for AppLifecycleReadyToStop {
             let _ = sender.send(());
         }
 
-        encode_success(request, "app.lifecycle.readyToStop result")
+        Ok(Box::new(RuntimeAckResult { ok: true }))
     }
 }

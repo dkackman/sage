@@ -50,6 +50,7 @@ pub struct RustBridgeErrorResponse {
     pub error: RustBridgeErrorPayload,
 }
 
+
 #[derive(Debug, Clone, Serialize, Type)]
 #[serde(untagged)]
 pub enum RustBridgeResponse {

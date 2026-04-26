@@ -114,7 +114,7 @@ pub(crate) async fn execute_bridge_request(
     source_label: &str,
     request: &RustBridgeRequest,
 ) -> RustBridgeResponse {
-    let registry = BridgeRegistry::new_for_app(&app);
+    let registry = BridgeRegistry::new_for_app(app);
 
     let Some(method) = registry.get(&request.method) else {
         return RustBridgeResponse::error(
@@ -125,7 +125,7 @@ pub(crate) async fn execute_bridge_request(
         );
     };
 
-    method
+    let result = method
         .handle(
             BridgeContext { app, source_label },
             BridgeTools {
@@ -135,7 +135,27 @@ pub(crate) async fn execute_bridge_request(
             },
             request,
         )
-        .await
+        .await;
+
+    match result {
+        Ok(value) => {
+            match erased_serde::serialize(&*value, serde_json::value::Serializer) {
+                Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
+                Err(err) => RustBridgeResponse::error(
+                    &request.channel,
+                    &request.id,
+                    "internal_error",
+                    format!("failed to encode {} result: {err}", method.name()),
+                ),
+            }
+        }
+        Err(err) => RustBridgeResponse::error(
+            &request.channel,
+            &request.id,
+            err.code,
+            err.message,
+        ),
+    }
 }
 
 fn verify_capability(

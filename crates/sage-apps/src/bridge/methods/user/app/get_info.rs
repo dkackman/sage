@@ -1,11 +1,15 @@
 use std::collections::BTreeSet;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+
 use crate::bridge::capabilities::UserBridgeCapability;
-use crate::bridge::methods::shared::BridgeMethodCapability;
+use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
+use crate::bridge::methods::shared::{
+    BridgeHandleResult, BridgeMethodCapability, BridgeMethodHandleError,
+};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest};
 use crate::lifecycle::parse_network_permission_target;
 use crate::permissions::resolve_shared_capabilities;
 
@@ -33,11 +37,19 @@ pub struct AppGetInfoResult {
 
 #[async_trait]
 impl BridgeMethod for AppGetInfo {
+    fn name(&self) -> &'static str {
+        "app.getInfo"
+    }
+
     fn capability(&self) -> BridgeMethodCapability {
         BridgeMethodCapability::user(UserBridgeCapability::AppGetInfo)
     }
 
-    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+    fn approval_request(
+        &self,
+        _ctx: BridgeContext<'_>,
+        _request: &RustBridgeRequest,
+    ) -> Option<RustBridgeApprovalRequest> {
         None
     }
 
@@ -45,16 +57,13 @@ impl BridgeMethod for AppGetInfo {
         &self,
         ctx: BridgeContext<'_>,
         _tools: BridgeTools<'_>,
-        request: &RustBridgeRequest,
-    ) -> RustBridgeResponse {
+        _request: &RustBridgeRequest,
+    ) -> BridgeHandleResult {
         let capabilities =
             resolve_shared_capabilities(&ctx.app.granted_permissions().capabilities)
                 .unwrap_or_default();
 
-        let required_network = match required_network_set(&ctx) {
-            Ok(value) => value,
-            Err(err) => return err,
-        };
+        let required_network = required_network_set(&ctx)?;
 
         let network = ctx
             .app
@@ -69,30 +78,20 @@ impl BridgeMethod for AppGetInfo {
             })
             .collect::<Vec<_>>();
 
-        let result = AppGetInfoResult {
+        Ok(Box::new(AppGetInfoResult {
             id: ctx.app.id().to_string(),
             name: ctx.app.name().to_string(),
             version: ctx.app.version().to_string(),
             requested_permissions: ctx.app.requested_permissions().clone(),
             capabilities,
             network,
-        };
-
-        match serde_json::to_value(result) {
-            Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
-            Err(err) => RustBridgeResponse::error(
-                &request.channel,
-                &request.id,
-                "internal_error",
-                format!("failed to encode app.getInfo result: {err}"),
-            ),
-        }
+        }))
     }
 }
 
 fn required_network_set(
     ctx: &BridgeContext<'_>,
-) -> Result<BTreeSet<(String, String)>, RustBridgeResponse> {
+) -> Result<BTreeSet<(String, String)>, BridgeMethodHandleError> {
     let mut out = BTreeSet::new();
 
     for entry in &ctx.app.requested_permissions().network.whitelist.required {
@@ -100,7 +99,7 @@ fn required_network_set(
             "{}://{}",
             entry.scheme, entry.host
         ))
-            .map_err(|err| RustBridgeResponse::error("sage-bridge", "app.getInfo", "internal_error", err))?;
+            .map_err(BridgeMethodHandleError::internal_error)?;
 
         out.insert((normalized.scheme, normalized.host));
     }

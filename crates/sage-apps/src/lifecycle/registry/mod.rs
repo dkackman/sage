@@ -38,14 +38,11 @@ fn format_network_target(value: &SageNetworkPermissionTarget) -> String {
     format!("{}://{}", value.scheme, value.host)
 }
 
-pub fn parse_network_permission_target(
-    value: &str,
+pub fn normalize_network_permission_target(
+    entry: SageNetworkPermissionTarget,
 ) -> Result<SageNetworkPermissionTarget, String> {
-    let value = value.trim().to_ascii_lowercase();
-
-    let (scheme, host) = value
-        .split_once("://")
-        .ok_or_else(|| format!("invalid network entry (missing scheme): {}", value))?;
+    let scheme = entry.scheme.trim().to_ascii_lowercase();
+    let host = entry.host.trim().to_ascii_lowercase();
 
     if scheme != "https" && scheme != "wss" {
         return Err(format!(
@@ -60,10 +57,22 @@ pub fn parse_network_permission_target(
         || host.contains('#')
         || host.contains(' ')
     {
-        return Err(format!("invalid host in network entry: {}", value));
+        return Err(format!("invalid host in network entry: {}://{}", scheme, host));
     }
 
-    Ok(SageNetworkPermissionTarget {
+    Ok(SageNetworkPermissionTarget { scheme, host })
+}
+
+pub fn parse_network_permission_target(
+    value: &str,
+) -> Result<SageNetworkPermissionTarget, String> {
+    let value = value.trim().to_ascii_lowercase();
+
+    let (scheme, host) = value
+        .split_once("://")
+        .ok_or_else(|| format!("invalid network entry (missing scheme): {}", value))?;
+
+    normalize_network_permission_target(SageNetworkPermissionTarget {
         scheme: scheme.to_string(),
         host: host.to_string(),
     })

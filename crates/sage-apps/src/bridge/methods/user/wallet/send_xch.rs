@@ -2,14 +2,17 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{
-    RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse,
-};
-use sage_api::SendXch;
 use crate::bridge::capabilities::UserBridgeCapability;
-use crate::bridge::methods::shared::BridgeMethodCapability;
+use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
+use crate::bridge::methods::shared::{
+    parse_required_params, BridgeHandleResult, BridgeMethodCapability,
+    BridgeMethodHandleError,
+};
+use crate::bridge::{
+    RustBridgeApprovalRequest, RustBridgeRequest,
+};
 use crate::bridge::types::RustBridgeApprovalBody;
+use sage_api::SendXch;
 
 #[derive(Debug, Clone, Copy)]
 pub struct WalletSendXch;
@@ -26,28 +29,6 @@ pub struct WalletSendXchParams {
     pub clawback: Option<u64>,
 }
 
-fn parse_wallet_send_xch_params(
-    request: &RustBridgeRequest,
-) -> Result<WalletSendXchParams, RustBridgeResponse> {
-    let Some(params_json) = request.params_json.clone() else {
-        return Err(RustBridgeResponse::error(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            "wallet.sendXch requires params",
-        ));
-    };
-
-    serde_json::from_str(&params_json).map_err(|err| {
-        RustBridgeResponse::error(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            format!("Failed to decode wallet.sendXch params: {err}"),
-        )
-    })
-}
-
 fn parse_amount(value: String) -> sage_api::Amount {
     match value.parse::<u64>() {
         Ok(number) => sage_api::Amount::Number(number),
@@ -55,19 +36,25 @@ fn parse_amount(value: String) -> sage_api::Amount {
     }
 }
 
-fn to_send_xch_request(params: WalletSendXchParams) -> SendXch {
-    SendXch {
-        address: params.address,
-        amount: parse_amount(params.amount),
-        fee: parse_amount(params.fee),
-        memos: params.memos.unwrap_or_default(),
-        clawback: params.clawback,
-        auto_submit: true,
+impl From<WalletSendXchParams> for SendXch {
+    fn from(v: WalletSendXchParams) -> Self {
+        Self {
+            address: v.address,
+            amount: parse_amount(v.amount),
+            fee: parse_amount(v.fee),
+            memos: v.memos.unwrap_or_default(),
+            clawback: v.clawback,
+            auto_submit: true,
+        }
     }
 }
 
 #[async_trait]
 impl BridgeMethod for WalletSendXch {
+    fn name(&self) -> &'static str {
+        "wallet.sendXch"
+    }
+
     fn capability(&self) -> BridgeMethodCapability {
         BridgeMethodCapability::user(UserBridgeCapability::WalletSendXch)
     }
@@ -86,7 +73,7 @@ impl BridgeMethod for WalletSendXch {
             return None;
         }
 
-        let Ok(params) = parse_wallet_send_xch_params(request) else {
+        let Ok(params) = parse_required_params::<WalletSendXchParams>(self, request) else {
             return None;
         };
 
@@ -94,9 +81,7 @@ impl BridgeMethod for WalletSendXch {
             app: ctx.app.clone(),
             source_label: ctx.source_label.to_string(),
             request_id: request.id.clone(),
-            body: RustBridgeApprovalBody::SendXch {
-                summary: params,
-            },
+            body: RustBridgeApprovalBody::SendXch { summary: params },
         })
     }
 
@@ -105,30 +90,23 @@ impl BridgeMethod for WalletSendXch {
         _ctx: BridgeContext<'_>,
         tools: BridgeTools<'_>,
         request: &RustBridgeRequest,
-    ) -> RustBridgeResponse {
-        let params = match parse_wallet_send_xch_params(request) {
-            Ok(params) => params,
-            Err(response) => return response,
-        };
+    ) -> BridgeHandleResult {
+        let params: WalletSendXchParams = parse_required_params(self, request)?;
+        let req: SendXch = params.into();
 
-        let req = to_send_xch_request(params);
+        let result = tools
+            .app_state
+            .lock()
+            .await
+            .send_xch(req)
+            .await
+            .map_err(|err| {
+                BridgeMethodHandleError::internal_error(format!(
+                    "{} failed: {err}",
+                    self.name()
+                ))
+            })?;
 
-        match tools.app_state.lock().await.send_xch(req).await {
-            Ok(result) => match serde_json::to_value(result) {
-                Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
-                Err(err) => RustBridgeResponse::error(
-                    &request.channel,
-                    &request.id,
-                    "internal_error",
-                    format!("Failed to encode wallet.sendXch result: {err}"),
-                ),
-            },
-            Err(err) => RustBridgeResponse::error(
-                &request.channel,
-                &request.id,
-                "internal_error",
-                format!("wallet.sendXch failed: {err}"),
-            ),
-        }
+        Ok(Box::new(result))
     }
 }

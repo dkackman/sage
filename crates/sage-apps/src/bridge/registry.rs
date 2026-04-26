@@ -59,48 +59,36 @@ fn build_user_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
     let mut methods: HashMap<&'static str, Box<dyn BridgeMethod>> = HashMap::new();
 
     // Bridge
-    methods.insert("bridge.ping", Box::new(BridgePing));
-    methods.insert("bridge.send", Box::new(BridgeSend));
+    insert_method(&mut methods, BridgePing);
+    insert_method(&mut methods, BridgeSend);
 
     // App
-    methods.insert("app.getInfo", Box::new(AppGetInfo));
-    methods.insert("app.getCapabilities", Box::new(AppGetCapabilities));
-    methods.insert("app.requestCapabilityGrant", Box::new(AppRequestCapabilityGrant));
-    methods.insert(
-        "app.requestNetworkWhitelistGrant",
-        Box::new(AppRequestNetworkWhitelistGrant),
-    );
-    methods.insert(
-        "app.lifecycle.setBeforeStopListener",
-        Box::new(AppLifecycleSetBeforeStopListener),
-    );
-    methods.insert("app.lifecycle.readyToStop", Box::new(AppLifecycleReadyToStop));
+    insert_method(&mut methods, AppGetInfo);
+    insert_method(&mut methods, AppGetCapabilities);
+    insert_method(&mut methods, AppRequestCapabilityGrant);
+    insert_method(&mut methods, AppRequestNetworkWhitelistGrant);
+    insert_method(&mut methods, AppLifecycleSetBeforeStopListener);
+    insert_method(&mut methods, AppLifecycleReadyToStop);
 
     // Wallet keys / secrets
-    methods.insert("wallet.getKeys", Box::new(WalletGetKeys));
-    methods.insert("wallet.getKey", Box::new(WalletGetKey));
-    methods.insert("wallet.getSecretKey", Box::new(WalletGetSecretKey));
+    insert_method(&mut methods, WalletGetKeys);
+    insert_method(&mut methods, WalletGetKey);
+    insert_method(&mut methods, WalletGetSecretKey);
 
     // Wallet XCH
-    methods.insert("wallet.sendXch", Box::new(WalletSendXch));
+    insert_method(&mut methods, WalletSendXch);
 
     // Wallet read/query
-    methods.insert("wallet.getSyncStatus", Box::new(WalletGetSyncStatus));
-    methods.insert("wallet.getVersion", Box::new(WalletGetVersion));
-    methods.insert(
-        "wallet.getPendingTransactions",
-        Box::new(WalletGetPendingTransactions),
-    );
-    methods.insert("wallet.checkAddress", Box::new(WalletCheckAddress));
-    methods.insert("wallet.getDerivations", Box::new(WalletGetDerivations));
-    methods.insert(
-        "wallet.getSpendableCoinCount",
-        Box::new(WalletGetSpendableCoinCount),
-    );
-    methods.insert("wallet.getCoinsByIds", Box::new(WalletGetCoinsByIds));
-    methods.insert("wallet.getCoins", Box::new(WalletGetCoins));
-    methods.insert("wallet.getTransaction", Box::new(WalletGetTransaction));
-    methods.insert("wallet.getTransactions", Box::new(WalletGetTransactions));
+    insert_method(&mut methods, WalletGetSyncStatus);
+    insert_method(&mut methods, WalletGetVersion);
+    insert_method(&mut methods, WalletGetPendingTransactions);
+    insert_method(&mut methods, WalletCheckAddress);
+    insert_method(&mut methods, WalletGetDerivations);
+    insert_method(&mut methods, WalletGetSpendableCoinCount);
+    insert_method(&mut methods, WalletGetCoinsByIds);
+    insert_method(&mut methods, WalletGetCoins);
+    insert_method(&mut methods, WalletGetTransaction);
+    insert_method(&mut methods, WalletGetTransactions);
 
     methods
 }
@@ -108,16 +96,10 @@ fn build_user_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
 fn build_system_methods() -> HashMap<&'static str, Box<dyn BridgeMethod>> {
     let mut methods = build_user_methods();
 
-    methods.insert(
-        "runtimeManager.listRuntimes",
-        Box::new(RuntimeManagerListRuntimes),
-    );
-    methods.insert(
-        "runtimeManager.focusRuntime",
-        Box::new(RuntimeManagerFocusRuntime),
-    );
-    methods.insert("runtimeManager.hideRuntime", Box::new(RuntimeManagerHideRuntime));
-    methods.insert("runtimeManager.killRuntime", Box::new(RuntimeManagerKillRuntime));
+    insert_method(&mut methods, RuntimeManagerListRuntimes);
+    insert_method(&mut methods, RuntimeManagerFocusRuntime);
+    insert_method(&mut methods, RuntimeManagerHideRuntime);
+    insert_method(&mut methods, RuntimeManagerKillRuntime);
 
     methods
 }
@@ -128,4 +110,11 @@ impl std::fmt::Debug for BridgeRegistry {
             .field("method_count", &self.methods.len())
             .finish()
     }
+}
+
+fn insert_method<M>(methods: &mut HashMap<&'static str, Box<dyn BridgeMethod>>, method: M)
+where
+    M: BridgeMethod + 'static,
+{
+    methods.insert(method.name(), Box::new(method));
 }

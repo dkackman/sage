@@ -1,9 +1,11 @@
 use async_trait::async_trait;
 
-use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
 use crate::bridge::capabilities::SystemBridgeCapability;
-use crate::bridge::methods::shared::BridgeMethodCapability;
+use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
+use crate::bridge::methods::shared::{
+    BridgeHandleResult, BridgeMethodCapability, BridgeMethodHandleError,
+};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest};
 use crate::runtime::state::read::list_runtimes;
 
 #[derive(Debug, Clone, Copy)]
@@ -11,11 +13,19 @@ pub struct RuntimeManagerListRuntimes;
 
 #[async_trait]
 impl BridgeMethod for RuntimeManagerListRuntimes {
+    fn name(&self) -> &'static str {
+        "runtimeManager.listRuntimes"
+    }
+
     fn capability(&self) -> BridgeMethodCapability {
         BridgeMethodCapability::system(SystemBridgeCapability::RuntimeManagerListRuntimes)
     }
 
-    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+    fn approval_request(
+        &self,
+        _ctx: BridgeContext<'_>,
+        _request: &RustBridgeRequest,
+    ) -> Option<RustBridgeApprovalRequest> {
         None
     }
 
@@ -23,19 +33,12 @@ impl BridgeMethod for RuntimeManagerListRuntimes {
         &self,
         _ctx: BridgeContext<'_>,
         tools: BridgeTools<'_>,
-        request: &RustBridgeRequest,
-    ) -> RustBridgeResponse {
-        match list_runtimes(tools.host_state).await {
-            Ok(records) => match serde_json::to_value(records) {
-                Ok(value) => RustBridgeResponse::success(&request.channel, &request.id, value),
-                Err(err) => RustBridgeResponse::error(
-                    &request.channel,
-                    &request.id,
-                    "internal_error",
-                    format!("failed to encode runtimes: {err}"),
-                ),
-            },
-            Err(err) => RustBridgeResponse::error(&request.channel, &request.id, "internal_error", err),
-        }
+        _request: &RustBridgeRequest,
+    ) -> BridgeHandleResult {
+        let records = list_runtimes(tools.host_state)
+            .await
+            .map_err(BridgeMethodHandleError::internal_error)?;
+
+        Ok(Box::new(records))
     }
 }
