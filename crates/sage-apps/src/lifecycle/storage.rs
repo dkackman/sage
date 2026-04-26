@@ -1,15 +1,15 @@
-use std::path::Path;
+use std::io;
+use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Result as AnyResult};
-use tauri::{AppHandle, Manager, State};
+use tauri::{command, AppHandle, Manager, State};
 use uuid::Uuid;
 use crate::AppsHostState;
-use crate::lifecycle::{
-    read_pending_storage_cleanup_entries, read_retired_app_origins,
-    write_pending_storage_cleanup_entries, write_retired_app_origins,
-};
+use crate::host::AppState;
+use crate::lifecycle::{read_installed_app_by_id, read_pending_storage_cleanup_entries, read_retired_app_origins, write_installed_app_metadata, write_pending_storage_cleanup_entries, write_retired_app_origins};
+use crate::permissions::mark_storage_may_contain_secrets;
 use crate::runtime::{resolve_app};
 use crate::runtime::stop::close_runtime_internal;
 use crate::storage::{cleanup_target_from_storage, parse_data_store_id};
@@ -217,7 +217,7 @@ pub async fn clear_runtime_browsing_data_internal(
     apps_clear_runtime_browsing_data(app.clone(), app_id.to_string()).await
 }
 
-#[tauri::command]
+#[command]
 #[specta::specta]
 pub async fn apps_clear_runtime_browsing_data(
     app: AppHandle,
@@ -229,6 +229,38 @@ pub async fn apps_clear_runtime_browsing_data(
 
     let target = cleanup_target_from_storage(resolved.storage());
     clear_app_storage_by_target(&app, &target).await
+}
+
+#[command]
+#[specta::specta]
+pub async fn apps_mark_storage_may_contain_secrets(
+    state: State<'_, AppState>,
+    app_id: String,
+) -> crate::host::Result<()> {
+    let base_path = {
+        let state = state.lock().await;
+        state.path.clone()
+    };
+
+    let mut app = read_installed_app_by_id(&base_path, &app_id)
+        .map_err(|err| io::Error::other(format!("failed to read app {app_id}: {err}")))?;
+
+    if !app.common.capability_flags.has_secret_access {
+        return Ok(());
+    }
+
+    if app.common.capability_flags.storage_may_contain_secrets {
+        return Ok(());
+    }
+
+    app.common.capability_flags =
+        mark_storage_may_contain_secrets(&app.common.capability_flags);
+
+    let app_dir = PathBuf::from(&app.common.app_dir);
+    write_installed_app_metadata(&app, &app_dir)
+        .map_err(|err| io::Error::other(format!("failed to write metadata: {err}")))?;
+
+    Ok(())
 }
 
 #[cfg(test)]

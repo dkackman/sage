@@ -6,10 +6,6 @@ use common::{sample_installed_app, sample_manifest_file};
 use sage_apps::lifecycle::registry::{
     app_dir, read_installed_app_by_id, write_installed_app_metadata,
 };
-use sage_apps::lifecycle::update::{
-    grant_requested_capability_internal, grant_requested_network_whitelist_entry_internal,
-    update_app_permissions_internal, GrantCapabilityOutcome, GrantNetworkWhitelistOutcome,
-};
 use sage_apps::types::{
     InstalledSageAppStorage, SageAppCapabilityFlags, SageAppPackageManifest,
     SageAppSnapshot, SageGrantedNetworkPermissions, SageGrantedPermissions,
@@ -19,6 +15,8 @@ use sage_apps::types::{
 };
 use tempfile::tempdir;
 use sage_apps::bridge::capabilities::UserBridgeCapability;
+use sage_apps::lifecycle::update::types::{GrantCapabilityOutcome, GrantNetworkWhitelistOutcome};
+use sage_apps::lifecycle::update::utils::{grant_requested_capability_internal, grant_requested_network_whitelist_entry_internal, update_app_permissions_internal};
 
 fn sample_app(base: &Path, app_id: &str) -> UserSageApp {
     let mut app = sample_installed_app(base, app_id, "Test App");

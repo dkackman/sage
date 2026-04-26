@@ -13,10 +13,9 @@ use crate::bridge::methods::shared::BridgeMethodCapability;
 use crate::bridge::methods::user::app::{encode_request_success, resolve_app_base_path};
 use crate::bridge::methods::user::app::events::EventForApp;
 use crate::bridge::types::RustBridgeApprovalBody;
-use crate::lifecycle::{
-    grant_requested_network_whitelist_entry_internal, parse_network_permission_target,
-    GrantNetworkWhitelistOutcome,
-};
+use crate::lifecycle::{parse_network_permission_target};
+use crate::lifecycle::update::types::GrantNetworkWhitelistOutcome;
+use crate::lifecycle::update::utils::grant_requested_network_whitelist_entry_internal;
 use crate::types::SageNetworkPermissionTarget;
 
 #[derive(Debug, Clone, Copy)]

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use crate::bridge::capabilities::UserBridgeCapability;
-use crate::lifecycle::{GrantedCapabilitiesChange, GrantedNetworkWhitelistChange};
+use crate::lifecycle::update::types::{GrantedCapabilitiesChange, GrantedNetworkWhitelistChange};
 use crate::types::SageNetworkPermissionTarget;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

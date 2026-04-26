@@ -10,7 +10,7 @@ pub mod state;
 pub mod system_apps;
 pub mod types;
 pub mod utils;
-mod storage;
+pub mod storage;
 
 pub use security::{
     handle_system_app_protocol_request,
