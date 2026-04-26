@@ -13,3 +13,26 @@ pub fn bytes_sha256_hex(bytes: &[u8]) -> String {
     hasher.update(bytes);
     hex::encode(hasher.finalize())
 }
+
+pub fn slugify_app_name(name: &str) -> String {
+    let mut out = String::new();
+    let mut last_dash = false;
+
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            last_dash = false;
+        } else if !last_dash {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+
+    let out = out.trim_matches('-').to_string();
+
+    if out.is_empty() {
+        "app".to_string()
+    } else {
+        out
+    }
+}

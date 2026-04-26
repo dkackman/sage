@@ -15,7 +15,7 @@ use crate::permissions::normalize_and_validate_requested_permissions;
 use crate::types::{
     SageAppPackageManifest, SageAppSnapshot, SageAppUrlPreview, UserSageApp, UserSageAppSource,
 };
-use crate::utils::bytes_sha256_hex;
+use crate::utils::{bytes_sha256_hex, slugify_app_name};
 
 #[derive(Debug, Clone)]
 pub struct UrlInstallSource {
@@ -221,34 +221,11 @@ fn normalize_manifest_permissions(
 fn slugify_host(input: &str) -> String {
     if let Ok(url) = Url::parse(input) {
         if let Some(host) = url.host_str() {
-            return slugify_name(host);
+            return slugify_app_name(host);
         }
     }
 
-    slugify_name(input)
-}
-
-fn slugify_name(name: &str) -> String {
-    let mut out = String::new();
-    let mut last_dash = false;
-
-    for ch in name.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch.to_ascii_lowercase());
-            last_dash = false;
-        } else if !last_dash {
-            out.push('-');
-            last_dash = true;
-        }
-    }
-
-    let out = out.trim_matches('-').to_string();
-
-    if out.is_empty() {
-        "app".to_string()
-    } else {
-        out
-    }
+    slugify_app_name(input)
 }
 
 #[cfg(test)]
@@ -262,7 +239,23 @@ mod tests {
         SageNetworkPermissionTarget, SageRequestedCapabilities, SageRequestedNetworkPermissions,
         SageRequestedNetworkWhitelist, SageRequestedPermissions,
     };
-    use tempfile::tempdir;
+    use tempfile::{tempdir, TempDir};
+
+    fn fake_retired_app_origins(dir: &TempDir, storage_may_contain_secrets: bool) {
+        write_retired_app_origins(
+            dir.path(),
+            &[RetiredAppOriginEntry {
+                id: "retired-1".into(),
+                app_id: "url-abc123".into(),
+                app_name: "Test App".into(),
+                origin_id: "url-abc123".into(),
+                created_at_ms: 1,
+                storage_may_contain_secrets,
+                cleanup_pending: false,
+            }],
+        )
+            .unwrap();
+    }
 
     fn sample_manifest() -> SageAppPackageManifest {
         SageAppPackageManifest {
@@ -394,19 +387,7 @@ mod tests {
     fn should_not_rotate_url_origin_for_pending_cleanup_without_secrets() {
         let dir = tempdir().unwrap();
 
-        write_retired_app_origins(
-            dir.path(),
-            &[RetiredAppOriginEntry {
-                id: "retired-1".into(),
-                app_id: "url-abc123".into(),
-                app_name: "Test App".into(),
-                origin_id: "url-abc123".into(),
-                created_at_ms: 1,
-                storage_may_contain_secrets: false,
-                cleanup_pending: true,
-            }],
-        )
-            .unwrap();
+        fake_retired_app_origins(&dir, false);
 
         assert!(!should_rotate_url_origin_on_install(dir.path(), "url-abc123").unwrap());
     }
@@ -415,19 +396,7 @@ mod tests {
     fn should_not_rotate_url_origin_for_clean_retired_origin() {
         let dir = tempdir().unwrap();
 
-        write_retired_app_origins(
-            dir.path(),
-            &[RetiredAppOriginEntry {
-                id: "retired-1".into(),
-                app_id: "url-abc123".into(),
-                app_name: "Test App".into(),
-                origin_id: "url-abc123".into(),
-                created_at_ms: 1,
-                storage_may_contain_secrets: false,
-                cleanup_pending: false,
-            }],
-        )
-            .unwrap();
+        fake_retired_app_origins(&dir, false);
 
         assert!(!should_rotate_url_origin_on_install(dir.path(), "url-abc123").unwrap());
     }
@@ -457,19 +426,7 @@ mod tests {
     fn should_rotate_url_origin_when_retired_storage_may_contain_secrets_even_if_cleanup_pending() {
         let dir = tempdir().unwrap();
 
-        write_retired_app_origins(
-            dir.path(),
-            &[RetiredAppOriginEntry {
-                id: "retired-1".into(),
-                app_id: "url-abc123".into(),
-                app_name: "Test App".into(),
-                origin_id: "url-abc123".into(),
-                created_at_ms: 1,
-                storage_may_contain_secrets: true,
-                cleanup_pending: true,
-            }],
-        )
-            .unwrap();
+        fake_retired_app_origins(&dir, true);
 
         assert!(should_rotate_url_origin_on_install(dir.path(), "url-abc123").unwrap());
     }
@@ -507,19 +464,7 @@ mod tests {
     fn url_origin_id_reuses_default_origin_for_pending_cleanup_without_secrets() {
         let dir = tempdir().unwrap();
 
-        write_retired_app_origins(
-            dir.path(),
-            &[RetiredAppOriginEntry {
-                id: "retired-1".into(),
-                app_id: "url-abc123".into(),
-                app_name: "Test App".into(),
-                origin_id: "url-abc123".into(),
-                created_at_ms: 1,
-                storage_may_contain_secrets: false,
-                cleanup_pending: true,
-            }],
-        )
-            .unwrap();
+        fake_retired_app_origins(&dir, false);
 
         let source = UrlInstallSource {
             app_url: "https://example.com/app/".into(),
@@ -534,19 +479,7 @@ mod tests {
     fn url_origin_id_rotates_with_retired_secret_storage() {
         let dir = tempdir().unwrap();
 
-        write_retired_app_origins(
-            dir.path(),
-            &[RetiredAppOriginEntry {
-                id: "retired-1".into(),
-                app_id: "url-abc123".into(),
-                app_name: "Test App".into(),
-                origin_id: "url-abc123".into(),
-                created_at_ms: 1,
-                storage_may_contain_secrets: true,
-                cleanup_pending: true,
-            }],
-        )
-            .unwrap();
+        fake_retired_app_origins(&dir, true);
 
         let source = UrlInstallSource {
             app_url: "https://example.com/app/".into(),

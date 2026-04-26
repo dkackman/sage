@@ -431,12 +431,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "enable once a capability with accesses_sensitive_secret = true exists"]
     fn requested_permissions_policy_rejects_secret_and_external_combination() {
         let mut requested = empty_requested_permissions();
         requested.capabilities.required = vec![
             UserBridgeCapability::WalletSendXch,
-            UserBridgeCapability::WalletSendXchAutoSubmit,
+            UserBridgeCapability::WalletGetSecretKey,
         ];
 
         let err = validate_requested_permission_policy(&requested)

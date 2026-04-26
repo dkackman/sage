@@ -16,6 +16,7 @@ use crate::permissions::normalize_and_validate_requested_permissions;
 use crate::types::{
     ListedSageApp, SageAppPackageManifest, SageAppSnapshot, UserSageApp, UserSageAppSource,
 };
+use crate::utils::slugify_app_name;
 
 #[derive(Debug, Clone)]
 pub struct ZipInstallSource {
@@ -93,7 +94,7 @@ impl AppInstallSource for ZipInstallSource {
 }
 
 pub fn generate_zip_app_id(name: &str) -> String {
-    format!("{}-{}", slugify_name(name), Uuid::new_v4())
+    format!("{}-{}", slugify_app_name(name), Uuid::new_v4())
 }
 
 pub fn resolve_zip_install_target(
@@ -126,29 +127,6 @@ fn normalize_manifest_permissions(
 ) -> AnyResult<SageAppPackageManifest> {
     manifest.permissions = normalize_and_validate_requested_permissions(&manifest.permissions)?;
     Ok(manifest)
-}
-
-fn slugify_name(name: &str) -> String {
-    let mut out = String::new();
-    let mut last_dash = false;
-
-    for ch in name.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch.to_ascii_lowercase());
-            last_dash = false;
-        } else if !last_dash {
-            out.push('-');
-            last_dash = true;
-        }
-    }
-
-    let out = out.trim_matches('-').to_string();
-
-    if out.is_empty() {
-        "app".to_string()
-    } else {
-        out
-    }
 }
 
 #[cfg(test)]
