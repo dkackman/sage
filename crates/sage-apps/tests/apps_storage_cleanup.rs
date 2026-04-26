@@ -1,7 +1,7 @@
 mod common;
 
 use common::{empty_permissions, sample_manifest_file};
-use sage_apps::lifecycle::storage_cleanup::{
+use sage_apps::lifecycle::storage::{
     enqueue_pending_storage_cleanup, enqueue_retired_app_origin,
 };
 use sage_apps::lifecycle::{

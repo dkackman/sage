@@ -1,11 +1,10 @@
 use tauri::{AppHandle, Emitter, Manager, State};
-
+use crate::runtime::webview_locator::get_sage_webview;
 use crate::state::AppsHostState;
-
+use crate::utils::unix_timestamp_ms;
 use super::probes::{
     run_clear_cycle_test, run_isolation_test, run_network_test, run_persistence_test,
 };
-use super::runtime::now_ms;
 use super::state_view::{build_effective_state, build_state_view};
 use super::types::{
     build_running_sandbox_state, mark_cap, SandboxCapability, SandboxCapabilityStatus,
@@ -17,8 +16,8 @@ async fn emit_state_view(app: &AppHandle, apps_state: &State<'_, AppsHostState>)
     let current_run = apps_state.sandbox.current_run.lock().await.clone();
     let view = build_state_view(&baseline, current_run.as_ref());
 
-    if let Some(window) = app.get_window("main") {
-        let _ = window.emit("apps:sandbox-state-updated", view);
+    if let Ok(webview) = get_sage_webview(app) {
+        let _ = webview.emit("apps:sandbox-state-updated", view);
     }
 }
 
@@ -80,7 +79,7 @@ pub async fn begin_sandbox_run(
 
     let run_state = SandboxRunState {
         run_id: super::runtime::unique_run_id("sandbox-run"),
-        state: build_running_sandbox_state(now_ms()),
+        state: build_running_sandbox_state(unix_timestamp_ms()),
     };
 
     *apps_state.sandbox.current_run.lock().await = Some(run_state);
@@ -110,7 +109,7 @@ pub async fn sandbox_runner(app: AppHandle) {
         let current_run = apps_state.sandbox.current_run.lock().await.clone();
         current_run
             .map(|r| r.state)
-            .unwrap_or_else(|| build_running_sandbox_state(now_ms()))
+            .unwrap_or_else(|| build_running_sandbox_state(unix_timestamp_ms()))
     };
 
     let isolation_fut = run_isolation_test(&app, &apps_state);
@@ -140,7 +139,7 @@ pub async fn sandbox_runner(app: AppHandle) {
                             SandboxCapability::StorageIsolationFromSage,
                             if passed { SandboxCapabilityStatus::Passed } else { SandboxCapabilityStatus::Failed },
                             details,
-                            now_ms(),
+                            unix_timestamp_ms(),
                         );
                     }
                     Err(err) => {
@@ -149,7 +148,7 @@ pub async fn sandbox_runner(app: AppHandle) {
                             SandboxCapability::StorageIsolationFromSage,
                             SandboxCapabilityStatus::Failed,
                             Some(err),
-                            now_ms(),
+                            unix_timestamp_ms(),
                         );
                     }
                 }
@@ -167,7 +166,7 @@ pub async fn sandbox_runner(app: AppHandle) {
                             SandboxCapability::StoragePersistenceNormal,
                             if normal.0 { SandboxCapabilityStatus::Passed } else { SandboxCapabilityStatus::Failed },
                             normal.1,
-                            now_ms(),
+                            unix_timestamp_ms(),
                         );
 
                         mark_cap(
@@ -175,7 +174,7 @@ pub async fn sandbox_runner(app: AppHandle) {
                             SandboxCapability::StorageNonPersistenceIncognito,
                             if incog.0 { SandboxCapabilityStatus::Passed } else { SandboxCapabilityStatus::Failed },
                             incog.1,
-                            now_ms(),
+                            unix_timestamp_ms(),
                         );
                     }
                     Err(err) => {
@@ -184,7 +183,7 @@ pub async fn sandbox_runner(app: AppHandle) {
                             SandboxCapability::StoragePersistenceNormal,
                             SandboxCapabilityStatus::Failed,
                             Some(err.clone()),
-                            now_ms(),
+                            unix_timestamp_ms(),
                         );
 
                         mark_cap(
@@ -192,7 +191,7 @@ pub async fn sandbox_runner(app: AppHandle) {
                             SandboxCapability::StorageNonPersistenceIncognito,
                             SandboxCapabilityStatus::Failed,
                             Some(err),
-                            now_ms(),
+                            unix_timestamp_ms(),
                         );
                     }
                 }
@@ -210,7 +209,7 @@ pub async fn sandbox_runner(app: AppHandle) {
                             SandboxCapability::StorageClearCycle,
                             if passed { SandboxCapabilityStatus::Passed } else { SandboxCapabilityStatus::Failed },
                             details,
-                            now_ms(),
+                            unix_timestamp_ms(),
                         );
                     }
                     Err(err) => {
@@ -219,7 +218,7 @@ pub async fn sandbox_runner(app: AppHandle) {
                             SandboxCapability::StorageClearCycle,
                             SandboxCapabilityStatus::Failed,
                             Some(err),
-                            now_ms(),
+                            unix_timestamp_ms(),
                         );
                     }
                 }
@@ -237,7 +236,7 @@ pub async fn sandbox_runner(app: AppHandle) {
                             SandboxCapability::NetworkAllowlistEnforced,
                             if passed { SandboxCapabilityStatus::Passed } else { SandboxCapabilityStatus::Failed },
                             details,
-                            now_ms(),
+                            unix_timestamp_ms(),
                         );
                     }
                     Err(err) => {
@@ -246,7 +245,7 @@ pub async fn sandbox_runner(app: AppHandle) {
                             SandboxCapability::NetworkAllowlistEnforced,
                             SandboxCapabilityStatus::Failed,
                             Some(err),
-                            now_ms(),
+                            unix_timestamp_ms(),
                         );
                     }
                 }
@@ -271,7 +270,7 @@ pub async fn sandbox_runner(app: AppHandle) {
         } else {
             SandboxCapabilityStatus::Passed
         };
-    current_state.finished_at = Some(now_ms());
+    current_state.finished_at = Some(unix_timestamp_ms());
 
     *apps_state.sandbox.baseline.lock().await = current_state.clone();
     *apps_state.sandbox.current_run.lock().await = None;

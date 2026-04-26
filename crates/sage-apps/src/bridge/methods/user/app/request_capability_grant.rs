@@ -2,16 +2,18 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{
-    emit_granted_capabilities_change_for_app, failure, RustBridgeApprovalRequest,
-    RustBridgeRequest, RustBridgeResponse,
-};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest};
 use crate::bridge::capabilities::UserBridgeCapability;
-use crate::bridge::methods::shared::BridgeMethodCapability;
-use crate::bridge::methods::user::app::{encode_request_success, resolve_app_base_path};
+use crate::bridge::event_emit::emit_bridge_event_to_app_id;
+use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
+use crate::bridge::methods::shared::{
+    parse_required_params, BridgeHandleResult, BridgeMethodCapability, BridgeMethodHandleError,
+};
+use crate::bridge::methods::user::app::events::EventForApp;
+use crate::bridge::methods::user::app::resolve_app_base_path;
 use crate::bridge::types::RustBridgeApprovalBody;
-use crate::lifecycle::{grant_requested_capability_internal, GrantCapabilityOutcome};
+use crate::lifecycle::update::permissions::grant_requested_capability_internal;
+use crate::lifecycle::update::types::GrantCapabilityOutcome;
 use crate::permissions::{get_user_capability_definition, user_capability_definition_view};
 
 #[derive(Debug, Clone, Copy)]
@@ -33,30 +35,12 @@ pub struct RequestCapabilityGrantResult {
     pub full_granted_capabilities: Vec<UserBridgeCapability>,
 }
 
-fn parse_capability_grant_params(
-    request: &RustBridgeRequest,
-) -> Result<RequestCapabilityGrantParams, RustBridgeResponse> {
-    let Some(params_json) = request.params_json.clone() else {
-        return Err(failure(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            "sage.requestCapabilityGrant requires params",
-        ));
-    };
-
-    serde_json::from_str(&params_json).map_err(|err| {
-        failure(
-            &request.channel,
-            &request.id,
-            "invalid_request",
-            format!("Failed to decode sage.requestCapabilityGrant params: {err}"),
-        )
-    })
-}
-
 #[async_trait]
 impl BridgeMethod for AppRequestCapabilityGrant {
+    fn name(&self) -> &'static str {
+        "app.requestCapabilityGrant"
+    }
+
     fn capability(&self) -> BridgeMethodCapability {
         BridgeMethodCapability::user(UserBridgeCapability::AppRequestCapabilityGrant)
     }
@@ -66,9 +50,8 @@ impl BridgeMethod for AppRequestCapabilityGrant {
         ctx: BridgeContext<'_>,
         request: &RustBridgeRequest,
     ) -> Option<RustBridgeApprovalRequest> {
-        let Ok(params) = parse_capability_grant_params(request) else {
-            return None;
-        };
+        let params: RequestCapabilityGrantParams =
+            parse_required_params(self, request).ok()?;
 
         if ctx
             .app
@@ -97,59 +80,52 @@ impl BridgeMethod for AppRequestCapabilityGrant {
         ctx: BridgeContext<'_>,
         tools: BridgeTools<'_>,
         request: &RustBridgeRequest,
-    ) -> RustBridgeResponse {
-        let params = match parse_capability_grant_params(request) {
-            Ok(params) => params,
-            Err(err) => return err,
-        };
+    ) -> BridgeHandleResult {
+        let params: RequestCapabilityGrantParams =
+            parse_required_params(self, request)?;
 
-        let base_path = match resolve_app_base_path(&tools, request) {
-            Ok(path) => path,
-            Err(err) => return err,
-        };
+        let base_path = resolve_app_base_path(&tools)?;
 
-        match grant_requested_capability_internal(&base_path, &ctx.app.id(), params.capability) {
+        let result = match grant_requested_capability_internal(
+            &base_path,
+            &ctx.app.id(),
+            params.capability,
+        ) {
             Ok(GrantCapabilityOutcome::AlreadyGranted {
                    capability,
                    full_granted_capabilities,
-               }) => encode_request_success(
-                request,
-                RequestCapabilityGrantResult {
-                    granted: true,
-                    already_granted: Some(true),
-                    capability,
-                    full_granted_capabilities,
-                },
-                "sage.requestCapabilityGrant result",
-            ),
+               }) => RequestCapabilityGrantResult {
+                granted: true,
+                already_granted: Some(true),
+                capability,
+                full_granted_capabilities,
+            },
+
             Ok(GrantCapabilityOutcome::Granted { capability, change }) => {
                 let full_granted_capabilities = change.full.clone();
 
-                let _ = emit_granted_capabilities_change_for_app(
+                let _ = emit_bridge_event_to_app_id(
                     tools.app_handle,
                     ctx.app.id(),
-                    &request.channel,
-                    change,
+                    EventForApp::from_capabilities_change(&request.channel, change),
                 )
                     .await;
 
-                encode_request_success(
-                    request,
-                    RequestCapabilityGrantResult {
-                        granted: true,
-                        already_granted: None,
-                        capability,
-                        full_granted_capabilities,
-                    },
-                    "sage.requestCapabilityGrant result",
-                )
+                RequestCapabilityGrantResult {
+                    granted: true,
+                    already_granted: None,
+                    capability,
+                    full_granted_capabilities,
+                }
             }
-            Err(err) => failure(
-                &request.channel,
-                &request.id,
-                "internal_error",
-                format!("failed to grant requested capability: {err}"),
-            ),
-        }
+
+            Err(err) => {
+                return Err(BridgeMethodHandleError::internal_error(format!(
+                    "failed to grant requested capability: {err}"
+                )));
+            }
+        };
+
+        Ok(Box::new(result))
     }
 }

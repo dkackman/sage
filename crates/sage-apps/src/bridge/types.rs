@@ -1,9 +1,17 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use specta::Type;
 use tauri_specta::Event;
 use crate::bridge::capabilities::UserBridgeCapability;
 use crate::bridge::methods::user::wallet::send_xch::WalletSendXchParams;
 use crate::types::{SageApp, SageAppCapabilityDefinitionView, SageNetworkPermissionTarget};
+
+#[derive(Debug, Clone)]
+pub struct PendingBridgeApproval {
+    pub app_id: String,
+    pub app_webview_label: String,
+    pub request: RustBridgeRequest,
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +49,7 @@ pub struct RustBridgeErrorResponse {
     pub ok: bool,
     pub error: RustBridgeErrorPayload,
 }
+
 
 #[derive(Debug, Clone, Serialize, Type)]
 #[serde(untagged)]
@@ -98,4 +107,37 @@ pub struct ResolveBridgeApprovalArgs {
     pub approval_id: String,
     pub approved: bool,
     pub reason: Option<String>,
+}
+
+impl RustBridgeResponse {
+    pub fn success(
+        channel: &str,
+        id: &str,
+        result: Value
+    ) -> RustBridgeResponse {
+        RustBridgeResponse::Success(RustBridgeSuccessResponse {
+            channel: channel.into(),
+            bridge_version: "v1".into(),
+            id: id.into(),
+            ok: true,
+            result_json: serde_json::to_string(&result).unwrap_or_else(|_| "null".to_string()),
+        })
+    }
+    pub fn error(
+        channel: &str,
+        id: &str,
+        code: &str,
+        message: impl Into<String>
+    ) -> RustBridgeResponse {
+        RustBridgeResponse::Error(RustBridgeErrorResponse {
+            channel: channel.into(),
+            bridge_version: "v1".into(),
+            id: id.into(),
+            ok: false,
+            error: RustBridgeErrorPayload {
+                code: code.into(),
+                message: message.into(),
+            },
+        })
+    }
 }

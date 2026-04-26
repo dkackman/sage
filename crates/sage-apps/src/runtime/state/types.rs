@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet};
-
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tokio::sync::{oneshot, Mutex};
@@ -57,15 +56,12 @@ pub struct SageAppRuntimeRecord {
     pub last_active_at: i64,
     pub visible: bool,
     pub internal: bool,
-    pub active_batch_count: u32,
-    pub active_socket_count: u32,
-    pub in_flight_request_count: u32,
 }
 
 #[derive(Default)]
 pub struct AppRuntimeState {
-    pub by_runtime_id: Mutex<BTreeMap<String, SageAppRuntimeRecord>>,
-    pub runtime_by_app_id: Mutex<BTreeMap<String, String>>,
+    pub runtime_by_runtime_id: Mutex<BTreeMap<String, SageAppRuntimeRecord>>,
+    pub runtime_id_by_app_id: Mutex<BTreeMap<String, String>>,
     pub before_stop_listeners_by_app_id: Mutex<BTreeSet<String>>,
     pub pending_stop_ready: Mutex<BTreeMap<String, oneshot::Sender<()>>>,
 }
@@ -73,19 +69,5 @@ pub struct AppRuntimeState {
 impl std::fmt::Debug for AppRuntimeState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppRuntimeState").finish()
-    }
-}
-
-pub fn runtime_id_for(app_id: &str, runtime_kind: SageAppRuntimeKind) -> String {
-    match runtime_kind {
-        SageAppRuntimeKind::User => format!("runtime-{app_id}"),
-        SageAppRuntimeKind::System => format!("system-runtime-{app_id}"),
-    }
-}
-
-pub fn inline_label_for(app_id: &str, runtime_kind: SageAppRuntimeKind) -> String {
-    match runtime_kind {
-        SageAppRuntimeKind::User => format!("app-inline-{app_id}"),
-        SageAppRuntimeKind::System => format!("system-app-inline-{app_id}"),
     }
 }

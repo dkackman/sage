@@ -1,8 +1,14 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use crate::bridge::capabilities::UserBridgeCapability;
-use crate::lifecycle::{GrantedCapabilitiesChange, GrantedNetworkWhitelistChange};
+use crate::lifecycle::update::types::{GrantedCapabilitiesChange, GrantedNetworkWhitelistChange};
 use crate::types::SageNetworkPermissionTarget;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub enum EventForApp {
+    GrantedCapabilitiesChange(GrantedCapabilitiesChangeEvent),
+    GrantedNetworkWhitelistChange(GrantedNetworkWhitelistChangeEvent),
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -13,18 +19,6 @@ pub struct GrantedCapabilitiesChangeEvent {
     pub removed_granted_capabilities: Vec<UserBridgeCapability>,
     pub added_granted_capabilities: Vec<UserBridgeCapability>,
     pub full_granted_capabilities: Vec<UserBridgeCapability>,
-}
-
-impl GrantedCapabilitiesChangeEvent {
-    pub fn from_change(channel: String, change: GrantedCapabilitiesChange) -> Self {
-        Self {
-            channel,
-            event_type: "grantedCapabilitiesChange".to_string(),
-            removed_granted_capabilities: change.removed,
-            added_granted_capabilities: change.added,
-            full_granted_capabilities: change.full,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -38,14 +32,24 @@ pub struct GrantedNetworkWhitelistChangeEvent {
     pub full_granted_network_whitelist: Vec<SageNetworkPermissionTarget>,
 }
 
-impl GrantedNetworkWhitelistChangeEvent {
-    pub fn from_change(channel: String, change: GrantedNetworkWhitelistChange) -> Self {
-        Self {
-            channel,
+impl EventForApp {
+    pub fn from_capabilities_change(channel: &str, change: GrantedCapabilitiesChange) -> Self {
+        EventForApp::GrantedCapabilitiesChange(GrantedCapabilitiesChangeEvent {
+            channel: channel.to_string(),
+            event_type: "grantedCapabilitiesChange".to_string(),
+            removed_granted_capabilities: change.removed,
+            added_granted_capabilities: change.added,
+            full_granted_capabilities: change.full,
+        })
+    }
+
+    pub fn from_network_whitelist_change(channel: &str, change: GrantedNetworkWhitelistChange) -> Self {
+        EventForApp::GrantedNetworkWhitelistChange(GrantedNetworkWhitelistChangeEvent {
+            channel: channel.to_string(),
             event_type: "grantedNetworkWhitelistChange".to_string(),
             removed_granted_network_whitelist: change.removed,
             added_granted_network_whitelist: change.added,
             full_granted_network_whitelist: change.full,
-        }
+        })
     }
 }

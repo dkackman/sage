@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 use crate::runtime::resolve_app;
 use crate::state::AppsHostState;
@@ -15,6 +15,7 @@ pub async fn apps_get_sandbox_state(
 ) -> Result<SandboxStateView, String> {
     let baseline = apps_state.sandbox.baseline.lock().await.clone();
     let current_run = apps_state.sandbox.current_run.lock().await.clone();
+
     Ok(build_state_view(&baseline, current_run.as_ref()))
 }
 
@@ -25,15 +26,11 @@ pub async fn apps_get_app_launch_gate(
     apps_state: State<'_, AppsHostState>,
     app_id: String,
 ) -> Result<AppLaunchGateResult, String> {
-    let base_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
-
-    let installed = resolve_app(&base_path, &app_id)?;
+    let installed = resolve_app(&app, &app_id)?;
 
     let baseline = apps_state.sandbox.baseline.lock().await.clone();
     let current_run = apps_state.sandbox.current_run.lock().await.clone();
+
     let effective = build_effective_state(&baseline, current_run.as_ref());
 
     Ok(evaluate_app_launch_gate(&installed, &effective))

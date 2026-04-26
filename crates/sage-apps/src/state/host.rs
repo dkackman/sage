@@ -1,5 +1,5 @@
-use crate::bridge::BridgeState;
-use crate::runtime::AppRuntimeState;
+use crate::bridge::state::BridgeState;
+use crate::runtime::state::types::AppRuntimeState;
 use crate::sandbox::SandboxStateStore;
 
 #[derive(Debug, Default)]

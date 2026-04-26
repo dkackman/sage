@@ -4,21 +4,15 @@ use std::{
 };
 
 use anyhow::{Context, Result as AnyResult, anyhow};
-use sha2::{Digest, Sha256};
 use zip::ZipArchive;
 
 use crate::{
     lifecycle::manifest::read_manifest,
     types::{SageAppPackageManifest, SageAppSnapshot},
 };
+use crate::utils::bytes_sha256_hex;
 
 const MANIFEST_FILE_NAME: &str = "sage-manifest.json";
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    hex::encode(hasher.finalize())
-}
 
 pub fn unzip_to_dir(zip_path: &Path, out_dir: &Path) -> AnyResult<()> {
     let file = fs::File::open(zip_path)
@@ -74,7 +68,7 @@ pub fn validate_package_structure(package_root: &Path) -> AnyResult<()> {
         let bytes = fs::read(&path)
             .with_context(|| format!("failed to read package file {}", path.display()))?;
 
-        let actual_hash = sha256_hex(&bytes);
+        let actual_hash = bytes_sha256_hex(&bytes);
         if actual_hash != file.sha256 {
             anyhow::bail!("sha256 mismatch for {}", file.path);
         }
@@ -112,7 +106,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> AnyResult<()> {
     Ok(())
 }
 
-fn compute_dir_size(root: &Path) -> AnyResult<u64> {
+pub fn compute_dir_size(root: &Path) -> AnyResult<u64> {
     let mut total = 0_u64;
 
     for entry in fs::read_dir(root)
@@ -158,7 +152,7 @@ pub fn prepare_zip_snapshot(
     })?;
 
     let total_bytes = compute_dir_size(&snapshot_dir)?;
-    let manifest_hash = sha256_hex(&serde_json::to_vec(manifest)?);
+    let manifest_hash = bytes_sha256_hex(&serde_json::to_vec(manifest)?);
 
     Ok(SageAppSnapshot {
         manifest_hash,

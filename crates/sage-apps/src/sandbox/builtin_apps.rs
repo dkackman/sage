@@ -9,18 +9,28 @@ use crate::lifecycle::{manifest_entry_file, manifest_icon_file};
 use crate::permissions::{normalize_and_validate_requested_permissions, resolve_capability_flags, resolve_effective_granted_capabilities, validate_user_granted_capabilities};
 use crate::types::{InstalledSageAppStorage, SageApp, SageAppCommon, SageAppSnapshot, SageAppPackageManifest, SageGrantedNetworkPermissions, SageGrantedPermissions, UserSageAppSource, UserSageApp};
 
+macro_rules! sandbox_test_id_prefix {
+    () => {
+        "__sage_test_"
+    };
+}
+
+pub const SANDBOX_TEST_ID_PREFIX: &str = sandbox_test_id_prefix!();
+
 pub const BUILTIN_STORAGE_ISOLATION_PERSISTENT_ID: &str =
-    "__sage_test_storage_isolation_persistent";
+    concat!(sandbox_test_id_prefix!(), "storage_isolation_persistent");
 pub const BUILTIN_STORAGE_ISOLATION_INCOGNITO_ID: &str =
-    "__sage_test_storage_isolation_incognito";
+    concat!(sandbox_test_id_prefix!(), "storage_isolation_incognito");
 pub const BUILTIN_PERSISTENCE_PERSISTENT_ID: &str =
-    "__sage_test_persistence_persistent";
+    concat!(sandbox_test_id_prefix!(), "persistence_persistent");
 pub const BUILTIN_PERSISTENCE_INCOGNITO_ID: &str =
-    "__sage_test_persistence_incognito";
+    concat!(sandbox_test_id_prefix!(), "persistence_incognito");
 pub const BUILTIN_STORAGE_CLEAR_PERSISTENT_ID: &str =
-    "__sage_test_storage_clear_persistent";
-pub const BUILTIN_NETWORK_ALLOW_A_ID: &str = "__sage_test_network_allow_a";
-pub const BUILTIN_NETWORK_ALLOW_B_ID: &str = "__sage_test_network_allow_b";
+    concat!(sandbox_test_id_prefix!(), "storage_clear_persistent");
+pub const BUILTIN_NETWORK_ALLOW_A_ID: &str =
+    concat!(sandbox_test_id_prefix!(), "network_allow_a");
+pub const BUILTIN_NETWORK_ALLOW_B_ID: &str =
+    concat!(sandbox_test_id_prefix!(), "network_allow_b");
 
 #[derive(Debug, Clone, Copy)]
 pub struct BuiltinTestAppSpec {

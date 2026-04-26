@@ -10,7 +10,8 @@ use crate::bridge::methods::user::app::request_network_whitelist_grant::{Request
 use crate::bridge::methods::user::bridge::ping::BridgePingResult;
 use crate::bridge::methods::user::bridge::send::BridgeSendResult;
 use crate::bridge::methods::user::wallet::send_xch::WalletSendXchParams;
-use crate::runtime::{ReadyToStopParams, RuntimeAckResult, SageAppRuntimeRecord, SageLifecycleBeforeStopDetail, SetBeforeStopListenerParams, SystemKillRuntimeResult};
+use crate::runtime::state::types::{ReadyToStopParams, RuntimeAckResult, SageAppRuntimeRecord, SageLifecycleBeforeStopDetail, SetBeforeStopListenerParams};
+use crate::runtime::stop::SystemKillRuntimeResult;
 
 pub fn export_system_bridge_typescript() -> Result<String, String> {
     let mut types = TypeCollection::default();

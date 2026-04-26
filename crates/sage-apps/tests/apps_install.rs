@@ -2,9 +2,8 @@ mod common;
 
 use common::sample_manifest_file;
 use sage_apps::bridge::capabilities::UserBridgeCapability;
-use sage_apps::lifecycle::install::{
-    manifest_entry_file, manifest_icon_file, normalize_app_url,
-};
+use sage_apps::lifecycle::install::url::normalize_app_url;
+use sage_apps::lifecycle::manifest::{manifest_entry_file, manifest_icon_file};
 use sage_apps::types::{
     SageAppPackageManifest, SageNetworkPermissionTarget, SageRequestedCapabilities,
     SageRequestedNetworkPermissions, SageRequestedNetworkWhitelist,

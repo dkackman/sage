@@ -362,12 +362,6 @@ async isAssetOwned(req: IsAssetOwned) : Promise<IsAssetOwnedResponse> {
 async getXchUsdPrice(req: GetXchUsdPrice) : Promise<GetXchUsdPriceResponse> {
     return await TAURI_INVOKE("get_xch_usd_price", { req });
 },
-async appsCreateInlineRuntime(args: CreateInlineRuntimeArgs) : Promise<SageAppRuntimeRecord> {
-    return await TAURI_INVOKE("apps_create_inline_runtime", { args });
-},
-async appsClearRuntimeBrowsingData(appId: string) : Promise<null> {
-    return await TAURI_INVOKE("apps_clear_runtime_browsing_data", { appId });
-},
 async appsInvokeBridge(request: RustBridgeRequest) : Promise<RustBridgeInvokeResult> {
     return await TAURI_INVOKE("apps_invoke_bridge", { request });
 },
@@ -422,11 +416,17 @@ async appsUpdatePermissions(appId: string, grantedPermissions: SageGrantedPermis
 async appsMarkStorageMayContainSecrets(appId: string) : Promise<null> {
     return await TAURI_INVOKE("apps_mark_storage_may_contain_secrets", { appId });
 },
+async appsClearRuntimeBrowsingData(appId: string) : Promise<null> {
+    return await TAURI_INVOKE("apps_clear_runtime_browsing_data", { appId });
+},
 async getBuiltinTestApp(appId: string) : Promise<SageApp | null> {
     return await TAURI_INVOKE("get_builtin_test_app", { appId });
 },
 async getBuiltinSystemApp(appId: string) : Promise<SageApp | null> {
     return await TAURI_INVOKE("get_builtin_system_app", { appId });
+},
+async appsCreateInlineRuntime(args: CreateInlineRuntimeArgs) : Promise<SageAppRuntimeRecord> {
+    return await TAURI_INVOKE("apps_create_inline_runtime", { args });
 },
 async appsListRuntimes() : Promise<SageAppRuntimeRecord[]> {
     return await TAURI_INVOKE("apps_list_runtimes");
@@ -2265,7 +2265,7 @@ export type SageAppDonation = { address: string }
 export type SageAppManifestFile = { path: string; sha256: string; size: number }
 export type SageAppPackageManifest = { name: string; version: string; permissions: SageRequestedPermissions; files: SageAppManifestFile[]; entry: string | null; icon: string | null; author: SageAppAuthor | null; donation: SageAppDonation | null }
 export type SageAppRuntimeKind = "user" | "system"
-export type SageAppRuntimeRecord = { runtimeId: string; appId: string; appName: string; entrySrc: string; webviewLabel: string; hostWindowLabel: string; runtimeKind: SageAppRuntimeKind; mode: string; state: string; startedAt: number; lastActiveAt: number; visible: boolean; internal: boolean; activeBatchCount: number; activeSocketCount: number; inFlightRequestCount: number }
+export type SageAppRuntimeRecord = { runtimeId: string; appId: string; appName: string; entrySrc: string; webviewLabel: string; hostWindowLabel: string; runtimeKind: SageAppRuntimeKind; mode: string; state: string; startedAt: number; lastActiveAt: number; visible: boolean; internal: boolean }
 export type SageAppSnapshot = { manifestHash: string; snapshotDir: string; totalBytes: number; manifest: SageAppPackageManifest }
 export type SageAppUrlPreview = { appUrl: string; manifestUrl: string; manifestHash: string; manifest: SageAppPackageManifest }
 export type SageAppsError = { kind: ErrorKind; reason: string }

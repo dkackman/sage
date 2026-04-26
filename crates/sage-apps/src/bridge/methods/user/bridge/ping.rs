@@ -1,9 +1,12 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+
 use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
-use crate::bridge::methods::shared::BridgeMethodCapability;
+use crate::bridge::methods::shared::{
+    BridgeHandleResult, BridgeMethodCapability,
+};
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest};
 
 #[derive(Debug, Clone, Copy)]
 pub struct BridgePing;
@@ -18,11 +21,19 @@ pub struct BridgePingResult {
 
 #[async_trait]
 impl BridgeMethod for BridgePing {
+    fn name(&self) -> &'static str {
+        "bridge.ping"
+    }
+
     fn capability(&self) -> BridgeMethodCapability {
         BridgeMethodCapability::ungated()
     }
 
-    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+    fn approval_request(
+        &self,
+        _ctx: BridgeContext<'_>,
+        _request: &RustBridgeRequest,
+    ) -> Option<RustBridgeApprovalRequest> {
         None
     }
 
@@ -30,22 +41,12 @@ impl BridgeMethod for BridgePing {
         &self,
         ctx: BridgeContext<'_>,
         _tools: BridgeTools<'_>,
-        request: &RustBridgeRequest,
-    ) -> RustBridgeResponse {
-        let result = BridgePingResult {
+        _request: &RustBridgeRequest,
+    ) -> BridgeHandleResult {
+        Ok(Box::new(BridgePingResult {
             ok: true,
             app_id: ctx.app.id().to_string(),
             app_name: ctx.app.name().to_string(),
-        };
-
-        match serde_json::to_value(result) {
-            Ok(value) => success(&request.channel, &request.id, value),
-            Err(err) => failure(
-                &request.channel,
-                &request.id,
-                "internal_error",
-                format!("failed to encode bridge.ping result: {err}"),
-            ),
-        }
+        }))
     }
 }

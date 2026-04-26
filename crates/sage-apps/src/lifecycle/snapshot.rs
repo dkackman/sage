@@ -4,15 +4,9 @@ use std::{
 };
 use std::path::Component;
 use anyhow::{Context, Result as AnyResult, anyhow};
-use sha2::{Digest, Sha256};
-
+use crate::lifecycle::compute_dir_size;
 use crate::types::{SageAppPackageManifest, SageAppSnapshot};
-
-fn hash_bytes(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    hex::encode(hasher.finalize())
-}
+use crate::utils::bytes_sha256_hex;
 
 pub fn read_snapshot_file(root: &Path, request_path: &str) -> AnyResult<PathBuf> {
     let normalized = if request_path.is_empty() || request_path == "/" {
@@ -75,30 +69,6 @@ fn write_file(path: &Path, bytes: &[u8]) -> AnyResult<()> {
     Ok(())
 }
 
-fn compute_dir_size(root: &Path) -> AnyResult<u64> {
-    let mut total = 0_u64;
-
-    for entry in fs::read_dir(root)
-        .with_context(|| format!("failed to read directory {}", root.display()))?
-    {
-        let entry = entry?;
-        let file_type = entry.file_type()?;
-        let path = entry.path();
-
-        if file_type.is_dir() {
-            total = total
-                .checked_add(compute_dir_size(&path)?)
-                .ok_or_else(|| anyhow!("directory size overflow"))?;
-        } else if file_type.is_file() {
-            total = total
-                .checked_add(entry.metadata()?.len())
-                .ok_or_else(|| anyhow!("directory size overflow"))?;
-        }
-    }
-
-    Ok(total)
-}
-
 fn join_app_url(base_url: &str, relative_path: &str) -> AnyResult<String> {
     let base = reqwest::Url::parse(base_url)
         .with_context(|| format!("invalid app url {base_url}"))?;
@@ -129,7 +99,7 @@ pub async fn download_url_snapshot(
         let url = join_app_url(app_url, &file.path)?;
         let bytes = download_bytes(&url).await?;
 
-        let actual_hash = hash_bytes(&bytes);
+        let actual_hash = bytes_sha256_hex(&bytes);
         if actual_hash != file.sha256 {
             return Err(anyhow!(
                 "hash mismatch for {}: expected {}, got {}",

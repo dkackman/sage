@@ -162,9 +162,6 @@ export function App() {
   const totals = useMemo(
     () => ({
       runtimes: runtimes.length,
-      requests: runtimes.reduce((sum, r) => sum + r.inFlightRequestCount, 0),
-      batches: runtimes.reduce((sum, r) => sum + r.activeBatchCount, 0),
-      sockets: runtimes.reduce((sum, r) => sum + r.activeSocketCount, 0),
     }),
     [runtimes],
   );
@@ -278,9 +275,6 @@ export function App() {
           }}
         >
           <Metric label='Runtimes' value={totals.runtimes} />
-          <Metric label='Requests' value={totals.requests} />
-          <Metric label='Batches' value={totals.batches} />
-          <Metric label='Sockets' value={totals.sockets} />
         </div>
 
         <div
@@ -422,18 +416,6 @@ export function App() {
                       <Metric label='Kind' value={runtime.runtimeKind} />
                       <Metric label='State' value={runtime.state} />
                       <Metric label='Mode' value={runtime.mode} />
-                      <Metric
-                        label='Requests'
-                        value={runtime.inFlightRequestCount}
-                      />
-                      <Metric
-                        label='Batches'
-                        value={runtime.activeBatchCount}
-                      />
-                      <Metric
-                        label='Sockets'
-                        value={runtime.activeSocketCount}
-                      />
                     </div>
                   </div>
 

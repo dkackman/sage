@@ -1,8 +1,9 @@
 use async_trait::async_trait;
-use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
-use crate::bridge::{failure, success, RustBridgeApprovalRequest, RustBridgeRequest, RustBridgeResponse};
+
+use crate::bridge::{RustBridgeApprovalRequest, RustBridgeRequest};
 use crate::bridge::capabilities::UserBridgeCapability;
-use crate::bridge::methods::shared::BridgeMethodCapability;
+use crate::bridge::methods::{BridgeContext, BridgeMethod, BridgeTools};
+use crate::bridge::methods::shared::{BridgeHandleResult, BridgeMethodCapability};
 use crate::permissions::{resolve_effective_granted_capabilities, resolve_shared_capabilities};
 use crate::types::SageApp;
 
@@ -11,11 +12,19 @@ pub struct AppGetCapabilities;
 
 #[async_trait]
 impl BridgeMethod for AppGetCapabilities {
+    fn name(&self) -> &'static str {
+        "app.getCapabilities"
+    }
+
     fn capability(&self) -> BridgeMethodCapability {
         BridgeMethodCapability::user(UserBridgeCapability::AppGetCapabilities)
     }
 
-    fn approval_request(&self, _ctx: BridgeContext<'_>, _request: &RustBridgeRequest) -> Option<RustBridgeApprovalRequest> {
+    fn approval_request(
+        &self,
+        _ctx: BridgeContext<'_>,
+        _request: &RustBridgeRequest,
+    ) -> Option<RustBridgeApprovalRequest> {
         None
     }
 
@@ -23,8 +32,8 @@ impl BridgeMethod for AppGetCapabilities {
         &self,
         ctx: BridgeContext<'_>,
         _tools: BridgeTools<'_>,
-        request: &RustBridgeRequest,
-    ) -> RustBridgeResponse {
+        _request: &RustBridgeRequest,
+    ) -> BridgeHandleResult {
         let effective_capabilities = match ctx.app {
             SageApp::User(user_app) => resolve_effective_granted_capabilities(
                 &user_app.common.requested_permissions,
@@ -34,16 +43,9 @@ impl BridgeMethod for AppGetCapabilities {
             SageApp::System(_) => ctx.app.granted_permissions().capabilities.clone(),
         };
 
-        let capabilities = resolve_shared_capabilities(&effective_capabilities).unwrap_or_default();
+        let capabilities =
+            resolve_shared_capabilities(&effective_capabilities).unwrap_or_default();
 
-        match serde_json::to_value(&capabilities) {
-            Ok(value) => success(&request.channel, &request.id, value),
-            Err(err) => failure(
-                &request.channel,
-                &request.id,
-                "internal_error",
-                format!("failed to encode sage.getCapabilities result: {err}"),
-            ),
-        }
+        Ok(Box::new(capabilities))
     }
 }

@@ -2,8 +2,7 @@ use tauri::State;
 use tokio::time::{sleep, Duration};
 
 use crate::state::AppsHostState;
-
-use super::super::runtime::now_ms;
+use crate::utils::unix_timestamp_ms;
 use super::super::store::SandboxAppResult;
 use super::super::types::{
     SandboxIsolationProbeResult, SandboxNetworkProbeResult,
@@ -17,7 +16,7 @@ pub async fn poll_isolation(
     expected_count: usize,
     timeout_ms: i64,
 ) -> Result<Vec<SandboxAppResult<SandboxIsolationProbeResult>>, String> {
-    let started = now_ms();
+    let started = unix_timestamp_ms();
 
     loop {
         let results = {
@@ -31,7 +30,7 @@ pub async fn poll_isolation(
             return Ok(results);
         }
 
-        if now_ms() - started >= timeout_ms {
+        if unix_timestamp_ms() - started >= timeout_ms {
             return Err("Timed out waiting for sandbox isolation results.".into());
         }
 
@@ -45,7 +44,7 @@ pub async fn poll_persistence_write(
     expected_count: usize,
     timeout_ms: i64,
 ) -> Result<Vec<SandboxAppResult<SandboxPersistenceWriteProbeResult>>, String> {
-    let started = now_ms();
+    let started = unix_timestamp_ms();
 
     loop {
         let results = {
@@ -59,7 +58,7 @@ pub async fn poll_persistence_write(
             return Ok(results);
         }
 
-        if now_ms() - started >= timeout_ms {
+        if unix_timestamp_ms() - started >= timeout_ms {
             return Err("Timed out waiting for sandbox persistence write results.".into());
         }
 
@@ -73,7 +72,7 @@ pub async fn poll_persistence_read(
     expected_count: usize,
     timeout_ms: i64,
 ) -> Result<Vec<SandboxAppResult<SandboxPersistenceReadProbeResult>>, String> {
-    let started = now_ms();
+    let started = unix_timestamp_ms();
 
     loop {
         let results = {
@@ -87,7 +86,7 @@ pub async fn poll_persistence_read(
             return Ok(results);
         }
 
-        if now_ms() - started >= timeout_ms {
+        if unix_timestamp_ms() - started >= timeout_ms {
             return Err("Timed out waiting for sandbox persistence read results.".into());
         }
 
@@ -101,7 +100,7 @@ pub async fn poll_network(
     expected_count: usize,
     timeout_ms: i64,
 ) -> Result<Vec<SandboxAppResult<SandboxNetworkProbeResult>>, String> {
-    let started = now_ms();
+    let started = unix_timestamp_ms();
 
     loop {
         let results = {
@@ -115,7 +114,7 @@ pub async fn poll_network(
             return Ok(results);
         }
 
-        if now_ms() - started >= timeout_ms {
+        if unix_timestamp_ms() - started >= timeout_ms {
             return Err("Timed out waiting for sandbox network results.".into());
         }
 
@@ -130,7 +129,7 @@ pub async fn poll_clear_cycle_phase(
     phase: SandboxStorageClearProbePhase,
     timeout_ms: i64,
 ) -> Result<SandboxStorageClearProbeResult, String> {
-    let started = now_ms();
+    let started = unix_timestamp_ms();
 
     loop {
         let results = {
@@ -147,7 +146,7 @@ pub async fn poll_clear_cycle_phase(
             return Ok(found.data);
         }
 
-        if now_ms() - started >= timeout_ms {
+        if unix_timestamp_ms() - started >= timeout_ms {
             return Err("Timed out waiting for sandbox storage clear phase.".into());
         }
 

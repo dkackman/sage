@@ -1,17 +1,15 @@
 use std::collections::BTreeMap;
-use std::path::Path;
 
 use tauri::{AppHandle, Manager};
 use url::Url;
-use crate::bridge::capabilities::UserBridgeCapability;
 use crate::lifecycle::read_installed_app_by_id;
+use crate::runtime::webview_locator::get_webview_in_sage_window;
+use crate::runtime::state::types::SageAppRuntimeKind;
 use crate::sandbox::build_builtin_test_app;
 use crate::system_apps::build_builtin_system_app;
 use crate::types::SageApp;
 
-use super::records::{inline_label_for, SageAppRuntimeKind};
-
-fn app_id_from_inline_label(label: &str) -> Option<(SageAppRuntimeKind, &str)> {
+pub fn app_id_from_webview_label(label: &str) -> Option<(SageAppRuntimeKind, &str)> {
     if let Some(app_id) = label.strip_prefix("app-inline-") {
         return Some((SageAppRuntimeKind::User, app_id));
     }
@@ -65,8 +63,13 @@ pub fn build_entry_src(
     url.to_string()
 }
 
-pub fn resolve_app(base_path: &Path, app_id: &str) -> Result<SageApp, String> {
-    if let Ok(app) = read_installed_app_by_id(base_path, app_id) {
+pub fn resolve_app(app: &AppHandle, app_id: &str) -> Result<SageApp, String> {
+    let base_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
+
+    if let Ok(app) = read_installed_app_by_id(&base_path, app_id) {
         return Ok(SageApp::User(app));
     }
 
@@ -81,61 +84,33 @@ pub fn resolve_app(base_path: &Path, app_id: &str) -> Result<SageApp, String> {
         .ok_or_else(|| format!("failed to resolve app {app_id}"))
 }
 
-pub fn should_use_incognito(app: &SageApp) -> bool {
-    let has_persistent_storage = app
-        .granted_permissions()
-        .capabilities
-        .contains(&UserBridgeCapability::PersistentStorage);
-
-    if !has_persistent_storage {
-        return true;
-    }
-
-    if app.capability_flags().storage_may_contain_secrets {
-        return true;
-    }
-
-    false
-}
-
 pub(crate) fn assert_bridge_origin(
     app: AppHandle,
-    source_label: String,
+    webview_label: String,
 ) -> Result<(String, SageAppRuntimeKind), String> {
-    let (runtime_kind, app_id) = app_id_from_inline_label(&source_label)
-        .ok_or_else(|| format!("invalid app runtime label: {source_label}"))?;
+    let (runtime_kind, app_id) = app_id_from_webview_label(&webview_label)
+        .ok_or_else(|| format!("invalid app runtime label: {webview_label}"))?;
 
     let app_id = app_id.to_string();
 
-    let base_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
-
-    let resolved = resolve_app(&base_path, &app_id)?;
+    let resolved = resolve_app(&app, &app_id)?;
     let expected_runtime_kind = runtime_kind_for_app(&resolved);
 
     if runtime_kind != expected_runtime_kind {
         return Err(format!(
-            "bridge denied for {source_label}: runtime kind mismatch (label={runtime_kind:?}, app={expected_runtime_kind:?})"
+            "bridge denied for {webview_label}: runtime kind mismatch (label={runtime_kind:?}, app={expected_runtime_kind:?})"
         ));
     }
 
-    let host_window = app
-        .get_window("main")
-        .ok_or_else(|| "missing main window".to_string())?;
+    let app_webview = get_webview_in_sage_window(&app, &webview_label)?;
 
-    let webview = host_window
-        .get_webview(&source_label)
-        .ok_or_else(|| format!("missing webview for label: {source_label}"))?;
-
-    let current_url = webview
+    let current_url = app_webview
         .url()
         .map_err(|e| format!("failed to read current webview url: {e}"))?;
 
     if !is_allowed_app_url(&current_url, resolved.origin_id(), runtime_kind) {
         return Err(format!(
-            "bridge denied for {source_label}: current url {} is outside {}://{}/...",
+            "bridge denied for {webview_label}: current url {} is outside {}://{}/...",
             current_url,
             protocol_scheme_for_runtime_kind(runtime_kind),
             resolved.origin_id()
@@ -143,8 +118,4 @@ pub(crate) fn assert_bridge_origin(
     }
 
     Ok((app_id, runtime_kind))
-}
-
-pub fn webview_label_for_app(app: &SageApp) -> String {
-    inline_label_for(app.id(), runtime_kind_for_app(app))
 }

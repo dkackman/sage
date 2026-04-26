@@ -3,6 +3,7 @@ use specta::Type;
 
 use crate::bridge::capabilities::{SystemBridgeCapability, UserBridgeCapability};
 use crate::lifecycle::parse_network_permission_target;
+use crate::sandbox::SANDBOX_TEST_ID_PREFIX;
 
 #[derive(
     Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, PartialOrd, Ord,
@@ -75,8 +76,8 @@ pub struct PendingStorageCleanupEntry {
     pub app_id: String,
     pub app_name: String,
     pub target: PendingStorageCleanupTarget,
-    pub created_at_ms: u64,
-    pub last_attempt_at_ms: Option<u64>,
+    pub created_at_ms: i64,
+    pub last_attempt_at_ms: Option<i64>,
     pub attempt_count: u32,
     pub last_error: Option<String>,
 }
@@ -88,7 +89,7 @@ pub struct RetiredAppOriginEntry {
     pub app_id: String,
     pub app_name: String,
     pub origin_id: String,
-    pub created_at_ms: u64,
+    pub created_at_ms: i64,
     pub storage_may_contain_secrets: bool,
     pub cleanup_pending: bool,
 }
@@ -166,7 +167,7 @@ pub struct UserSageAppPendingUpdate {
     pub manifest: SageAppPackageManifest,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum UserSageAppSource {
     Zip,
@@ -325,6 +326,10 @@ impl SageApp {
             Self::System(app) => Some(app),
             Self::User(_) => None,
         }
+    }
+
+    pub fn is_sandbox_test(&self) -> bool {
+        self.id().starts_with(SANDBOX_TEST_ID_PREFIX)
     }
 }
 
