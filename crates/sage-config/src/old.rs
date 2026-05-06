@@ -140,6 +140,7 @@ pub fn migrate_config(old: OldConfig) -> Result<(Config, WalletConfig), ParseInt
             enabled: old.rpc.run_on_startup,
             port: old.rpc.server_port,
         },
+        sync: crate::SyncConfig::default(),
     };
 
     let mut wallet_config = WalletConfig {
@@ -155,6 +156,7 @@ pub fn migrate_config(old: OldConfig) -> Result<(Config, WalletConfig), ParseInt
             delta_sync: None,
             emoji: None,
             change_address: None,
+            sync_enabled: false,
         });
     }
 

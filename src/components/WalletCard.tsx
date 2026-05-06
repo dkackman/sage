@@ -96,15 +96,16 @@ export function WalletCard({
 
     commands
       .renameKey({ fingerprint: info.fingerprint, name: newName })
-      .then(() =>
+      .then(() => {
         setKeys(
           keys.map((key) =>
             key.fingerprint === info.fingerprint
               ? { ...key, name: newName }
               : key,
           ),
-        ),
-      )
+        );
+        commands.publishWalletSettings(info.fingerprint).catch(console.warn);
+      })
       .catch(addError)
       .finally(() => setIsRenameOpen(false));
 
@@ -114,13 +115,14 @@ export function WalletCard({
   const updateEmoji = (emoji: string | null) => {
     commands
       .setWalletEmoji({ fingerprint: info.fingerprint, emoji })
-      .then(() =>
+      .then(() => {
         setKeys(
           keys.map((key) =>
             key.fingerprint === info.fingerprint ? { ...key, emoji } : key,
           ),
-        ),
-      )
+        );
+        commands.publishWalletSettings(info.fingerprint).catch(console.warn);
+      })
       .catch(addError);
   };
 

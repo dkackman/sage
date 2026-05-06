@@ -70,6 +70,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 import {
   commands,
+  FetchSettingsResult,
   GetDatabaseStatsResponse,
   KeyInfo,
   LogFile,
@@ -79,6 +80,12 @@ import {
   Wallet,
   WalletDefaults,
 } from '../bindings';
+import {
+  getRelays,
+  getStatus,
+  RelayInfo,
+  SyncStatus,
+} from 'tauri-plugin-nostr-sync-api';
 
 import { ThemeSelectorSimple } from '../components/ThemeSelector';
 import { isValidU32 } from '../validation';
@@ -198,6 +205,7 @@ export default function Settings() {
 
               <TabsContent value='advanced'>
                 <div className='grid gap-4'>
+                  {wallet && <SyncSettings fingerprint={wallet.fingerprint} />}
                   {!isMobile && <RpcSettings />}
                   <LogViewer />
                 </div>
@@ -1229,6 +1237,7 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
                     if (wallet) {
                       setWallet({ ...wallet, name: localName });
                     }
+                    commands.publishWalletSettings(fingerprint).catch(console.warn);
                   })
                   .catch(addError);
               }}
@@ -1599,5 +1608,147 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function SyncSettings({ fingerprint }: { fingerprint: number }) {
+  const { addError } = useErrors();
+  const [syncEnabled, setSyncEnabledState] = useState<boolean>(false);
+  const [relays, setRelays] = useState<RelayInfo[]>([]);
+  const [status, setStatus] = useState<SyncStatus | null>(null);
+  const [newRelay, setNewRelay] = useState('');
+  const [fetchMessage, setFetchMessage] = useState<string | null>(null);
+  const [fetching, setFetching] = useState(false);
+
+  useEffect(() => {
+    commands.getSyncEnabled(fingerprint).then(setSyncEnabledState).catch(addError);
+  }, [fingerprint, addError]);
+
+  useEffect(() => {
+    if (!syncEnabled) return;
+    const load = () => {
+      getRelays().then(setRelays).catch(console.warn);
+      getStatus().then(setStatus).catch(console.warn);
+    };
+    load();
+    const id = setInterval(load, 5000);
+    return () => clearInterval(id);
+  }, [syncEnabled]);
+
+  const toggleSync = async (enabled: boolean) => {
+    await commands.setSyncEnabled(fingerprint, enabled).catch(addError);
+    setSyncEnabledState(enabled);
+  };
+
+  const handleAddRelay = async () => {
+    const url = newRelay.trim();
+    if (!url) return;
+    await commands.addSyncRelay(url).catch(addError);
+    setNewRelay('');
+    getRelays().then(setRelays).catch(console.warn);
+  };
+
+  const handleRemoveRelay = async (url: string) => {
+    await commands.removeSyncRelay(url).catch(addError);
+    getRelays().then(setRelays).catch(console.warn);
+  };
+
+  const handleFetch = async () => {
+    setFetching(true);
+    setFetchMessage(null);
+    try {
+      const result: FetchSettingsResult =
+        await commands.fetchWalletSettings(fingerprint);
+      if (result.applied) {
+        setFetchMessage(t`Settings applied`);
+      } else {
+        setFetchMessage(t`Already up to date`);
+      }
+    } catch (e) {
+      setFetchMessage(String(e));
+    } finally {
+      setFetching(false);
+    }
+  };
+
+  const connectedCount = status?.connectedRelayCount ?? 0;
+  const totalCount = status?.relayCount ?? 0;
+
+  return (
+    <SettingsSection title={t`Settings Sync`}>
+      <SettingItem
+        label={t`Sync Wallet Settings`}
+        description={t`Sync name and icon across devices using Nostr`}
+        control={
+          <Switch checked={syncEnabled} onCheckedChange={toggleSync} />
+        }
+      />
+
+      {syncEnabled && (
+        <>
+          <div className='px-3 py-2 text-xs text-muted-foreground'>
+            {status?.ready
+              ? t`Sync ready (${connectedCount}/${totalCount} relays connected)`
+              : t`Not connected`}
+          </div>
+
+          {relays.map((relay) => (
+            <div
+              key={relay.url}
+              className='px-3 py-2 flex items-center justify-between gap-2'
+            >
+              <div className='flex items-center gap-2'>
+                <div
+                  className={`h-2 w-2 rounded-full ${relay.connected ? 'bg-green-500' : 'bg-red-400'}`}
+                />
+                <span className='text-sm font-mono truncate'>{relay.url}</span>
+              </div>
+              <Button
+                variant='ghost'
+                size='icon'
+                onClick={() => handleRemoveRelay(relay.url)}
+              >
+                <TrashIcon className='h-4 w-4' />
+              </Button>
+            </div>
+          ))}
+
+          <div className='p-3 flex gap-2'>
+            <Input
+              value={newRelay}
+              placeholder='wss://relay.example.com'
+              onChange={(e) => setNewRelay(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddRelay()}
+            />
+            <Button size='sm' onClick={handleAddRelay}>
+              <Trans>Add</Trans>
+            </Button>
+          </div>
+
+          <div className='p-3 flex items-center gap-3'>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={handleFetch}
+              disabled={fetching}
+            >
+              {fetching ? (
+                <>
+                  <LoaderCircleIcon className='mr-2 h-4 w-4 animate-spin' />
+                  <Trans>Fetching...</Trans>
+                </>
+              ) : (
+                <Trans>Fetch Settings</Trans>
+              )}
+            </Button>
+            {fetchMessage && (
+              <span className='text-sm text-muted-foreground'>
+                {fetchMessage}
+              </span>
+            )}
+          </div>
+        </>
+      )}
+    </SettingsSection>
   );
 }

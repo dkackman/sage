@@ -179,6 +179,9 @@ importers:
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@3.4.19(yaml@2.5.1))
+      tauri-plugin-nostr-sync-api:
+        specifier: file:../tauri-plugin-nostr
+        version: file:../tauri-plugin-nostr(@tauri-apps/api@2.10.1)
       tauri-plugin-safe-area-insets:
         specifier: ^0.1.0
         version: 0.1.0
@@ -3521,6 +3524,12 @@ packages:
     resolution: {integrity: sha512-3ofp+LL8E+pK/JuPLPggVAIaEuhvIz4qNcf3nA1Xn2o/7fb7s/TYpHhwGDv1ZU3PkBluUVaF8PyCHcm48cKLWQ==}
     engines: {node: '>=14.0.0'}
     hasBin: true
+
+  tauri-plugin-nostr-sync-api@file:../tauri-plugin-nostr:
+    resolution: {directory: ../tauri-plugin-nostr, type: directory}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@tauri-apps/api': '>=2.11.0'
 
   tauri-plugin-safe-area-insets@0.1.0:
     resolution: {integrity: sha512-NhtxSQdU7+laTJiO4WZFlTB1CBzRlNE5EuHflGAGXS55fiwOkkaWztfNishFQO+eZtb9i5jLHX3Yho48lnqcRQ==}
@@ -7425,6 +7434,10 @@ snapshots:
     transitivePeerDependencies:
       - tsx
       - yaml
+
+  tauri-plugin-nostr-sync-api@file:../tauri-plugin-nostr(@tauri-apps/api@2.10.1):
+    dependencies:
+      '@tauri-apps/api': 2.10.1
 
   tauri-plugin-safe-area-insets@0.1.0:
     dependencies:

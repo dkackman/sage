@@ -31,6 +31,8 @@ pub struct Wallet {
     pub emoji: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub change_address: Option<String>,
+    #[serde(default)]
+    pub sync_enabled: bool,
 }
 
 impl Wallet {
@@ -48,6 +50,7 @@ impl Default for Wallet {
             delta_sync: None,
             emoji: None,
             change_address: None,
+            sync_enabled: false,
         }
     }
 }
@@ -68,6 +71,7 @@ mod tests {
             change_address: Some(
                 "xch1dtfukqqka3ftqtdlhmc5spc5vd44h7ejrtnjcewxlueam5yrnnqqyczg8t".to_string(),
             ),
+            sync_enabled: false,
         }
     }
 
@@ -95,6 +99,7 @@ mod tests {
                 name = "Main"
                 fingerprint = 1000000
                 change_address = "xch1dtfukqqka3ftqtdlhmc5spc5vd44h7ejrtnjcewxlueam5yrnnqqyczg8t"
+                sync_enabled = false
             "#]],
             &expect![[r#"
                 {
@@ -106,7 +111,8 @@ mod tests {
                       "name": "Main",
                       "fingerprint": 1000000,
                       "delta_sync": null,
-                      "change_address": "xch1dtfukqqka3ftqtdlhmc5spc5vd44h7ejrtnjcewxlueam5yrnnqqyczg8t"
+                      "change_address": "xch1dtfukqqka3ftqtdlhmc5spc5vd44h7ejrtnjcewxlueam5yrnnqqyczg8t",
+                      "sync_enabled": false
                     }
                   ]
                 }"#]],
@@ -126,6 +132,7 @@ mod tests {
                 name = "Main"
                 fingerprint = 1000000
                 change_address = "xch1dtfukqqka3ftqtdlhmc5spc5vd44h7ejrtnjcewxlueam5yrnnqqyczg8t"
+                sync_enabled = false
             "#]],
             &expect![[r#"
                 {
@@ -137,10 +144,32 @@ mod tests {
                       "name": "Main",
                       "fingerprint": 1000000,
                       "delta_sync": null,
-                      "change_address": "xch1dtfukqqka3ftqtdlhmc5spc5vd44h7ejrtnjcewxlueam5yrnnqqyczg8t"
+                      "change_address": "xch1dtfukqqka3ftqtdlhmc5spc5vd44h7ejrtnjcewxlueam5yrnnqqyczg8t",
+                      "sync_enabled": false
                     }
                   ]
                 }"#]],
         );
+    }
+
+    #[test]
+    fn sync_enabled_defaults_to_false() {
+        let wallet = Wallet::default();
+        assert!(!wallet.sync_enabled);
+    }
+
+    #[test]
+    fn sync_enabled_survives_toml_roundtrip() {
+        let wallet = Wallet {
+            sync_enabled: true,
+            ..Wallet::default()
+        };
+        let config = WalletConfig {
+            defaults: WalletDefaults::default(),
+            wallets: vec![wallet],
+        };
+        let toml = toml::to_string_pretty(&config).unwrap();
+        let parsed: WalletConfig = toml::from_str(&toml).unwrap();
+        assert!(parsed.wallets[0].sync_enabled);
     }
 }

@@ -98,6 +98,9 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 aes-gcm = "0.10.3"
 argon2 = "0.5.3"
+hkdf = "0.12"
+sha2 = "0.10"
+nostr-sdk = { version = "0.44.1", features = ["nip44"] }
 
 # Async
 tokio = "1.39.2"

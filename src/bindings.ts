@@ -358,6 +358,30 @@ async getLogs() : Promise<LogFile[]> {
 },
 async isAssetOwned(req: IsAssetOwned) : Promise<IsAssetOwnedResponse> {
     return await TAURI_INVOKE("is_asset_owned", { req });
+},
+async injectNostrSigner(fingerprint: number) : Promise<null> {
+    return await TAURI_INVOKE("inject_nostr_signer", { fingerprint });
+},
+async clearNostrSigner() : Promise<null> {
+    return await TAURI_INVOKE("clear_nostr_signer");
+},
+async getSyncEnabled(fingerprint: number) : Promise<boolean> {
+    return await TAURI_INVOKE("get_sync_enabled", { fingerprint });
+},
+async setSyncEnabled(fingerprint: number, enabled: boolean) : Promise<null> {
+    return await TAURI_INVOKE("set_sync_enabled", { fingerprint, enabled });
+},
+async addSyncRelay(url: string) : Promise<null> {
+    return await TAURI_INVOKE("add_sync_relay", { url });
+},
+async removeSyncRelay(url: string) : Promise<null> {
+    return await TAURI_INVOKE("remove_sync_relay", { url });
+},
+async publishWalletSettings(fingerprint: number) : Promise<null> {
+    return await TAURI_INVOKE("publish_wallet_settings", { fingerprint });
+},
+async fetchWalletSettings(fingerprint: number) : Promise<FetchSettingsResult> {
+    return await TAURI_INVOKE("fetch_wallet_settings", { fingerprint });
 }
 }
 
@@ -826,6 +850,7 @@ export type FeeAction = {
  * The fee amount, in mojos
  */
 amount: Amount }
+export type FetchSettingsResult = { applied: boolean; name: string | null; emoji: string | null }
 /**
  * Filter unlocked coins from a list
  */
@@ -2748,7 +2773,7 @@ offer: OfferSummary;
  * Offer status
  */
 status: OfferRecordStatus }
-export type Wallet = { name: string; fingerprint: number; network?: string | null; delta_sync: boolean | null; emoji?: string | null; change_address?: string | null }
+export type Wallet = { name: string; fingerprint: number; network?: string | null; delta_sync: boolean | null; emoji?: string | null; change_address?: string | null; sync_enabled?: boolean }
 export type WalletDefaults = { delta_sync: boolean }
 
 /** tauri-specta globals **/
