@@ -126,23 +126,13 @@ export function WalletCard({
 
   const copyAddress = async () => {
     try {
-      await commands.login({ fingerprint: info.fingerprint });
-      const sync = await commands.getSyncStatus({});
-
-      if (sync?.receive_address) {
-        await writeText(sync.receive_address);
-        toast.success(t`Address copied to clipboard`);
-      } else {
-        toast.error(t`No address found`);
-      }
+      const result = await commands.getWalletReceiveAddress({
+        fingerprint: info.fingerprint,
+      });
+      await writeText(result.address);
+      toast.success(t`Address copied to clipboard`);
     } catch {
       toast.error(t`Failed to copy address to clipboard`);
-    } finally {
-      try {
-        await commands.logout({});
-      } catch (error) {
-        console.error(error);
-      }
     }
   };
 

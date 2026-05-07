@@ -77,7 +77,7 @@ pub async fn initialize(
     // Resume: inject signer and trigger background settings fetch for the active wallet
     if let Some(fingerprint) = resume_fingerprint {
         inject_signer_for_fingerprint(&app_handle, &state, fingerprint).await;
-        spawn_fetch_settings_if_enabled(app_handle, (*state).clone(), fingerprint);
+        spawn_fetch_settings_if_enabled(app_handle, (*state).clone(), fingerprint, true);
     }
 
     Ok(())
@@ -288,8 +288,20 @@ async fn inject_signer_for_fingerprint(app_handle: &AppHandle, state: &AppState,
     }
 }
 
-fn spawn_fetch_settings_if_enabled(app_handle: AppHandle, state: AppState, fingerprint: u32) {
+fn spawn_fetch_settings_if_enabled(
+    app_handle: AppHandle,
+    state: AppState,
+    fingerprint: u32,
+    wait_connect: bool,
+) {
     tokio::spawn(async move {
+        if wait_connect {
+            app_handle
+                .nostr_sync()
+                .wait_for_connection(Duration::from_secs(10))
+                .await;
+        }
+
         let sync_enabled = {
             let sage = state.lock().await;
             sage.wallet_config
@@ -320,7 +332,7 @@ pub async fn login(
     let fingerprint = req.fingerprint;
     let resp = state.lock().await.login(req).await?;
     inject_signer_for_fingerprint(&app_handle, &state, fingerprint).await;
-    spawn_fetch_settings_if_enabled(app_handle, (*state).clone(), fingerprint);
+    spawn_fetch_settings_if_enabled(app_handle, (*state).clone(), fingerprint, false);
     Ok(resp)
 }
 
@@ -439,10 +451,18 @@ async fn do_publish_wallet_settings(app_handle: &AppHandle, state: &AppState, fi
         else {
             return;
         };
-        (wallet.sync_enabled, wallet.name.clone(), wallet.emoji.clone())
+        (
+            wallet.sync_enabled,
+            wallet.name.clone(),
+            wallet.emoji.clone(),
+        )
     };
 
     if !sync_enabled {
+        return;
+    }
+
+    if app_handle.nostr_sync().pubkey().await.is_none() {
         return;
     }
 
@@ -503,8 +523,19 @@ pub async fn publish_wallet_settings(
 pub async fn fetch_wallet_settings(
     app_handle: AppHandle,
     state: State<'_, AppState>,
-    fingerprint: u32,
 ) -> Result<FetchSettingsResult> {
+    let fingerprint = {
+        let sage = state.lock().await;
+        let Some(fp) = sage.config.global.fingerprint else {
+            return Ok(FetchSettingsResult {
+                applied: false,
+                name: None,
+                emoji: None,
+            });
+        };
+        fp
+    };
+
     let result = app_handle
         .nostr_sync()
         .fetch("wallet-settings")

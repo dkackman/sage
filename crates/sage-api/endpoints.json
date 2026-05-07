@@ -8,6 +8,7 @@
   "get_secret_key": false,
   "get_keys": false,
   "get_sync_status": true,
+  "get_wallet_receive_address": true,
   "get_version": false,
   "get_database_stats": true,
   "perform_database_maintenance": true,

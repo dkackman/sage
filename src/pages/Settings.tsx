@@ -1612,7 +1612,7 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
 
 function SyncSettings({ fingerprint }: { fingerprint: number }) {
   const { addError } = useErrors();
-  const [syncEnabled, setSyncEnabledState] = useState<boolean>(false);
+  const [syncEnabledState, setSyncEnabledState] = useState<boolean>(false);
   const [relays, setRelays] = useState<RelayInfo[]>([]);
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [newRelay, setNewRelay] = useState('');
@@ -1620,11 +1620,18 @@ function SyncSettings({ fingerprint }: { fingerprint: number }) {
   const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
-    commands.getSyncEnabled(fingerprint).then(setSyncEnabledState).catch(addError);
+    commands
+      .getSyncEnabled(fingerprint)
+      .then(setSyncEnabledState)
+      .catch(addError);
   }, [fingerprint, addError]);
 
   useEffect(() => {
-    if (!syncEnabled) return;
+    if (!syncEnabledState) {
+      setRelays([]);
+      setStatus(null);
+      return;
+    }
     const load = () => {
       getRelays().then(setRelays).catch(console.warn);
       getStatus().then(setStatus).catch(console.warn);
@@ -1632,7 +1639,7 @@ function SyncSettings({ fingerprint }: { fingerprint: number }) {
     load();
     const id = setInterval(load, 5000);
     return () => clearInterval(id);
-  }, [syncEnabled]);
+  }, [syncEnabledState]);
 
   const toggleSync = async (enabled: boolean) => {
     await commands.setSyncEnabled(fingerprint, enabled).catch(addError);
@@ -1656,8 +1663,7 @@ function SyncSettings({ fingerprint }: { fingerprint: number }) {
     setFetching(true);
     setFetchMessage(null);
     try {
-      const result: FetchSettingsResult =
-        await commands.fetchWalletSettings(fingerprint);
+      const result: FetchSettingsResult = await commands.fetchWalletSettings();
       if (result.applied) {
         setFetchMessage(t`Settings applied`);
       } else {
@@ -1679,11 +1685,11 @@ function SyncSettings({ fingerprint }: { fingerprint: number }) {
         label={t`Sync Wallet Settings`}
         description={t`Sync name and icon across devices using Nostr`}
         control={
-          <Switch checked={syncEnabled} onCheckedChange={toggleSync} />
+          <Switch checked={syncEnabledState} onCheckedChange={toggleSync} />
         }
       />
 
-      {syncEnabled && (
+      {syncEnabledState && (
         <>
           <div className='px-3 py-2 text-xs text-muted-foreground'>
             {status?.ready

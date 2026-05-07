@@ -119,6 +119,9 @@ async submitTransaction(req: SubmitTransaction) : Promise<SubmitTransactionRespo
 async getSyncStatus(req: GetSyncStatus) : Promise<GetSyncStatusResponse> {
     return await TAURI_INVOKE("get_sync_status", { req });
 },
+async getWalletReceiveAddress(req: GetWalletReceiveAddress) : Promise<GetWalletReceiveAddressResponse> {
+    return await TAURI_INVOKE("get_wallet_receive_address", { req });
+},
 async getVersion(req: GetVersion) : Promise<GetVersionResponse> {
     return await TAURI_INVOKE("get_version", { req });
 },
@@ -359,12 +362,6 @@ async getLogs() : Promise<LogFile[]> {
 async isAssetOwned(req: IsAssetOwned) : Promise<IsAssetOwnedResponse> {
     return await TAURI_INVOKE("is_asset_owned", { req });
 },
-async injectNostrSigner(fingerprint: number) : Promise<null> {
-    return await TAURI_INVOKE("inject_nostr_signer", { fingerprint });
-},
-async clearNostrSigner() : Promise<null> {
-    return await TAURI_INVOKE("clear_nostr_signer");
-},
 async getSyncEnabled(fingerprint: number) : Promise<boolean> {
     return await TAURI_INVOKE("get_sync_enabled", { fingerprint });
 },
@@ -380,8 +377,8 @@ async removeSyncRelay(url: string) : Promise<null> {
 async publishWalletSettings(fingerprint: number) : Promise<null> {
     return await TAURI_INVOKE("publish_wallet_settings", { fingerprint });
 },
-async fetchWalletSettings(fingerprint: number) : Promise<FetchSettingsResult> {
-    return await TAURI_INVOKE("fetch_wallet_settings", { fingerprint });
+async fetchWalletSettings() : Promise<FetchSettingsResult> {
+    return await TAURI_INVOKE("fetch_wallet_settings");
 }
 }
 
@@ -1625,6 +1622,22 @@ export type GetVersionResponse = {
  * Semantic version string
  */
 version: string }
+/**
+ * Get the current receive address for any wallet by fingerprint
+ */
+export type GetWalletReceiveAddress = { 
+/**
+ * Wallet fingerprint
+ */
+fingerprint: number }
+/**
+ * Response with the wallet receive address
+ */
+export type GetWalletReceiveAddressResponse = { 
+/**
+ * Encoded receive address
+ */
+address: string }
 export type Id = 
 /**
  * The XCH asset
