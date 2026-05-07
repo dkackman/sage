@@ -65,12 +65,19 @@ pub async fn initialize(
 
     // Load persisted relays into the nostr-sync plugin
     let relays = app_state.config.sync.relays.clone();
+    let resume_fingerprint = app_state.config.global.fingerprint;
     drop(app_state);
 
     for url in relays {
         if let Err(e) = app_handle.nostr_sync().add_relay(&url).await {
             tracing::warn!("Failed to connect to relay {url}: {e}");
         }
+    }
+
+    // Resume: inject signer and trigger background settings fetch for the active wallet
+    if let Some(fingerprint) = resume_fingerprint {
+        inject_signer_for_fingerprint(&app_handle, &state, fingerprint).await;
+        spawn_fetch_settings_if_enabled(app_handle, (*state).clone(), fingerprint);
     }
 
     Ok(())
@@ -256,18 +263,14 @@ pub async fn get_logs(state: State<'_, AppState>) -> Result<Vec<LogFile>> {
     Ok(log_files)
 }
 
-#[command]
-#[specta]
-pub async fn inject_nostr_signer(
-    app_handle: AppHandle,
-    state: State<'_, AppState>,
-    fingerprint: u32,
-) -> Result<()> {
-    let sage = state.lock().await;
-    let Ok((_, Some(master_sk))) = sage.keychain.extract_secrets(fingerprint, b"") else {
-        return Ok(()); // watch-only wallet — skip silently
+async fn inject_signer_for_fingerprint(app_handle: &AppHandle, state: &AppState, fingerprint: u32) {
+    let master_sk = {
+        let sage = state.lock().await;
+        let Ok((_, Some(sk))) = sage.keychain.extract_secrets(fingerprint, b"") else {
+            return; // watch-only wallet — skip silently
+        };
+        sk
     };
-    drop(sage);
 
     let ikm = master_sk.to_bytes();
     let hk = Hkdf::<Sha256>::new(None, &ikm);
@@ -275,29 +278,62 @@ pub async fn inject_nostr_signer(
     hk.expand(b"sage-nostr-sync", &mut okm)
         .expect("32 bytes is a valid HKDF output length");
 
-    let secret_key = nostr_sdk::SecretKey::from_slice(&okm).map_err(|e| crate::error::Error {
-        kind: sage_api::ErrorKind::Internal,
-        reason: e.to_string(),
-    })?;
+    let Ok(secret_key) = nostr_sdk::SecretKey::from_slice(&okm) else {
+        return;
+    };
     let keys = nostr_sdk::Keys::new(secret_key);
 
-    app_handle
-        .nostr_sync()
-        .set_signer(keys)
-        .await
-        .map_err(|e| crate::error::Error {
-            kind: sage_api::ErrorKind::Internal,
-            reason: e.to_string(),
-        })?;
+    if let Err(e) = app_handle.nostr_sync().set_signer(keys).await {
+        tracing::warn!("Failed to inject Nostr signer: {e}");
+    }
+}
 
-    Ok(())
+fn spawn_fetch_settings_if_enabled(app_handle: AppHandle, state: AppState, fingerprint: u32) {
+    tokio::spawn(async move {
+        let sync_enabled = {
+            let sage = state.lock().await;
+            sage.wallet_config
+                .wallets
+                .iter()
+                .find(|w| w.fingerprint == fingerprint)
+                .map(|w| w.sync_enabled)
+                .unwrap_or(false)
+        };
+
+        if !sync_enabled {
+            return;
+        }
+
+        if let Err(e) = app_handle.nostr_sync().fetch("wallet-settings").await {
+            tracing::warn!("Background settings fetch failed: {e}");
+        }
+    });
 }
 
 #[command]
 #[specta]
-pub async fn clear_nostr_signer(app_handle: AppHandle) -> Result<()> {
+pub async fn login(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    req: sage_api::Login,
+) -> Result<sage_api::LoginResponse> {
+    let fingerprint = req.fingerprint;
+    let resp = state.lock().await.login(req).await?;
+    inject_signer_for_fingerprint(&app_handle, &state, fingerprint).await;
+    spawn_fetch_settings_if_enabled(app_handle, (*state).clone(), fingerprint);
+    Ok(resp)
+}
+
+#[command]
+#[specta]
+pub async fn logout(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    req: sage_api::Logout,
+) -> Result<sage_api::LogoutResponse> {
+    let resp = state.lock().await.logout(req).await?;
     app_handle.nostr_sync().clear_signer().await;
-    Ok(())
+    Ok(resp)
 }
 
 #[command]

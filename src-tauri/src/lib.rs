@@ -141,8 +141,6 @@ pub fn run() {
             commands::download_cni_offercode,
             commands::get_logs,
             commands::is_asset_owned,
-            commands::inject_nostr_signer,
-            commands::clear_nostr_signer,
             commands::get_sync_enabled,
             commands::set_sync_enabled,
             commands::add_sync_relay,

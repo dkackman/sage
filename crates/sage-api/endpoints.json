@@ -1,6 +1,4 @@
 {
-  "login": true,
-  "logout": true,
   "resync": true,
   "generate_mnemonic": false,
   "import_key": true,

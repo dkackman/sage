@@ -1,7 +1,7 @@
 import { KeyInfo, commands } from '@/bindings';
 import { CustomError } from '@/contexts/ErrorContext';
 import { useErrors } from '@/hooks/useErrors';
-import { backgroundFetchSettings, fetchState, initializeWalletState } from '@/state';
+import { fetchState, initializeWalletState } from '@/state';
 import { createContext, useContext, useEffect, useState } from 'react';
 
 interface WalletContextType {
@@ -26,12 +26,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         initializeWalletState(setWallet);
         const data = await commands.getKey({});
         setWallet(data.key);
-        if (data.key) {
-          await commands
-            .injectNostrSigner(data.key.fingerprint)
-            .catch((e) => console.warn('inject_nostr_signer failed on resume:', e));
-          backgroundFetchSettings(data.key.fingerprint);
-        }
         await fetchState();
       } catch (error) {
         const customError = error as CustomError;

@@ -115,19 +115,6 @@ events.syncEvent.listen((event) => {
   }
 });
 
-export function backgroundFetchSettings(fingerprint: number): void {
-  commands
-    .getSyncEnabled(fingerprint)
-    .then((enabled) => {
-      if (enabled) {
-        commands
-          .fetchWalletSettings(fingerprint)
-          .catch((e) => console.warn('background settings fetch failed:', e));
-      }
-    })
-    .catch(() => {});
-}
-
 export async function loginAndUpdateState(
   fingerprint: number,
   onError?: (error: CustomError) => void,
@@ -135,11 +122,6 @@ export async function loginAndUpdateState(
   try {
     await commands.login({ fingerprint });
     await fetchState();
-    // Inject Nostr signer for settings sync (no-op for watch-only wallets)
-    await commands.injectNostrSigner(fingerprint).catch((e) =>
-      console.warn('inject_nostr_signer failed:', e),
-    );
-    backgroundFetchSettings(fingerprint);
   } catch (error) {
     if (onError) {
       onError(error as CustomError);
@@ -164,9 +146,6 @@ export async function logoutAndUpdateState(): Promise<void> {
   if (setWalletState) {
     setWalletState(null);
   }
-  await commands.clearNostrSigner().catch((e) =>
-    console.warn('clear_nostr_signer failed:', e),
-  );
   await commands.logout({});
 }
 
