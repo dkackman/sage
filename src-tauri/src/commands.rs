@@ -317,21 +317,25 @@ pub async fn get_sync_enabled(state: State<'_, AppState>, fingerprint: u32) -> R
 #[command]
 #[specta]
 pub async fn set_sync_enabled(
+    app_handle: AppHandle,
     state: State<'_, AppState>,
     fingerprint: u32,
     enabled: bool,
 ) -> Result<()> {
-    let mut sage = state.lock().await;
-    let Some(wallet) = sage
-        .wallet_config
-        .wallets
-        .iter_mut()
-        .find(|w| w.fingerprint == fingerprint)
-    else {
-        return Err(Error::UnknownFingerprint.into());
-    };
-    wallet.sync_enabled = enabled;
-    sage.save_config()?;
+    {
+        let mut sage = state.lock().await;
+        let Some(wallet) = sage
+            .wallet_config
+            .wallets
+            .iter_mut()
+            .find(|w| w.fingerprint == fingerprint)
+        else {
+            return Err(Error::UnknownFingerprint.into());
+        };
+        wallet.sync_enabled = enabled;
+        sage.save_config()?;
+    }
+    do_publish_wallet_settings(&app_handle, &state, fingerprint).await;
     Ok(())
 }
 
@@ -388,13 +392,7 @@ pub struct FetchSettingsResult {
     pub emoji: Option<String>,
 }
 
-#[command]
-#[specta]
-pub async fn publish_wallet_settings(
-    app_handle: AppHandle,
-    state: State<'_, AppState>,
-    fingerprint: u32,
-) -> Result<()> {
+async fn do_publish_wallet_settings(app_handle: &AppHandle, state: &AppState, fingerprint: u32) {
     let (sync_enabled, name, emoji) = {
         let sage = state.lock().await;
         let Some(wallet) = sage
@@ -403,13 +401,13 @@ pub async fn publish_wallet_settings(
             .iter()
             .find(|w| w.fingerprint == fingerprint)
         else {
-            return Ok(());
+            return;
         };
         (wallet.sync_enabled, wallet.name.clone(), wallet.emoji.clone())
     };
 
     if !sync_enabled {
-        return Ok(());
+        return;
     }
 
     let payload = serde_json::json!({
@@ -420,12 +418,47 @@ pub async fn publish_wallet_settings(
 
     if let Err(e) = app_handle
         .nostr_sync()
-        .publish("wallet-settings", &payload)
+        .publish("wallet-settings", &payload, None)
         .await
     {
         tracing::warn!("Failed to publish wallet settings: {e}");
     }
+}
 
+#[command]
+#[specta]
+pub async fn rename_key(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    req: sage_api::RenameKey,
+) -> Result<sage_api::RenameKeyResponse> {
+    let fingerprint = req.fingerprint;
+    let resp = state.lock().await.rename_key(req)?;
+    do_publish_wallet_settings(&app_handle, &state, fingerprint).await;
+    Ok(resp)
+}
+
+#[command]
+#[specta]
+pub async fn set_wallet_emoji(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    req: sage_api::SetWalletEmoji,
+) -> Result<sage_api::SetWalletEmojiResponse> {
+    let fingerprint = req.fingerprint;
+    let resp = state.lock().await.set_wallet_emoji(req)?;
+    do_publish_wallet_settings(&app_handle, &state, fingerprint).await;
+    Ok(resp)
+}
+
+#[command]
+#[specta]
+pub async fn publish_wallet_settings(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    fingerprint: u32,
+) -> Result<()> {
+    do_publish_wallet_settings(&app_handle, &state, fingerprint).await;
     Ok(())
 }
 

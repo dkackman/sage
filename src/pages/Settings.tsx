@@ -1237,7 +1237,6 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
                     if (wallet) {
                       setWallet({ ...wallet, name: localName });
                     }
-                    commands.publishWalletSettings(fingerprint).catch(console.warn);
                   })
                   .catch(addError);
               }}

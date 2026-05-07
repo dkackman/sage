@@ -104,7 +104,6 @@ export function WalletCard({
               : key,
           ),
         );
-        commands.publishWalletSettings(info.fingerprint).catch(console.warn);
       })
       .catch(addError)
       .finally(() => setIsRenameOpen(false));
@@ -121,7 +120,6 @@ export function WalletCard({
             key.fingerprint === info.fingerprint ? { ...key, emoji } : key,
           ),
         );
-        commands.publishWalletSettings(info.fingerprint).catch(console.warn);
       })
       .catch(addError);
   };
