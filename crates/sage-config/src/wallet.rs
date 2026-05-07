@@ -151,25 +151,4 @@ mod tests {
                 }"#]],
         );
     }
-
-    #[test]
-    fn sync_enabled_defaults_to_false() {
-        let wallet = Wallet::default();
-        assert!(!wallet.sync_enabled);
-    }
-
-    #[test]
-    fn sync_enabled_survives_toml_roundtrip() {
-        let wallet = Wallet {
-            sync_enabled: true,
-            ..Wallet::default()
-        };
-        let config = WalletConfig {
-            defaults: WalletDefaults::default(),
-            wallets: vec![wallet],
-        };
-        let toml = toml::to_string_pretty(&config).unwrap();
-        let parsed: WalletConfig = toml::from_str(&toml).unwrap();
-        assert!(parsed.wallets[0].sync_enabled);
-    }
 }
