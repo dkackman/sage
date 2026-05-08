@@ -205,7 +205,6 @@ export default function Settings() {
 
               <TabsContent value='advanced'>
                 <div className='grid gap-4'>
-                  {wallet && <SyncSettings fingerprint={wallet.fingerprint} />}
                   {!isMobile && <RpcSettings />}
                   <LogViewer />
                 </div>
@@ -1606,6 +1605,8 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SyncSettings fingerprint={fingerprint} />
     </div>
   );
 }
@@ -1682,8 +1683,8 @@ function SyncSettings({ fingerprint }: { fingerprint: number }) {
   return (
     <SettingsSection title={t`Settings Sync`}>
       <SettingItem
-        label={t`Sync Wallet Settings`}
-        description={t`Sync name and icon across devices using Nostr`}
+        label={t`Sync Settings Across Devices`}
+        description={t`Syncs this wallet's settings and app preferences (fees, expiry, etc.) using this wallet's identity`}
         control={
           <Switch checked={syncEnabledState} onCheckedChange={toggleSync} />
         }
