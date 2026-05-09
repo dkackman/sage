@@ -19,11 +19,11 @@ use sage_api::{
     GetPendingTransactions, GetPendingTransactionsResponse, GetSpendableCoinCount,
     GetSpendableCoinCountResponse, GetSyncStatus, GetSyncStatusResponse, GetToken,
     GetTokenResponse, GetTransaction, GetTransactionResponse, GetTransactions,
-    GetTransactionsResponse, GetVersion, GetVersionResponse, IsAssetOwned, IsAssetOwnedResponse,
-    NftCollectionRecord, NftData, NftRecord, NftSortMode as ApiNftSortMode, NftSpecialUseType,
-    OptionRecord, OptionSortMode as ApiOptionSortMode, PendingTransactionRecord,
-    PerformDatabaseMaintenance, PerformDatabaseMaintenanceResponse, TokenRecord,
-    TransactionCoinRecord, TransactionRecord,
+    GetTransactionsResponse, GetVersion, GetVersionResponse, GetWalletReceiveAddress,
+    GetWalletReceiveAddressResponse, IsAssetOwned, IsAssetOwnedResponse, NftCollectionRecord,
+    NftData, NftRecord, NftSortMode as ApiNftSortMode, NftSpecialUseType, OptionRecord,
+    OptionSortMode as ApiOptionSortMode, PendingTransactionRecord, PerformDatabaseMaintenance,
+    PerformDatabaseMaintenanceResponse, TokenRecord, TransactionCoinRecord, TransactionRecord,
 };
 use sage_database::{
     AssetFilter, CoinFilterMode, CoinSortMode, NftGroupSearch, NftRow, NftSortMode, OptionSortMode,
@@ -118,6 +118,26 @@ impl Sage {
             total_files: wallet.db.total_files().await?.try_into().unwrap_or(0),
             database_size,
         })
+    }
+
+    pub async fn get_wallet_receive_address(
+        &self,
+        req: GetWalletReceiveAddress,
+    ) -> Result<GetWalletReceiveAddressResponse> {
+        let pool = self.connect_to_database(req.fingerprint).await?;
+        let db = sage_database::Database::new(pool);
+
+        let Some(max_idx) = db.max_derivation_index(false).await? else {
+            return Err(Error::NotLoggedIn);
+        };
+
+        let (derivations, _) = db.derivations(false, 1, max_idx).await?;
+        let Some(row) = derivations.first() else {
+            return Err(Error::NotLoggedIn);
+        };
+
+        let address = Address::new(row.p2_puzzle_hash, self.network().prefix()).encode()?;
+        Ok(GetWalletReceiveAddressResponse { address })
     }
 
     pub async fn check_address(&self, req: CheckAddress) -> Result<CheckAddressResponse> {

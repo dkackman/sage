@@ -208,6 +208,32 @@ pub struct GetVersionResponse {
     pub version: String,
 }
 
+/// Get the current receive address for any wallet by fingerprint
+#[cfg_attr(
+    feature = "openapi",
+    crate::openapi_attr(
+        tag = "System & Sync",
+        description = "Get the receive address for a wallet without switching the active session."
+    )
+)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "tauri", derive(specta::Type))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct GetWalletReceiveAddress {
+    /// Wallet fingerprint
+    pub fingerprint: u32,
+}
+
+/// Response with the wallet receive address
+#[cfg_attr(feature = "openapi", crate::openapi_attr(tag = "System & Sync"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tauri", derive(specta::Type))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct GetWalletReceiveAddressResponse {
+    /// Encoded receive address
+    pub address: String,
+}
+
 /// Check if specific coins are spendable
 #[cfg_attr(
     feature = "openapi",

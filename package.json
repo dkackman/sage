@@ -73,6 +73,7 @@
     "spoiled": "^0.4.0",
     "tailwind-merge": "^2.6.1",
     "tailwindcss-animate": "^1.0.7",
+    "tauri-plugin-nostr-sync-api": "file:../tauri-plugin-nostr",
     "tauri-plugin-safe-area-insets": "^0.1.0",
     "tauri-plugin-sage": "file:tauri-plugin-sage",
     "theme-o-rama": "0.2.0",

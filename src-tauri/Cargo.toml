@@ -36,6 +36,10 @@ tracing = { workspace = true }
 anyhow = { workspace = true }
 rustls = { workspace = true }
 reqwest = { workspace = true }
+hkdf = { workspace = true }
+sha2 = { workspace = true }
+nostr-sdk = { workspace = true }
+tauri-plugin-nostr-sync = { path = "../../tauri-plugin-nostr" }
 
 # This is to ensure that the bindgen feature is enabled for the aws-lc-rs crate.
 # https://aws.github.io/aws-lc-rs/platform_support.html#tested-platforms

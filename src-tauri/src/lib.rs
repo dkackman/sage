@@ -61,6 +61,7 @@ pub fn run() {
             commands::view_coin_spends,
             commands::submit_transaction,
             commands::get_sync_status,
+            commands::get_wallet_receive_address,
             commands::get_version,
             commands::get_database_stats,
             commands::perform_database_maintenance,
@@ -141,6 +142,12 @@ pub fn run() {
             commands::download_cni_offercode,
             commands::get_logs,
             commands::is_asset_owned,
+            commands::get_sync_enabled,
+            commands::set_sync_enabled,
+            commands::add_sync_relay,
+            commands::remove_sync_relay,
+            commands::publish_wallet_settings,
+            commands::fetch_wallet_settings,
         ])
         .events(collect_events![SyncEvent]);
 
@@ -156,7 +163,12 @@ pub fn run() {
     let mut tauri_builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_os::init());
+        .plugin(tauri_plugin_os::init())
+        .plugin(
+            tauri_plugin_nostr_sync::Builder::new()
+                .app_namespace("sage")
+                .build(),
+        );
 
     #[cfg(not(mobile))]
     {

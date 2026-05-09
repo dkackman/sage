@@ -172,6 +172,15 @@ impl TestApp {
         self.consume_until(|event| matches!(event, SyncEvent::PuzzleBatchSynced))
             .await;
     }
+
+    async fn login(&self, body: sage_api::Login) -> Result<sage_api::LoginResponse> {
+        self.call_rpc("/login", body).await
+    }
+
+    #[allow(unused)]
+    async fn logout(&self, body: sage_api::Logout) -> Result<sage_api::LogoutResponse> {
+        self.call_rpc("/logout", body).await
+    }
 }
 
 impl_endpoints! {
