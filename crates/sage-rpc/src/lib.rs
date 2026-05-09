@@ -95,6 +95,23 @@ pub async fn start_rpc(sage: Arc<Mutex<Sage>>) -> Result<()> {
     Ok(())
 }
 
+async fn set_network_override(
+    State(state): State<AppState>,
+    Json(req): Json<sage_api::SetNetworkOverride>,
+) -> Response {
+    handle(state.sage.lock().await.set_network_override(req).await)
+}
+
+async fn set_change_address(
+    State(state): State<AppState>,
+    Json(req): Json<sage_api::SetChangeAddress>,
+) -> Response {
+    handle(state.sage.lock().await.set_change_address(req).await)
+}
+
 pub fn make_router(sage: Arc<Mutex<Sage>>) -> Router {
-    api_router().with_state(AppState { sage })
+    api_router()
+        .route("/set_network_override", post(set_network_override))
+        .route("/set_change_address", post(set_change_address))
+        .with_state(AppState { sage })
 }

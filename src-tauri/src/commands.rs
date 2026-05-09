@@ -441,7 +441,7 @@ pub struct FetchSettingsResult {
 }
 
 async fn do_publish_wallet_settings(app_handle: &AppHandle, state: &AppState, fingerprint: u32) {
-    let (sync_enabled, name, emoji) = {
+    let (sync_enabled, name, emoji, network, change_address) = {
         let sage = state.lock().await;
         let Some(wallet) = sage
             .wallet_config
@@ -455,6 +455,8 @@ async fn do_publish_wallet_settings(app_handle: &AppHandle, state: &AppState, fi
             wallet.sync_enabled,
             wallet.name.clone(),
             wallet.emoji.clone(),
+            wallet.network.clone(),
+            wallet.change_address.clone(),
         )
     };
 
@@ -470,6 +472,8 @@ async fn do_publish_wallet_settings(app_handle: &AppHandle, state: &AppState, fi
         "v": 1,
         "name": name,
         "emoji": emoji,
+        "network": network,
+        "change_address": change_address,
     });
 
     if let Err(e) = app_handle
@@ -503,6 +507,32 @@ pub async fn set_wallet_emoji(
 ) -> Result<sage_api::SetWalletEmojiResponse> {
     let fingerprint = req.fingerprint;
     let resp = state.lock().await.set_wallet_emoji(req)?;
+    do_publish_wallet_settings(&app_handle, &state, fingerprint).await;
+    Ok(resp)
+}
+
+#[command]
+#[specta]
+pub async fn set_network_override(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    req: sage_api::SetNetworkOverride,
+) -> Result<sage_api::SetNetworkOverrideResponse> {
+    let fingerprint = req.fingerprint;
+    let resp = state.lock().await.set_network_override(req).await?;
+    do_publish_wallet_settings(&app_handle, &state, fingerprint).await;
+    Ok(resp)
+}
+
+#[command]
+#[specta]
+pub async fn set_change_address(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    req: sage_api::SetChangeAddress,
+) -> Result<sage_api::SetChangeAddressResponse> {
+    let fingerprint = req.fingerprint;
+    let resp = state.lock().await.set_change_address(req).await?;
     do_publish_wallet_settings(&app_handle, &state, fingerprint).await;
     Ok(resp)
 }
@@ -576,6 +606,21 @@ pub async fn fetch_wallet_settings(
             e.as_str().map(str::to_string)
         }
     });
+    // network and change_address: Some(None) = explicitly cleared, None = key absent (skip)
+    let remote_network: Option<Option<String>> = payload.get("network").map(|v| {
+        if v.is_null() {
+            None
+        } else {
+            v.as_str().map(str::to_string)
+        }
+    });
+    let remote_change_address: Option<Option<String>> = payload.get("change_address").map(|v| {
+        if v.is_null() {
+            None
+        } else {
+            v.as_str().map(str::to_string)
+        }
+    });
 
     let mut sage = state.lock().await;
     let Some(wallet) = sage
@@ -603,6 +648,20 @@ pub async fn fetch_wallet_settings(
     if remote_emoji != wallet.emoji {
         wallet.emoji = remote_emoji.clone();
         applied = true;
+    }
+
+    if let Some(network) = remote_network {
+        if wallet.network != network {
+            wallet.network = network;
+            applied = true;
+        }
+    }
+
+    if let Some(change_address) = remote_change_address {
+        if wallet.change_address != change_address {
+            wallet.change_address = change_address;
+            applied = true;
+        }
     }
 
     if applied {
