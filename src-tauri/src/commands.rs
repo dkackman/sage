@@ -273,7 +273,7 @@ async fn inject_signer_for_fingerprint(app_handle: &AppHandle, state: &AppState,
     };
 
     let ikm = master_sk.to_bytes();
-    let hk = Hkdf::<Sha256>::new(None, &ikm);
+    let hk = Hkdf::<Sha256>::new(Some(b"sage-nostr-sync-v1".as_ref()), &ikm);
     let mut okm = [0u8; 32];
     hk.expand(b"sage-nostr-sync", &mut okm)
         .expect("32 bytes is a valid HKDF output length");
