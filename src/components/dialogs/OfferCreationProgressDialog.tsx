@@ -1,4 +1,3 @@
-import { commands, NetworkKind } from '@/bindings';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { CustomError } from '@/contexts/ErrorContext';
 import { useErrors } from '@/hooks/useErrors';
+import { useNetwork } from '@/hooks/useNetwork';
 import { useOfferProcessor } from '@/hooks/useOfferProcessor';
 import { marketplaces } from '@/lib/marketplaces';
 import { OfferState } from '@/state';
@@ -40,7 +40,7 @@ export function OfferCreationProgressDialog({
   isSwap,
 }: OfferCreationProgressDialogProps) {
   const { addError } = useErrors();
-  const [network, setNetwork] = useState<NetworkKind | null>(null);
+  const network = useNetwork();
   const [isUploading, setIsUploading] = useState(false);
   const [hasStartedProcessing, setHasStartedProcessing] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
@@ -69,10 +69,6 @@ export function OfferCreationProgressDialog({
       setCurrentOfferIndex(index);
     },
   });
-
-  useEffect(() => {
-    commands.getNetwork({}).then((data) => setNetwork(data.kind));
-  }, []);
 
   // Handle uploads when offers are created
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { spacescanUrl } from '@/hooks/useNetwork';
+import { spacescanCoinUrl } from '@/lib/urls';
 import { formatTimestamp, fromMojos } from '@/lib/utils';
 import { t } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
@@ -90,7 +90,7 @@ const CoinIdCell = ({
   network: NetworkKind | null;
 }) => {
   const coinId = row.original.coin_id;
-  const url = spacescanUrl(network, `coin/0x${coinId}`);
+  const url = spacescanCoinUrl(coinId, network === 'testnet');
   return (
     <div
       className='cursor-pointer truncate hover:underline'

@@ -5,6 +5,13 @@ import { LabeledItem } from '@/components/LabeledItem';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useErrors } from '@/hooks/useErrors';
+import { useNetwork } from '@/hooks/useNetwork';
+import {
+  dexieOfferUrl,
+  mintGardenDidUrl,
+  mintGardenNftUrl,
+  spacescanNftUrl,
+} from '@/lib/urls';
 import spacescanLogo from '@/images/spacescan-logo-192.png';
 import { getMintGardenProfile } from '@/lib/marketplaces';
 import { isAudio, isImage, isJson, isText, nftUri } from '@/lib/nftUri';
@@ -22,20 +29,14 @@ import { FileImage, FileText, HandCoins, Hash, Tag, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from 'theme-o-rama';
-import {
-  commands,
-  events,
-  NetworkKind,
-  NftData,
-  NftRecord,
-  OfferRecord,
-} from '../bindings';
+import { commands, events, NftData, NftRecord, OfferRecord } from '../bindings';
 
 export default function Nft() {
   const navigate = useNavigate();
   const { launcher_id: launcherId } = useParams();
   const { addError } = useErrors();
   const { reloadThemes } = useTheme();
+  const network = useNetwork();
   const [nft, setNft] = useState<NftRecord | null>(null);
   const [nftIsOwned, setNftIsOwned] = useState<boolean>(false);
   const [data, setData] = useState<NftData | null>(null);
@@ -46,7 +47,6 @@ export default function Nft() {
   const [requestedOffers, setRequestedOffers] = useState<DexieOffer[]>([]);
   const [offeredOffers, setOfferedOffers] = useState<DexieOffer[]>([]);
   const [offersForAsset, setOffersForAsset] = useState<OfferRecord[]>([]);
-  const [network, setNetwork] = useState<NetworkKind | null>(null);
 
   // Check for open offers when NFT loads
   useEffect(() => {
@@ -138,13 +138,6 @@ export default function Nft() {
       return {};
     }
   }, [data?.metadata_json, nft]);
-
-  useEffect(() => {
-    commands
-      .getNetwork({})
-      .then((data) => setNetwork(data.kind))
-      .catch(addError);
-  }, [addError]);
 
   const [minterProfile, setMinterProfile] = useState<{
     encoded_id: string;
@@ -314,7 +307,10 @@ export default function Nft() {
                     className='w-full'
                     onClick={() => {
                       openUrl(
-                        `https://${network === 'testnet' ? 'testnet.' : ''}mintgarden.io/nfts/${nft?.launcher_id}`,
+                        mintGardenNftUrl(
+                          nft?.launcher_id ?? '',
+                          network === 'testnet',
+                        ),
                       );
                     }}
                     disabled={network === 'unknown'}
@@ -333,7 +329,10 @@ export default function Nft() {
                     className='w-full mt-1'
                     onClick={() => {
                       openUrl(
-                        `https://${network === 'testnet' ? 'testnet11.' : ''}spacescan.io/nft/${nft?.launcher_id}`,
+                        spacescanNftUrl(
+                          nft?.launcher_id ?? '',
+                          network === 'testnet',
+                        ),
                       );
                     }}
                     disabled={network === 'unknown'}
@@ -399,7 +398,12 @@ export default function Nft() {
                   <div
                     className='flex items-center gap-2 mt-1 cursor-pointer text-blue-600 hover:text-blue-800 hover:underline'
                     onClick={() =>
-                      openUrl(`https://mintgarden.io/${nft?.minter_did}`)
+                      openUrl(
+                        mintGardenDidUrl(
+                          nft?.minter_did ?? '',
+                          network === 'testnet',
+                        ),
+                      )
                     }
                   >
                     {minterProfile.avatar_uri && (
@@ -424,7 +428,12 @@ export default function Nft() {
                   <div
                     className='flex items-center gap-2 mt-1 cursor-pointer text-blue-600 hover:text-blue-800 hover:underline'
                     onClick={() =>
-                      openUrl(`https://mintgarden.io/${nft?.owner_did}`)
+                      openUrl(
+                        mintGardenDidUrl(
+                          nft?.owner_did ?? '',
+                          network === 'testnet',
+                        ),
+                      )
                     }
                   >
                     {ownerProfile.avatar_uri && (
@@ -490,7 +499,10 @@ export default function Nft() {
                                 size='sm'
                                 onClick={() => {
                                   openUrl(
-                                    `https://${network === 'testnet' ? 'testnet.' : ''}dexie.space/offers/${offer.id}`,
+                                    dexieOfferUrl(
+                                      offer.id,
+                                      network === 'testnet',
+                                    ),
                                   );
                                 }}
                               >
@@ -544,7 +556,10 @@ export default function Nft() {
                                 size='sm'
                                 onClick={() => {
                                   openUrl(
-                                    `https://${network === 'testnet' ? 'testnet.' : ''}dexie.space/offers/${offer.id}`,
+                                    dexieOfferUrl(
+                                      offer.id,
+                                      network === 'testnet',
+                                    ),
                                   );
                                 }}
                               >

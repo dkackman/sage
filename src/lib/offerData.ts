@@ -1,5 +1,6 @@
 import { commands } from '@/bindings';
 import { CustomError } from '@/contexts/ErrorContext';
+import { dexieApiUrl } from '@/lib/urls';
 
 const CNI_NFC_PREFIX = 'DT001';
 
@@ -146,7 +147,10 @@ async function fetchDexieOffersFromNftId(
 ): Promise<DexieOffer[]> {
   // this will only get a single page of offers (20 by default) which is fine
   const response = await fetch(
-    `https://${network !== 'mainnet' ? 'api-testnet' : 'api'}.dexie.space/v1/offers?${type}=${id}&status=0&sort=${sort}`,
+    dexieApiUrl(
+      `v1/offers?${type}=${id}&status=0&sort=${sort}`,
+      network !== 'mainnet',
+    ),
   );
   const data = (await response.json()) as DexieOfferResponse;
   if (!data) {
@@ -163,7 +167,7 @@ async function fetchDexieOffersFromNftId(
   return [];
 }
 async function fetchDexieOffer(id: string): Promise<string> {
-  const response = await fetch(`https://api.dexie.space/v1/offers/${id}`);
+  const response = await fetch(dexieApiUrl(`v1/offers/${id}`, false));
   const data = await response.json();
 
   if (!data) {

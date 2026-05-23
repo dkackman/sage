@@ -16,11 +16,3 @@ export function useNetwork(): NetworkKind | null {
 
   return network;
 }
-
-export function spacescanUrl(
-  network: NetworkKind | null,
-  path: string,
-): string {
-  const subdomain = network === 'testnet' ? 'testnet11.' : '';
-  return `https://${subdomain}spacescan.io/${path}`;
-}

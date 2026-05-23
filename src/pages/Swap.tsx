@@ -11,6 +11,7 @@ import { FeeAmountInput, TokenAmountInput } from '@/components/ui/masked-input';
 import { CustomError } from '@/contexts/ErrorContext';
 import { useErrors } from '@/hooks/useErrors';
 import { toDecimal, toMojos } from '@/lib/utils';
+import { dexieApiUrl } from '@/lib/urls';
 import { OfferState, useWalletState } from '@/state';
 import { t } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
@@ -372,7 +373,10 @@ async function getDexieQuote(
 ) {
   try {
     const response = await fetch(
-      `https://api.dexie.space/v1/swap/quote?from=${payAssetId ?? 'XCH'}&to=${receiveAssetId ?? 'XCH'}&${amountKind === 'pay' ? 'from_amount' : 'to_amount'}=${amount || '0'}`,
+      dexieApiUrl(
+        `v1/swap/quote?from=${payAssetId ?? 'XCH'}&to=${receiveAssetId ?? 'XCH'}&${amountKind === 'pay' ? 'from_amount' : 'to_amount'}=${amount || '0'}`,
+        false,
+      ),
     );
     const data = await response.json();
     return {
@@ -392,7 +396,7 @@ async function executeDexieSwap(
   addError: (error: CustomError) => void,
 ) {
   try {
-    const response = await fetch('https://api.dexie.space/v1/swap', {
+    const response = await fetch(dexieApiUrl('v1/swap', false), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
