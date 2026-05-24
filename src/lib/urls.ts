@@ -84,3 +84,26 @@ export function mintGardenDidUrl(did: string, isTestnet: boolean): string {
 export function mintGardenApiUrl(path: string, isTestnet: boolean): string {
   return `${mintGardenApiBase(isTestnet)}/${path}`;
 }
+
+// ── ChiaOffer — API ─────────────────────────────────────────────────────────
+// `id` is the offer id.
+
+export function chiaOfferApiUrl(id: string, isTestnet: boolean): string {
+  if (isTestnet) {
+    console.warn(
+      'ChiaOffer.com does not have a testnet API, but isTestnet was set to true. Proceeding with mainnet URL.',
+    );
+  }
+  return `https://api.chia-offer.com/get-offer.php?id=${id}`;
+}
+
+// ── OfferCo — API ─────────────────────────────────────────────────────────
+
+export function offerCoApiUrl(isTestnet: boolean): string {
+  if (isTestnet) {
+    console.warn(
+      'OfferCo.com does not have a testnet API, but isTestnet was set to true. Proceeding with mainnet URL.',
+    );
+  }
+  return `'https://offerco.de/api/v1/getoffer'`;
+}

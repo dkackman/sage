@@ -36,7 +36,7 @@ export default function Nft() {
   const { launcher_id: launcherId } = useParams();
   const { addError } = useErrors();
   const { reloadThemes } = useTheme();
-  const { network, isTestnet } = useNetwork();
+  const { isTestnet } = useNetwork();
   const [nft, setNft] = useState<NftRecord | null>(null);
   const [nftIsOwned, setNftIsOwned] = useState<boolean>(false);
   const [data, setData] = useState<NftData | null>(null);
@@ -53,8 +53,8 @@ export default function Nft() {
     if (nft?.launcher_id) {
       // Fetch both requested and offered offers
       Promise.all([
-        fetchRequestedDexieOffersFromNftId(nft.launcher_id, network),
-        fetchOfferedDexieOffersFromNftId(nft.launcher_id, network),
+        fetchRequestedDexieOffersFromNftId(nft.launcher_id, isTestnet),
+        fetchOfferedDexieOffersFromNftId(nft.launcher_id, isTestnet),
       ])
         .then(([requested, offered]) => {
           setRequestedOffers(requested);
@@ -71,7 +71,7 @@ export default function Nft() {
           setOffersForAsset(response.offers);
         });
     }
-  }, [nft?.launcher_id, network]);
+  }, [nft?.launcher_id, isTestnet]);
 
   const checkThemeExists = useCallback(async () => {
     if (launcherId && nft?.special_use_type === 'theme') {
@@ -310,7 +310,6 @@ export default function Nft() {
                         mintGardenNftUrl(nft?.launcher_id ?? '', isTestnet),
                       );
                     }}
-                    disabled={network === 'unknown'}
                   >
                     <img
                       src='https://mintgarden.io/mint-logo.svg'
@@ -329,7 +328,6 @@ export default function Nft() {
                         spacescanNftUrl(nft?.launcher_id ?? '', isTestnet),
                       );
                     }}
-                    disabled={network === 'unknown'}
                   >
                     <img
                       src={spacescanLogo}

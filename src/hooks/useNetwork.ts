@@ -19,5 +19,5 @@ export function useNetwork(): NetworkState {
       });
   }, []);
 
-  return { network, isTestnet: network === 'testnet' };
+  return { network, isTestnet: network !== 'mainnet' };
 }
