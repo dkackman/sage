@@ -38,6 +38,7 @@ import {
   utf8ToBytes,
 } from '@/lib/utils';
 import { useWalletState } from '@/state';
+import { Memo, MemoMode } from '@/types/CoinMemo.ts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { t } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
@@ -53,7 +54,6 @@ import {
   TokenRecord,
   TransactionResponse,
 } from '../bindings';
-import { Memo, MemoMode } from '@/types/CoinMemo.ts';
 
 export default function Send() {
   let { asset_id: assetId = null } = useParams();
@@ -187,7 +187,9 @@ export default function Send() {
       memos = [toHex(memoBytes)];
     }
 
-    setCurrentMemo(values.memo ? {mode: values.memoMode, value: values.memo} : undefined);
+    setCurrentMemo(
+      values.memo ? { mode: values.memoMode, value: values.memo } : undefined,
+    );
 
     let clawback: number | null = null;
 
@@ -376,15 +378,7 @@ export default function Send() {
                   </FormLabel>
 
                   <div className='flex items-center gap-2 text-sm'>
-                    <span
-                      className={
-                        memoMode === 'text'
-                          ? 'font-medium'
-                          : 'text-muted-foreground'
-                      }
-                    >
-                      <Trans>Text</Trans>
-                    </span>
+                    <Trans>Hex</Trans>
 
                     <Switch
                       checked={memoMode === MemoMode.Hex}
@@ -398,16 +392,6 @@ export default function Send() {
                         );
                       }}
                     />
-
-                    <span
-                      className={
-                        memoMode === MemoMode.Hex
-                          ? 'font-medium'
-                          : 'text-muted-foreground'
-                      }
-                    >
-                      <Trans>Hex</Trans>
-                    </span>
                   </div>
                 </div>
 
@@ -436,9 +420,9 @@ export default function Send() {
 
                 <div className='text-sm text-muted-foreground mt-2'>
                   {memoMode === MemoMode.Hex ? (
-                    <Trans>Raw bytes (hex)</Trans>
+                    <Trans>Hex bytes</Trans>
                   ) : (
-                    <Trans>UTF-8 encoded</Trans>
+                    <Trans>UTF-8 string</Trans>
                   )}
                 </div>
               </div>
