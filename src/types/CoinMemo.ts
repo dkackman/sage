@@ -13,4 +13,3 @@ export interface Memo {
 export function formatMemo(memo: Memo): string {
   return memo.mode === MemoMode.Hex ? withHexPrefix(memo.value) : memo.value;
 }
-
