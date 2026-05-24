@@ -65,9 +65,9 @@ export function isDexieSupportedForSummary(summary: OfferSummary) {
 
 export async function uploadToDexie(
   offer: string,
-  testnet: boolean,
+  isTestnet: boolean,
 ): Promise<string> {
-  const response = await fetch(dexieApiUrl('v1/offers', testnet), {
+  const response = await fetch(dexieApiUrl('v1/offers', isTestnet), {
     method: 'POST',
     body: JSON.stringify({ offer, drop_only: true }),
     headers: { 'Content-Type': 'application/json' },
@@ -79,14 +79,14 @@ export async function uploadToDexie(
     throw new Error(`Failed to upload offer to Dexie: ${data?.error_message}`);
   }
 
-  return dexieOfferUrl(data.id, testnet);
+  return dexieOfferUrl(data.id, isTestnet);
 }
 
 export async function uploadToMintGarden(
   offer: string,
-  testnet: boolean,
+  isTestnet: boolean,
 ): Promise<string> {
-  const response = await fetch(mintGardenApiUrl('offer', testnet), {
+  const response = await fetch(mintGardenApiUrl('offer', isTestnet), {
     method: 'POST',
     body: JSON.stringify({ offer }),
     headers: { 'Content-Type': 'application/json' },
@@ -98,7 +98,7 @@ export async function uploadToMintGarden(
     throw new Error(`Failed to upload offer to MintGarden: ${data?.detail}`);
   }
 
-  return mintGardenOfferUrl(data.offer.id, testnet);
+  return mintGardenOfferUrl(data.offer.id, isTestnet);
 }
 
 export async function offerIsOnDexie(

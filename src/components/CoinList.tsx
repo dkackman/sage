@@ -12,7 +12,7 @@ import {
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { ArrowDown, ArrowUp, FilterIcon, FilterXIcon } from 'lucide-react';
 import { useMemo } from 'react';
-import { CoinRecord, CoinSortMode, NetworkKind } from '../bindings';
+import { CoinRecord, CoinSortMode } from '../bindings';
 import { NumberFormat } from './NumberFormat';
 import { SimplePagination } from './SimplePagination';
 import { Button } from './ui/button';
@@ -84,13 +84,13 @@ const CoinIdHeader = ({
 
 const CoinIdCell = ({
   row,
-  network,
+  isTestnet,
 }: {
   row: Row<CoinRecord>;
-  network: NetworkKind | null;
+  isTestnet: boolean;
 }) => {
   const coinId = row.original.coin_id;
-  const url = spacescanCoinUrl(coinId, network === 'testnet');
+  const url = spacescanCoinUrl(coinId, isTestnet);
   return (
     <div
       className='cursor-pointer truncate hover:underline'
@@ -412,7 +412,7 @@ const createColumns = (props: CoinListProps): ColumnDef<CoinRecord>[] => [
     size: 100,
     header: () => <CoinIdHeaderWrapper {...props} />,
     cell: ({ row }: { row: Row<CoinRecord> }) => (
-      <CoinIdCell row={row} network={props.network} />
+      <CoinIdCell row={row} isTestnet={props.isTestnet} />
     ),
   },
   {
@@ -446,7 +446,7 @@ const createColumns = (props: CoinListProps): ColumnDef<CoinRecord>[] => [
 
 export interface CoinListProps {
   precision: number;
-  network: NetworkKind | null;
+  isTestnet: boolean;
   coins: CoinRecord[];
   selectedCoins: RowSelectionState;
   setSelectedCoins: React.Dispatch<React.SetStateAction<RowSelectionState>>;

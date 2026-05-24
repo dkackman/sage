@@ -41,7 +41,7 @@ export const PriceContext = createContext<PriceContextType | undefined>(
 export function PriceProvider({ children }: { children: ReactNode }) {
   const [xchUsdPrice, setXchUsdPrice] = useState<number>(0);
   const [catPrices, setCatPrices] = useState<Record<string, CatPriceData>>({});
-  const network = useNetwork();
+  const { network, isTestnet } = useNetwork();
   const [isPriceLoading, setIsPriceLoading] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -59,7 +59,7 @@ export function PriceProvider({ children }: { children: ReactNode }) {
     const fetchCatPrices = async () => {
       try {
         const response = await fetch(
-          dexieApiUrl('v3/prices/tickers', network === 'testnet'),
+          dexieApiUrl('v3/prices/tickers', isTestnet),
         );
 
         if (!response.ok) {
@@ -127,7 +127,7 @@ export function PriceProvider({ children }: { children: ReactNode }) {
         intervalRef.current = null;
       }
     };
-  }, [network]);
+  }, [network, isTestnet]);
 
   const getPriceInUsd = useCallback(
     (assetId: string | null) => {

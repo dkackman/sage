@@ -10,12 +10,12 @@ type TokenListViewProps = TokenViewProps & {
 };
 
 export function TokenListView({ tokens, actionHandlers }: TokenListViewProps) {
-  const network = useNetwork();
+  const { isTestnet } = useNetwork();
 
   return (
     <div role='region' aria-label={t`Token List`}>
       <DataTable
-        columns={columns(actionHandlers, network === 'testnet')}
+        columns={columns(actionHandlers, isTestnet)}
         data={tokens}
         aria-label={t`Token list`}
         rowLabel={t`asset`}

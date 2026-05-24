@@ -46,7 +46,7 @@ export function OfferCard({
   content,
 }: OfferCardProps) {
   const walletState = useWalletState();
-  const network = useNetwork();
+  const { isTestnet } = useNetwork();
   // State to track which CATs are present in the wallet
   const [catPresence, setCatPresence] = useState<CatPresence>({});
   const isMobile = platform() === 'ios' || platform() === 'android';
@@ -256,7 +256,7 @@ export function OfferCard({
                   offer={offer || ''}
                   offerId={offerId}
                   offerSummary={offerSummary}
-                  network={network || 'unknown'}
+                  isTestnet={isTestnet}
                   marketplace={marketplace}
                 />
               ))}

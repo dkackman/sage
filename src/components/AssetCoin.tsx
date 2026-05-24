@@ -16,8 +16,8 @@ interface AssetCoinProps {
 }
 
 export function AssetCoin({ asset, amount, coinId }: AssetCoinProps) {
-  const network = useNetwork();
-  const url = coinId ? spacescanCoinUrl(coinId, network === 'testnet') : null;
+  const { isTestnet } = useNetwork();
+  const url = coinId ? spacescanCoinUrl(coinId, isTestnet) : null;
 
   return (
     <div className='rounded-xl border border-border bg-card text-card-foreground shadow p-4'>

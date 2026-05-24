@@ -65,7 +65,7 @@ export function OwnedCoinsCard({
   const walletState = useWalletState();
 
   const { addError } = useErrors();
-  const network = useNetwork();
+  const { isTestnet } = useNetwork();
 
   const [selectedCoinRecords, setSelectedCoinRecords] = useState<CoinRecord[]>(
     [],
@@ -424,7 +424,7 @@ export function OwnedCoinsCard({
         <CoinList
           clawback={false}
           precision={asset.precision}
-          network={network}
+          isTestnet={isTestnet}
           coins={coins}
           selectedCoins={selectedCoins}
           setSelectedCoins={setSelectedCoins}

@@ -20,7 +20,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 export default function Option() {
   const { option_id: optionId } = useParams();
   const navigate = useNavigate();
-  const network = useNetwork();
+  const { network, isTestnet } = useNetwork();
   const [option, setOption] = useState<OptionRecord | null>(null);
   const [offersForAsset, setOffersForAsset] = useState<OfferRecord[]>([]);
 
@@ -286,9 +286,7 @@ export default function Option() {
                 <Button
                   variant='outline'
                   onClick={() => {
-                    openUrl(
-                      spacescanCoinUrl(option.coin_id, network === 'testnet'),
-                    );
+                    openUrl(spacescanCoinUrl(option.coin_id, isTestnet));
                   }}
                   disabled={!network || network === 'unknown'}
                 >

@@ -64,7 +64,7 @@ export function ClawbackCoinsCard({
   const walletState = useWalletState();
 
   const { addError } = useErrors();
-  const network = useNetwork();
+  const { isTestnet } = useNetwork();
 
   const [selectedCoinRecords, setSelectedCoinRecords] = useState<CoinRecord[]>(
     [],
@@ -300,7 +300,7 @@ export function ClawbackCoinsCard({
         <CoinList
           clawback={true}
           precision={asset.precision}
-          network={network}
+          isTestnet={isTestnet}
           coins={coins}
           selectedCoins={selectedCoins}
           setSelectedCoins={setSelectedCoins}

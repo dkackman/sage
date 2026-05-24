@@ -70,7 +70,7 @@ export function NftGroupCard({
   setSplitNftOffers,
 }: NftGroupCardProps) {
   const navigate = useNavigate();
-  const network = useNetwork();
+  const { isTestnet } = useNetwork();
   const [offerState, setOfferState] = useOfferStateWithDefault();
   const isCollection = type === 'collection';
 
@@ -318,9 +318,7 @@ export function NftGroupCard({
                     disabled={isPlaceHolder}
                     onClick={(e) => {
                       e.stopPropagation();
-                      openUrl(
-                        mintGardenCollectionUrl(cardId, network === 'testnet'),
-                      );
+                      openUrl(mintGardenCollectionUrl(cardId, isTestnet));
                     }}
                     aria-label={t`View ${cardName} on Mintgarden`}
                   >
@@ -365,7 +363,7 @@ export function NftGroupCard({
                   className='cursor-pointer'
                   onClick={(e) => {
                     e.stopPropagation();
-                    openUrl(mintGardenDidUrl(cardId, network === 'testnet'));
+                    openUrl(mintGardenDidUrl(cardId, isTestnet));
                   }}
                   aria-label={t`View ${cardName} on Mintgarden`}
                 >

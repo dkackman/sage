@@ -36,7 +36,7 @@ export default function Nft() {
   const { launcher_id: launcherId } = useParams();
   const { addError } = useErrors();
   const { reloadThemes } = useTheme();
-  const network = useNetwork();
+  const { network, isTestnet } = useNetwork();
   const [nft, setNft] = useState<NftRecord | null>(null);
   const [nftIsOwned, setNftIsOwned] = useState<boolean>(false);
   const [data, setData] = useState<NftData | null>(null);
@@ -307,10 +307,7 @@ export default function Nft() {
                     className='w-full'
                     onClick={() => {
                       openUrl(
-                        mintGardenNftUrl(
-                          nft?.launcher_id ?? '',
-                          network === 'testnet',
-                        ),
+                        mintGardenNftUrl(nft?.launcher_id ?? '', isTestnet),
                       );
                     }}
                     disabled={network === 'unknown'}
@@ -329,10 +326,7 @@ export default function Nft() {
                     className='w-full mt-1'
                     onClick={() => {
                       openUrl(
-                        spacescanNftUrl(
-                          nft?.launcher_id ?? '',
-                          network === 'testnet',
-                        ),
+                        spacescanNftUrl(nft?.launcher_id ?? '', isTestnet),
                       );
                     }}
                     disabled={network === 'unknown'}
@@ -399,10 +393,7 @@ export default function Nft() {
                     className='flex items-center gap-2 mt-1 cursor-pointer text-blue-600 hover:text-blue-800 hover:underline'
                     onClick={() =>
                       openUrl(
-                        mintGardenDidUrl(
-                          nft?.minter_did ?? '',
-                          network === 'testnet',
-                        ),
+                        mintGardenDidUrl(nft?.minter_did ?? '', isTestnet),
                       )
                     }
                   >
@@ -428,12 +419,7 @@ export default function Nft() {
                   <div
                     className='flex items-center gap-2 mt-1 cursor-pointer text-blue-600 hover:text-blue-800 hover:underline'
                     onClick={() =>
-                      openUrl(
-                        mintGardenDidUrl(
-                          nft?.owner_did ?? '',
-                          network === 'testnet',
-                        ),
-                      )
+                      openUrl(mintGardenDidUrl(nft?.owner_did ?? '', isTestnet))
                     }
                   >
                     {ownerProfile.avatar_uri && (
@@ -498,12 +484,7 @@ export default function Nft() {
                                 variant='outline'
                                 size='sm'
                                 onClick={() => {
-                                  openUrl(
-                                    dexieOfferUrl(
-                                      offer.id,
-                                      network === 'testnet',
-                                    ),
-                                  );
+                                  openUrl(dexieOfferUrl(offer.id, isTestnet));
                                 }}
                               >
                                 <img
@@ -555,12 +536,7 @@ export default function Nft() {
                                 variant='outline'
                                 size='sm'
                                 onClick={() => {
-                                  openUrl(
-                                    dexieOfferUrl(
-                                      offer.id,
-                                      network === 'testnet',
-                                    ),
-                                  );
+                                  openUrl(dexieOfferUrl(offer.id, isTestnet));
                                 }}
                               >
                                 <img

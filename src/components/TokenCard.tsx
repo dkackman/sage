@@ -62,7 +62,7 @@ export function TokenCard({
   onUpdate,
 }: TokenCardProps) {
   const walletState = useWalletState();
-  const network = useNetwork();
+  const { isTestnet } = useNetwork();
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isReceiveOpen, setIsReceiveOpen] = useState(false);
@@ -180,10 +180,7 @@ export function TokenCard({
                   <DropdownMenuItem
                     onClick={() => {
                       openUrl(
-                        dexieAssetUrl(
-                          asset.asset_id ?? '',
-                          network === 'testnet',
-                        ),
+                        dexieAssetUrl(asset.asset_id ?? '', isTestnet),
                       ).catch((error) => {
                         toast.error(t`Failed to open dexie.space: ${error}`);
                       });

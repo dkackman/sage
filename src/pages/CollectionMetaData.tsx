@@ -108,7 +108,7 @@ export default function CollectionMetaData() {
     getMintGardenProfile(collection.did_id).then(setMinterProfile);
   }, [collection?.did_id]);
 
-  const network = useNetwork();
+  const { network, isTestnet } = useNetwork();
 
   // Find banner URL from attributes if it exists
   const getBannerUrl = () => {
@@ -215,12 +215,7 @@ export default function CollectionMetaData() {
                     <div
                       className='flex items-center gap-2 mt-1 cursor-pointer text-blue-600 hover:text-blue-800 hover:underline'
                       onClick={() =>
-                        openUrl(
-                          mintGardenDidUrl(
-                            collection.did_id,
-                            network === 'testnet',
-                          ),
-                        )
+                        openUrl(mintGardenDidUrl(collection.did_id, isTestnet))
                       }
                     >
                       {minterProfile.avatar_uri && (
@@ -294,7 +289,7 @@ export default function CollectionMetaData() {
                       openUrl(
                         mintGardenCollectionUrl(
                           collection.collection_id,
-                          network === 'testnet',
+                          isTestnet,
                         ),
                       )
                     }
@@ -316,7 +311,7 @@ export default function CollectionMetaData() {
                       openUrl(
                         spacescanCollectionUrl(
                           collection.collection_id,
-                          network === 'testnet',
+                          isTestnet,
                         ),
                       )
                     }
