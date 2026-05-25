@@ -156,9 +156,8 @@ export default function Nft() {
       setMinterProfile(null);
       return;
     }
-
-    getMintGardenProfile(nft.minter_did).then(setMinterProfile);
-  }, [nft?.minter_did]);
+    getMintGardenProfile(nft.minter_did, isTestnet).then(setMinterProfile);
+  }, [nft?.minter_did, isTestnet]);
 
   useEffect(() => {
     if (!nft?.owner_did) {
@@ -166,8 +165,8 @@ export default function Nft() {
       return;
     }
 
-    getMintGardenProfile(nft.owner_did).then(setOwnerProfile);
-  }, [nft?.owner_did]);
+    getMintGardenProfile(nft.owner_did, isTestnet).then(setOwnerProfile);
+  }, [nft?.owner_did, isTestnet]);
 
   return (
     <>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 export interface NetworkState {
   network: NetworkKind | null;
   isTestnet: boolean;
+  isUnknown: boolean;
 }
 
 export function useNetwork(): NetworkState {
@@ -19,5 +20,9 @@ export function useNetwork(): NetworkState {
       });
   }, []);
 
-  return { network, isTestnet: network !== 'mainnet' };
+  return {
+    network,
+    isTestnet: network === 'testnet',
+    isUnknown: network === null || network === 'unknown',
+  };
 }

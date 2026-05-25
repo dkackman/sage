@@ -40,7 +40,7 @@ export function OfferCreationProgressDialog({
   isSwap,
 }: OfferCreationProgressDialogProps) {
   const { addError } = useErrors();
-  const { isTestnet } = useNetwork();
+  const { isTestnet, isUnknown } = useNetwork();
   const [isUploading, setIsUploading] = useState(false);
   const [hasStartedProcessing, setHasStartedProcessing] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
@@ -72,7 +72,12 @@ export function OfferCreationProgressDialog({
 
   // Handle uploads when offers are created
   useEffect(() => {
-    if (createdOffers.length > 0 && !isProcessing && !isCanceling) {
+    if (
+      createdOffers.length > 0 &&
+      !isUnknown &&
+      !isProcessing &&
+      !isCanceling
+    ) {
       let isMounted = true;
 
       const uploadToMarketplaces = async () => {
@@ -130,6 +135,7 @@ export function OfferCreationProgressDialog({
   }, [
     createdOffers,
     isTestnet,
+    isUnknown,
     addError,
     enabledMarketplaces,
     isProcessing,

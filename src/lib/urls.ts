@@ -105,5 +105,5 @@ export function offerCoApiUrl(isTestnet: boolean): string {
       'OfferCo.com does not have a testnet API, but isTestnet was set to true. Proceeding with mainnet URL.',
     );
   }
-  return `'https://offerco.de/api/v1/getoffer'`;
+  return 'https://offerco.de/api/v1/getoffer';
 }

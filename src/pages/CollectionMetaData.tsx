@@ -48,6 +48,7 @@ export default function CollectionMetaData() {
     name: string;
     avatar_uri: string | null;
   } | null>(null);
+  const { isTestnet } = useNetwork();
 
   useEffect(() => {
     async function fetchData() {
@@ -105,10 +106,8 @@ export default function CollectionMetaData() {
       return;
     }
 
-    getMintGardenProfile(collection.did_id).then(setMinterProfile);
-  }, [collection?.did_id]);
-
-  const { network, isTestnet } = useNetwork();
+    getMintGardenProfile(collection.did_id, isTestnet).then(setMinterProfile);
+  }, [collection?.did_id, isTestnet]);
 
   // Find banner URL from attributes if it exists
   const getBannerUrl = () => {
@@ -293,7 +292,6 @@ export default function CollectionMetaData() {
                         ),
                       )
                     }
-                    disabled={network === 'unknown'}
                   >
                     <img
                       src='https://mintgarden.io/mint-logo.svg'
@@ -315,7 +313,6 @@ export default function CollectionMetaData() {
                         ),
                       )
                     }
-                    disabled={network === 'unknown'}
                   >
                     <img
                       src={spacescanLogo}
