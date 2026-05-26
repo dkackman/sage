@@ -58,9 +58,9 @@ export const marketplaces: MarketplaceConfig[] = [
   },
 ];
 
-export async function getMintGardenProfile(did: string) {
+export async function getMintGardenProfile(did: string, isTestnet: boolean) {
   try {
-    const response = await fetch(mintGardenApiUrl(`profile/${did}`, false));
+    const response = await fetch(mintGardenApiUrl(`profile/${did}`, isTestnet));
     const data = await response.json();
     if ('detail' in data) {
       return null;
