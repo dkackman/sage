@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useErrors } from '@/hooks/useErrors';
+import { useNetwork } from '@/hooks/useNetwork';
 import { amount } from '@/lib/formTypes';
 import { fromMojos, toMojos } from '@/lib/utils';
 import { useWallet } from '@/contexts/WalletContext';
@@ -66,6 +67,7 @@ export function OwnedCoinsCard({
   const { isTransactionDisabled } = useWallet();
 
   const { addError } = useErrors();
+  const { isTestnet } = useNetwork();
 
   const [selectedCoinRecords, setSelectedCoinRecords] = useState<CoinRecord[]>(
     [],
@@ -424,6 +426,7 @@ export function OwnedCoinsCard({
         <CoinList
           clawback={false}
           precision={asset.precision}
+          isTestnet={isTestnet}
           coins={coins}
           selectedCoins={selectedCoins}
           setSelectedCoins={setSelectedCoins}

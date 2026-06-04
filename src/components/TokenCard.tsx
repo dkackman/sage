@@ -21,6 +21,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { fromMojos } from '@/lib/utils';
+import { useNetwork } from '@/hooks/useNetwork';
+import { dexieAssetUrl } from '@/lib/urls';
 import { useWalletState } from '@/state';
 import { t } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
@@ -62,6 +64,7 @@ export function TokenCard({
 }: TokenCardProps) {
   const walletState = useWalletState();
   const navigate = useNavigate();
+  const { isTestnet } = useNetwork();
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isReceiveOpen, setIsReceiveOpen] = useState(false);
@@ -182,7 +185,7 @@ export function TokenCard({
                   <DropdownMenuItem
                     onClick={() => {
                       openUrl(
-                        `https://dexie.space/offers/XCH/${asset.asset_id}`,
+                        dexieAssetUrl(asset.asset_id ?? '', isTestnet),
                       ).catch((error) => {
                         toast.error(t`Failed to open dexie.space: ${error}`);
                       });
