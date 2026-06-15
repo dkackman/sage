@@ -119,6 +119,9 @@ async submitTransaction(req: SubmitTransaction) : Promise<SubmitTransactionRespo
 async getSyncStatus(req: GetSyncStatus) : Promise<GetSyncStatusResponse> {
     return await TAURI_INVOKE("get_sync_status", { req });
 },
+async getWalletReceiveAddress(req: GetWalletReceiveAddress) : Promise<GetWalletReceiveAddressResponse> {
+    return await TAURI_INVOKE("get_wallet_receive_address", { req });
+},
 async getVersion(req: GetVersion) : Promise<GetVersionResponse> {
     return await TAURI_INVOKE("get_version", { req });
 },
@@ -358,6 +361,24 @@ async getLogs() : Promise<LogFile[]> {
 },
 async isAssetOwned(req: IsAssetOwned) : Promise<IsAssetOwnedResponse> {
     return await TAURI_INVOKE("is_asset_owned", { req });
+},
+async getSyncEnabled(fingerprint: number) : Promise<boolean> {
+    return await TAURI_INVOKE("get_sync_enabled", { fingerprint });
+},
+async setSyncEnabled(fingerprint: number, enabled: boolean) : Promise<null> {
+    return await TAURI_INVOKE("set_sync_enabled", { fingerprint, enabled });
+},
+async addSyncRelay(url: string) : Promise<null> {
+    return await TAURI_INVOKE("add_sync_relay", { url });
+},
+async removeSyncRelay(url: string) : Promise<null> {
+    return await TAURI_INVOKE("remove_sync_relay", { url });
+},
+async publishWalletSettings(fingerprint: number) : Promise<null> {
+    return await TAURI_INVOKE("publish_wallet_settings", { fingerprint });
+},
+async fetchWalletSettings() : Promise<FetchSettingsResult> {
+    return await TAURI_INVOKE("fetch_wallet_settings");
 }
 }
 
@@ -826,6 +847,7 @@ export type FeeAction = {
  * The fee amount, in mojos
  */
 amount: Amount }
+export type FetchSettingsResult = { applied: boolean; name: string | null; emoji: string | null }
 /**
  * Filter unlocked coins from a list
  */
@@ -1600,6 +1622,22 @@ export type GetVersionResponse = {
  * Semantic version string
  */
 version: string }
+/**
+ * Get the current receive address for any wallet by fingerprint
+ */
+export type GetWalletReceiveAddress = { 
+/**
+ * Wallet fingerprint
+ */
+fingerprint: number }
+/**
+ * Response with the wallet receive address
+ */
+export type GetWalletReceiveAddressResponse = { 
+/**
+ * Encoded receive address
+ */
+address: string }
 export type Id = 
 /**
  * The XCH asset
@@ -2748,7 +2786,7 @@ offer: OfferSummary;
  * Offer status
  */
 status: OfferRecordStatus }
-export type Wallet = { name: string; fingerprint: number; network?: string | null; delta_sync: boolean | null; emoji?: string | null; change_address?: string | null }
+export type Wallet = { name: string; fingerprint: number; network?: string | null; delta_sync: boolean | null; emoji?: string | null; change_address?: string | null; sync_enabled?: boolean }
 export type WalletDefaults = { delta_sync: boolean }
 
 /** tauri-specta globals **/

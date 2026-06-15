@@ -96,15 +96,15 @@ export function WalletCard({
 
     commands
       .renameKey({ fingerprint: info.fingerprint, name: newName })
-      .then(() =>
+      .then(() => {
         setKeys(
           keys.map((key) =>
             key.fingerprint === info.fingerprint
               ? { ...key, name: newName }
               : key,
           ),
-        ),
-      )
+        );
+      })
       .catch(addError)
       .finally(() => setIsRenameOpen(false));
 
@@ -114,35 +114,25 @@ export function WalletCard({
   const updateEmoji = (emoji: string | null) => {
     commands
       .setWalletEmoji({ fingerprint: info.fingerprint, emoji })
-      .then(() =>
+      .then(() => {
         setKeys(
           keys.map((key) =>
             key.fingerprint === info.fingerprint ? { ...key, emoji } : key,
           ),
-        ),
-      )
+        );
+      })
       .catch(addError);
   };
 
   const copyAddress = async () => {
     try {
-      await commands.login({ fingerprint: info.fingerprint });
-      const sync = await commands.getSyncStatus({});
-
-      if (sync?.receive_address) {
-        await writeText(sync.receive_address);
-        toast.success(t`Address copied to clipboard`);
-      } else {
-        toast.error(t`No address found`);
-      }
+      const result = await commands.getWalletReceiveAddress({
+        fingerprint: info.fingerprint,
+      });
+      await writeText(result.address);
+      toast.success(t`Address copied to clipboard`);
     } catch {
       toast.error(t`Failed to copy address to clipboard`);
-    } finally {
-      try {
-        await commands.logout({});
-      } catch (error) {
-        console.error(error);
-      }
     }
   };
 

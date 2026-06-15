@@ -1,3 +1,4 @@
+use crate::SyncConfig;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -8,6 +9,7 @@ pub struct Config {
     pub global: GlobalConfig,
     pub network: NetworkConfig,
     pub rpc: RpcConfig,
+    pub sync: SyncConfig,
 }
 
 impl Default for Config {
@@ -17,6 +19,7 @@ impl Default for Config {
             global: GlobalConfig::default(),
             network: NetworkConfig::default(),
             rpc: RpcConfig::default(),
+            sync: SyncConfig::default(),
         }
     }
 }
@@ -68,5 +71,25 @@ impl Default for RpcConfig {
             enabled: false,
             port: 9257,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sync_config_in_config_defaults_correctly() {
+        let cfg = Config::default();
+        assert_eq!(cfg.sync.relays.len(), 3);
+    }
+
+    #[test]
+    fn config_toml_roundtrip_preserves_sync() {
+        let mut cfg = Config::default();
+        cfg.sync.relays = vec!["wss://custom.relay".to_string()];
+        let toml = toml::to_string_pretty(&cfg).unwrap();
+        let parsed: Config = toml::from_str(&toml).unwrap();
+        assert_eq!(parsed.sync.relays, vec!["wss://custom.relay"]);
     }
 }
