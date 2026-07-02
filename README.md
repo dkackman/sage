@@ -126,3 +126,5 @@ The following things have to be done before a new release is published:
 6. Upload to TestFlight and the Google Play Store
 7. Generate the OpenAPI specification `cargo run --bin sage rpc generate_openapi -o dist/openapi.json`
 8. Upload to docusaurus
+
+Test
