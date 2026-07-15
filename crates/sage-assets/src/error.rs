@@ -22,4 +22,7 @@ pub enum UriError {
 
     #[error("Failed to create thumbnail: {0}")]
     Thumbnail(#[from] ThumbnailError),
+
+    #[error("Failed to fetch DIG capsule resource: {0}")]
+    Dig(#[from] crate::DigError),
 }

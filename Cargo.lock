@@ -50,6 +50,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "aes-gcm-siv"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae0784134ba9375416d469ec31e7c5f9fa94405049cf08c5ce5b4698be673e0d"
+dependencies = [
+ "aead",
+ "aes",
+ "cipher",
+ "ctr",
+ "polyval",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6265,16 +6280,20 @@ dependencies = [
 name = "sage-assets"
 version = "0.12.11"
 dependencies = [
+ "aes-gcm-siv",
  "base64 0.22.1",
  "chia-wallet-sdk",
  "futures-lite",
  "futures-util",
+ "hex",
+ "hkdf",
  "image",
  "mime-sniffer",
  "num-bigint",
  "reqwest 0.12.24",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
