@@ -2132,6 +2132,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "dig-urn-resolver"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f33e087c437c97ace10aafe0c1e948f96338b2a7ea7ff1bc4c641eeb2167fca3"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "digstore-core",
+ "hex",
+ "reqwest 0.12.24",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2141,6 +2159,19 @@ dependencies = [
  "const-oid",
  "crypto-common",
  "subtle",
+]
+
+[[package]]
+name = "digstore-core"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da20d5cdc680f025058da0f6a3d2481b537a658683a294cf62a65e0f0e4d8412"
+dependencies = [
+ "aes-gcm-siv",
+ "hex",
+ "hkdf",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -6280,20 +6311,17 @@ dependencies = [
 name = "sage-assets"
 version = "0.12.11"
 dependencies = [
- "aes-gcm-siv",
  "base64 0.22.1",
  "chia-wallet-sdk",
+ "dig-urn-resolver",
  "futures-lite",
  "futures-util",
- "hex",
- "hkdf",
  "image",
  "mime-sniffer",
  "num-bigint",
  "reqwest 0.12.24",
  "serde",
  "serde_json",
- "sha2",
  "thiserror 1.0.69",
  "tokio",
  "tracing",

@@ -21,10 +21,10 @@ pub struct Data {
 }
 
 pub async fn fetch_uri(uri: String, testnet: bool) -> Result<Data, UriError> {
-    // DIG capsule URIs serve sealed bytes; decrypt locally so the blob (and
+    // DIG capsule URIs serve sealed bytes; resolve locally so the blob (and
     // its hash, which the NFT pins over the plaintext) is the real content.
-    let (blob, mime_type) = if let Some(dig) = super::DigUri::parse(&uri) {
-        (super::fetch_dig_uri(&dig, None).await?, None)
+    let (blob, mime_type) = if super::is_dig_uri(&uri) {
+        (super::fetch_dig_uri(&uri).await?, None)
     } else {
         let response = reqwest::get(&uri).await?;
 

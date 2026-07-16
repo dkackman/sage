@@ -97,10 +97,8 @@ bech32 = "0.9.1"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 aes-gcm = "0.10.3"
-aes-gcm-siv = "0.11.1"
-hkdf = "0.12.4"
-sha2 = "0.10.8"
 argon2 = "0.5.3"
+dig-urn-resolver = "0.3.1"
 
 # Async
 tokio = "1.39.2"
