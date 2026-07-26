@@ -1,9 +1,7 @@
 //! DIG Network URN resolution.
 //!
 //! DIG-minted NFTs carry `data_uris`/`metadata_uris` like
-//! `chia://<storeId>:<rootHash>/<resource>` (the correct scheme) or, from an
-//! earlier naming mistake that's still seen in the wild, `dig://...` in the
-//! same shape. Both are accepted, alongside the canonical
+//! the canonical
 //! `urn:dig:chia:<storeId>:<rootHash>/<resource>` (optionally wrapped in an
 //! https gateway URL). Resolution is delegated to the
 //! [`dig-urn-resolver`](https://crates.io/crates/dig-urn-resolver) crate,
@@ -27,24 +25,11 @@ pub enum DigError {
     Resolve(#[from] dig_urn_resolver::ResolveError),
 }
 
-/// True for any URI form the DIG resolver understands: `chia://...`,
-/// `dig://...`, `urn:dig:chia:...`, or an https gateway URL wrapping the
-/// URN.
+/// True for any URI form the DIG resolver understands: `urn:dig:chia:...`, 
+/// or an https gateway URL wrapping the URN.
 pub fn is_dig_uri(uri: &str) -> bool {
     let uri = uri.trim();
-    uri.starts_with("chia://") || uri.starts_with("dig://") || uri.contains("urn:dig:chia:")
-}
-
-/// `dig_urn_resolver` only recognizes the canonical `urn:dig:chia:...` form
-/// (and https URLs wrapping it), so rewrite the `chia://`/`dig://`
-/// shorthand into that shape before handing it off.
-fn normalize(uri: &str) -> String {
-    let uri = uri.trim();
-    if let Some(rest) = uri.strip_prefix("chia://").or(uri.strip_prefix("dig://")) {
-        format!("urn:dig:chia:{rest}")
-    } else {
-        uri.to_string()
-    }
+    uri.contains("urn:dig:chia:")
 }
 
 /// Fetch, verify, and decrypt a DIG resource to plaintext.
@@ -54,7 +39,7 @@ fn normalize(uri: &str) -> String {
 /// onto the multi-threaded runtime. Run it on a blocking thread instead,
 /// via the crate's own sync entry point.
 pub async fn fetch_dig_uri(uri: &str) -> Result<Vec<u8>, DigError> {
-    let uri = normalize(uri);
+    let uri = uri.to_string();
     let outcome = tokio::task::spawn_blocking(move || native::resolve_blocking(&uri))
         .await
         .expect("dig resolver task panicked")?;
