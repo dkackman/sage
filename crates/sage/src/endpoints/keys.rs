@@ -423,6 +423,25 @@ impl Sage {
         req: ReconcileKeyProtection,
     ) -> Result<ReconcileKeyProtectionResponse> {
         let has_password = self.keychain.is_password_protected(req.fingerprint);
+
+        // This runs after an unexpected keychain decrypt failure, so if a
+        // passkey enrollment is present its wrapped password is very likely
+        // stale (that staleness is a plausible cause of the decrypt
+        // failure). Drop it defensively: worst case the user re-enrolls,
+        // and it never leaks anything, whereas leaving a stale wrap in
+        // place risks a confusing future unwrap failure.
+        if let Some(wallet) = self
+            .wallet_config
+            .wallets
+            .iter_mut()
+            .find(|wallet| wallet.fingerprint == req.fingerprint)
+        {
+            if wallet.passkey.is_some() {
+                wallet.passkey = None;
+                self.save_config()?;
+            }
+        }
+
         self.set_password_protected(req.fingerprint, has_password)?;
         Ok(ReconcileKeyProtectionResponse { has_password })
     }
@@ -456,6 +475,15 @@ impl Sage {
     }
 
     pub fn enroll_passkey(&mut self, req: EnrollPasskey) -> Result<EnrollPasskeyResponse> {
+        // A passkey wraps the key's password, so the key must actually have
+        // one; otherwise `password: ""` would satisfy `extract_secrets`
+        // below for a password-less key even though the design requires a
+        // real password before enrolling. The UI already gates this, but
+        // the backend must enforce it too.
+        if !self.keychain.is_password_protected(req.fingerprint) {
+            return Err(Error::PasswordRequired);
+        }
+
         let password = req.password.into_bytes();
 
         // Prove the caller knows the current password (also rejects public keys).
@@ -637,5 +665,86 @@ mod passkey_endpoint_tests {
             "passkey enrollment was not persisted as dropped on disk"
         );
         assert!(!wallets_toml.contains("cred"));
+    }
+
+    #[test]
+    fn test_reconcile_key_protection_drops_enrollment() {
+        let (mut sage, fingerprint, path) = sage_with_password_key(b"hunter2");
+        let prf = STANDARD.encode([9u8; 32]);
+        sage.enroll_passkey(EnrollPasskey {
+            fingerprint,
+            password: "hunter2".to_string(),
+            credential_id: "cred".to_string(),
+            rp_id: "rp".to_string(),
+            prf_salt: "salt".to_string(),
+            prf_secret: prf,
+        })
+        .unwrap();
+
+        sage.reconcile_key_protection(ReconcileKeyProtection { fingerprint })
+            .unwrap();
+
+        let wallet = sage
+            .wallet_config
+            .wallets
+            .iter()
+            .find(|w| w.fingerprint == fingerprint)
+            .unwrap();
+        assert!(wallet.passkey.is_none());
+
+        // Mirror `test_change_password_drops_enrollment`: prove the drop
+        // was actually persisted to disk, not just held in-memory.
+        let wallets_toml_path = path.join("wallets.toml");
+        let wallets_toml = std::fs::read_to_string(&wallets_toml_path).unwrap();
+        let on_disk: sage_config::WalletConfig = toml::from_str(&wallets_toml).unwrap();
+        let on_disk_wallet = on_disk
+            .wallets
+            .iter()
+            .find(|w| w.fingerprint == fingerprint)
+            .unwrap();
+        assert!(
+            on_disk_wallet.passkey.is_none(),
+            "passkey enrollment was not persisted as dropped on disk"
+        );
+        assert!(!wallets_toml.contains("cred"));
+    }
+
+    #[test]
+    fn test_enroll_passkey_requires_password() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().to_path_buf();
+        let mut sage = crate::Sage::new(&path, true);
+        let mnemonic = Mnemonic::from_entropy(&[7u8; 16]).unwrap();
+        let fingerprint = sage.keychain.add_mnemonic(&mnemonic, b"").unwrap();
+        sage.wallet_config.wallets.push(sage_config::Wallet {
+            fingerprint,
+            password_protected: false,
+            ..Default::default()
+        });
+        std::mem::forget(dir); // keep temp dir alive for save_config writes
+
+        let prf = STANDARD.encode([9u8; 32]);
+        let result = sage.enroll_passkey(EnrollPasskey {
+            fingerprint,
+            password: "".to_string(),
+            credential_id: "cred".to_string(),
+            rp_id: "rp".to_string(),
+            prf_salt: "salt".to_string(),
+            prf_secret: prf,
+        });
+        assert!(matches!(result, Err(Error::PasswordRequired)));
+
+        let wallet = sage
+            .wallet_config
+            .wallets
+            .iter()
+            .find(|w| w.fingerprint == fingerprint)
+            .unwrap();
+        assert!(wallet.passkey.is_none());
+
+        let wallets_toml_path = path.join("wallets.toml");
+        if let Ok(wallets_toml) = std::fs::read_to_string(&wallets_toml_path) {
+            assert!(!wallets_toml.contains("cred"));
+        }
     }
 }

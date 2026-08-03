@@ -244,6 +244,9 @@ pub enum Error {
 
     #[error("No passkey enrollment for this key")]
     NoPasskeyEnrollment,
+
+    #[error("Key must have a password before enrolling a passkey")]
+    PasswordRequired,
 }
 
 impl Error {
@@ -324,8 +327,14 @@ impl Error {
             | Self::InvalidGroup
             | Self::InvalidThemeJson
             | Self::MissingThemeData => ErrorKind::Api,
-            Self::Passkey(..) => ErrorKind::IncorrectPassword,
-            Self::NoPasskeyEnrollment => ErrorKind::Unauthorized,
+            Self::Passkey(error) => match error {
+                crate::passkey::PasskeyError::Decrypt => ErrorKind::IncorrectPassword,
+                crate::passkey::PasskeyError::Encrypt
+                | crate::passkey::PasskeyError::InvalidPrfSecretLength(..)
+                | crate::passkey::PasskeyError::Truncated
+                | crate::passkey::PasskeyError::Base64(..) => ErrorKind::Internal,
+            },
+            Self::NoPasskeyEnrollment | Self::PasswordRequired => ErrorKind::Unauthorized,
             Self::Base64(..) | Self::Utf8(..) => ErrorKind::Internal,
         }
     }
