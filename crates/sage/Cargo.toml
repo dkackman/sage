@@ -38,6 +38,7 @@ rand = { workspace = true }
 rand_chacha = { workspace = true }
 bech32 = { workspace = true }
 base64 = { workspace = true }
+aes-gcm = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 bincode = { workspace = true }
 serde_json = { workspace = true }
