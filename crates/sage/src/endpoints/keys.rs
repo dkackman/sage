@@ -401,6 +401,12 @@ impl Sage {
         {
             wallet.passkey = None;
         }
+        // `set_password_protected` below only saves when the protection flag
+        // actually changes value (e.g. old password non-empty, new password
+        // non-empty too), so the passkey drop above must be persisted here
+        // unconditionally or a stale enrollment (wrapping the OLD password)
+        // survives on disk across restarts.
+        self.save_config()?;
 
         self.set_password_protected(req.fingerprint, !new_password.is_empty())?;
         Ok(ChangePasswordResponse {})
@@ -524,24 +530,33 @@ mod passkey_endpoint_tests {
     use super::*;
     use base64::{engine::general_purpose::STANDARD, Engine};
     use bip39::Mnemonic;
+    use std::path::PathBuf;
     use tempfile::tempdir;
 
-    fn sage_with_password_key(password: &[u8]) -> (crate::Sage, u32) {
+    fn sage_with_password_key(password: &[u8]) -> (crate::Sage, u32, PathBuf) {
         let dir = tempdir().unwrap();
-        let mut sage = crate::Sage::new(dir.path(), true);
+        let path = dir.path().to_path_buf();
+        let mut sage = crate::Sage::new(&path, true);
         let mnemonic = Mnemonic::from_entropy(&[7u8; 16]).unwrap();
         let fingerprint = sage.keychain.add_mnemonic(&mnemonic, password).unwrap();
         sage.wallet_config.wallets.push(sage_config::Wallet {
             fingerprint,
+            // Realistic pre-condition: the wallet is already password-protected,
+            // so a change from one non-empty password to another non-empty
+            // password leaves this flag unchanged, and `set_password_protected`
+            // will NOT trigger a save on its own. This is required to actually
+            // exercise the persistence gap `test_change_password_drops_enrollment`
+            // guards against.
+            password_protected: true,
             ..Default::default()
         });
         std::mem::forget(dir); // keep temp dir alive for save_config writes
-        (sage, fingerprint)
+        (sage, fingerprint, path)
     }
 
     #[test]
     fn test_enroll_then_unwrap_returns_password() {
-        let (mut sage, fingerprint) = sage_with_password_key(b"hunter2");
+        let (mut sage, fingerprint, _path) = sage_with_password_key(b"hunter2");
         let prf = STANDARD.encode([9u8; 32]);
         sage.enroll_passkey(EnrollPasskey {
             fingerprint,
@@ -561,7 +576,7 @@ mod passkey_endpoint_tests {
 
     #[test]
     fn test_enroll_rejects_wrong_password() {
-        let (mut sage, fingerprint) = sage_with_password_key(b"hunter2");
+        let (mut sage, fingerprint, _path) = sage_with_password_key(b"hunter2");
         let prf = STANDARD.encode([9u8; 32]);
         assert!(sage
             .enroll_passkey(EnrollPasskey {
@@ -577,7 +592,7 @@ mod passkey_endpoint_tests {
 
     #[test]
     fn test_change_password_drops_enrollment() {
-        let (mut sage, fingerprint) = sage_with_password_key(b"hunter2");
+        let (mut sage, fingerprint, path) = sage_with_password_key(b"hunter2");
         let prf = STANDARD.encode([9u8; 32]);
         sage.enroll_passkey(EnrollPasskey {
             fingerprint,
@@ -601,5 +616,26 @@ mod passkey_endpoint_tests {
             .find(|w| w.fingerprint == fingerprint)
             .unwrap();
         assert!(wallet.passkey.is_none());
+
+        // Verify the drop was actually persisted to disk, not just held
+        // in-memory: `set_password_protected` only saves when the
+        // protection flag *value* changes, which it doesn't here (both
+        // passwords are non-empty), so a save purely gated on that call
+        // would silently leave the stale (old-password-wrapping)
+        // enrollment on disk. Read wallets.toml directly to prove the
+        // enrollment is gone on the persisted copy too.
+        let wallets_toml_path = path.join("wallets.toml");
+        let wallets_toml = std::fs::read_to_string(&wallets_toml_path).unwrap();
+        let on_disk: sage_config::WalletConfig = toml::from_str(&wallets_toml).unwrap();
+        let on_disk_wallet = on_disk
+            .wallets
+            .iter()
+            .find(|w| w.fingerprint == fingerprint)
+            .unwrap();
+        assert!(
+            on_disk_wallet.passkey.is_none(),
+            "passkey enrollment was not persisted as dropped on disk"
+        );
+        assert!(!wallets_toml.contains("cred"));
     }
 }
