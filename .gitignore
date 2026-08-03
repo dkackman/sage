@@ -28,3 +28,6 @@ target
 .env
 /test.sqlite*
 
+# macOS dev signing — developer-specific, must not be committed
+src-tauri/embedded.provisionprofile
+
