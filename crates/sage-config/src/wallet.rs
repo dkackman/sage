@@ -34,6 +34,21 @@ pub struct Wallet {
     #[serde(default)]
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub password_protected: bool,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub passkey: Option<PasskeyEnrollment>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct PasskeyEnrollment {
+    /// WebAuthn credential id (base64url), passed back into allowCredentials.
+    pub credential_id: String,
+    /// Relying-party id used at enrollment.
+    pub rp_id: String,
+    /// PRF eval salt (base64url) — must be reused verbatim on unlock.
+    pub prf_salt: String,
+    /// Standard-base64 of nonce ‖ AES-256-GCM ciphertext of the key's password.
+    pub wrapped_password: String,
 }
 
 impl Wallet {
@@ -52,6 +67,7 @@ impl Default for Wallet {
             emoji: None,
             change_address: None,
             password_protected: false,
+            passkey: None,
         }
     }
 }
@@ -73,6 +89,7 @@ mod tests {
                 "xch1dtfukqqka3ftqtdlhmc5spc5vd44h7ejrtnjcewxlueam5yrnnqqyczg8t".to_string(),
             ),
             password_protected: false,
+            passkey: None,
         }
     }
 
@@ -147,5 +164,35 @@ mod tests {
                   ]
                 }"#]],
         );
+    }
+
+    #[test]
+    fn test_passkey_roundtrips_through_toml() {
+        let mut wallet = default();
+        wallet.passkey = Some(PasskeyEnrollment {
+            credential_id: "Y3JlZA".to_string(),
+            rp_id: "webauthn.dkackman.com".to_string(),
+            prf_salt: "c2FsdA".to_string(),
+            wrapped_password: "d3JhcHBlZA==".to_string(),
+        });
+        let config = WalletConfig {
+            defaults: WalletDefaults::default(),
+            wallets: vec![wallet],
+        };
+        let toml = toml::to_string_pretty(&config).unwrap();
+        let back: WalletConfig = toml::from_str(&toml).unwrap();
+        let enrollment = back.wallets[0].passkey.as_ref().unwrap();
+        assert_eq!(enrollment.credential_id, "Y3JlZA");
+        assert_eq!(enrollment.rp_id, "webauthn.dkackman.com");
+    }
+
+    #[test]
+    fn test_passkey_omitted_when_none() {
+        let config = WalletConfig {
+            defaults: WalletDefaults::default(),
+            wallets: vec![default()],
+        };
+        let toml = toml::to_string_pretty(&config).unwrap();
+        assert!(!toml.contains("passkey"));
     }
 }
