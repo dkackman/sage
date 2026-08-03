@@ -1,3 +1,4 @@
+import type { PasskeyInfo } from '@/bindings';
 import { parseCommand, WalletConnectCommand } from './commands';
 import {
   handleChainId,
@@ -24,8 +25,14 @@ import {
 } from './commands/offers';
 
 export interface HandlerContext {
-  requestPassword: (hasPassword: boolean) => Promise<string | null | undefined>;
+  requestPassword: (info: {
+    has_password: boolean;
+    passkey: PasskeyInfo | null;
+    fingerprint: number;
+  }) => Promise<string | null | undefined>;
   hasPassword: boolean;
+  passkey: PasskeyInfo | null;
+  fingerprint: number;
 }
 
 export const handleCommand = async (

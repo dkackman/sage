@@ -1,5 +1,7 @@
 import { PasswordDialog } from '@/components/dialogs/PasswordDialog';
 import { useBiometric } from '@/hooks/useBiometric';
+import { type KeyInfo, type PasskeyInfo } from '@/bindings';
+import { unlockWithPasskey } from '@/lib/passkey';
 import { platform } from '@tauri-apps/plugin-os';
 import { createContext, ReactNode, useCallback, useRef, useState } from 'react';
 
@@ -12,8 +14,16 @@ interface PasswordRequest {
   resolve: (password: string | null | undefined) => void;
 }
 
+export interface RequestPasswordInfo {
+  has_password: boolean;
+  passkey: PasskeyInfo | null;
+  fingerprint: number;
+}
+
 export interface PasswordContextType {
-  requestPassword: (hasPassword: boolean) => Promise<string | null | undefined>;
+  requestPassword: (
+    info: RequestPasswordInfo,
+  ) => Promise<string | null | undefined>;
 }
 
 export const PasswordContext = createContext<PasswordContextType | undefined>(
@@ -29,9 +39,23 @@ export function PasswordProvider({ children }: { children: ReactNode }) {
   const lastBiometricPromptRef = useRef<number | null>(null);
 
   const requestPassword = useCallback(
-    async (hasPassword: boolean): Promise<string | null | undefined> => {
+    async (
+      info: RequestPasswordInfo,
+    ): Promise<string | null | undefined> => {
+      // Case 0: passkey-enrolled → try passkey first, password dialog as fallback.
+      if (info.passkey) {
+        try {
+          return await unlockWithPasskey({
+            fingerprint: info.fingerprint,
+            passkey: info.passkey,
+          } as KeyInfo);
+        } catch {
+          // fall through to the password dialog
+        }
+      }
+
       // Case 1: Has password → password takes precedence, show dialog
-      if (hasPassword) {
+      if (info.has_password) {
         return new Promise<string | null | undefined>((resolve) => {
           pendingRef.current = { resolve };
           setOpen(true);

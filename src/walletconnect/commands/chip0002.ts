@@ -76,7 +76,11 @@ export async function handleSignCoinSpends(
   params: Params<'chip0002_signCoinSpends'>,
   context: HandlerContext,
 ) {
-  const password = await context.requestPassword(context.hasPassword);
+  const password = await context.requestPassword({
+    has_password: context.hasPassword,
+    passkey: context.passkey,
+    fingerprint: context.fingerprint,
+  });
   if (password === undefined) throw new Error('Authentication failed');
 
   const data = await commands.signCoinSpends({
@@ -103,7 +107,11 @@ export async function handleSignMessage(
   params: Params<'chip0002_signMessage'>,
   context: HandlerContext,
 ) {
-  const password = await context.requestPassword(context.hasPassword);
+  const password = await context.requestPassword({
+    has_password: context.hasPassword,
+    passkey: context.passkey,
+    fingerprint: context.fingerprint,
+  });
   if (password === undefined) throw new Error('Authentication failed');
 
   const data = await commands.signMessageWithPublicKey({ ...params, password });

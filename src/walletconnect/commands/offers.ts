@@ -6,7 +6,11 @@ export async function handleCreateOffer(
   params: Params<'chia_createOffer'>,
   context: HandlerContext,
 ) {
-  const password = await context.requestPassword(context.hasPassword);
+  const password = await context.requestPassword({
+    has_password: context.hasPassword,
+    passkey: context.passkey,
+    fingerprint: context.fingerprint,
+  });
   if (password === undefined) throw new Error('Authentication failed');
 
   const data = await commands.makeOffer({
@@ -35,7 +39,11 @@ export async function handleTakeOffer(
   params: Params<'chia_takeOffer'>,
   context: HandlerContext,
 ) {
-  const password = await context.requestPassword(context.hasPassword);
+  const password = await context.requestPassword({
+    has_password: context.hasPassword,
+    passkey: context.passkey,
+    fingerprint: context.fingerprint,
+  });
   if (password === undefined) throw new Error('Authentication failed');
 
   const data = await commands.takeOffer({
@@ -52,7 +60,11 @@ export async function handleCancelOffer(
   params: Params<'chia_cancelOffer'>,
   context: HandlerContext,
 ) {
-  const password = await context.requestPassword(context.hasPassword);
+  const password = await context.requestPassword({
+    has_password: context.hasPassword,
+    passkey: context.passkey,
+    fingerprint: context.fingerprint,
+  });
   if (password === undefined) throw new Error('Authentication failed');
 
   await commands.cancelOffer({

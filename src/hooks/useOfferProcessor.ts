@@ -62,7 +62,11 @@ export function useOfferProcessor({
       expiresAtSecond = Math.ceil(Date.now() / 1000) + totalSeconds;
     }
 
-    const password = await requestPassword(wallet?.has_password ?? false);
+    const password = await requestPassword({
+      has_password: wallet?.has_password ?? false,
+      passkey: wallet?.passkey ?? null,
+      fingerprint: wallet?.fingerprint ?? 0,
+    });
     if (password === undefined) {
       throw new Error(t`Authentication was cancelled`);
     }
@@ -187,6 +191,8 @@ export function useOfferProcessor({
     walletState.sync.unit.precision,
     requestPassword,
     wallet?.has_password,
+    wallet?.passkey,
+    wallet?.fingerprint,
     onProcessingEnd,
     onProgress,
   ]);

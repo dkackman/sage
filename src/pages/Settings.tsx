@@ -50,6 +50,7 @@ import { usePassword } from '@/hooks/usePassword';
 import { useScannerOrClipboard } from '@/hooks/useScannerOrClipboard';
 import { useWalletConnect } from '@/hooks/useWalletConnect';
 import { exportText, ExportType } from '@/lib/exportText';
+import { enrollPasskey } from '@/lib/passkey';
 import {
   clearState,
   fetchState,
@@ -973,7 +974,11 @@ function RpcSettings() {
   }, [addError]);
 
   const start = async () => {
-    const auth = await requestPassword(false);
+    const auth = await requestPassword({
+      has_password: false,
+      passkey: null,
+      fingerprint: 0,
+    });
     if (auth === undefined) return;
 
     commands
@@ -990,7 +995,11 @@ function RpcSettings() {
   };
 
   const toggleRunOnStartup = async (checked: boolean) => {
-    const auth = await requestPassword(false);
+    const auth = await requestPassword({
+      has_password: false,
+      passkey: null,
+      fingerprint: 0,
+    });
     if (auth === undefined) return;
 
     commands
@@ -1234,7 +1243,11 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
   const handler = async (values: z.infer<typeof schema>) => {
     const needsPassword = key?.has_secrets && hardened;
     if (needsPassword) {
-      const password = await requestPassword(key?.has_password ?? false);
+      const password = await requestPassword({
+        has_password: key?.has_password ?? false,
+        passkey: key?.passkey ?? null,
+        fingerprint: key?.fingerprint ?? 0,
+      });
       if (password === undefined) return;
 
       setPending(true);
@@ -1399,6 +1412,59 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
               )
             }
           />
+
+          {key?.has_password && (
+            <SettingItem
+              label={
+                key.passkey
+                  ? t`Passkey Unlock`
+                  : t`Unlock with Passkey`
+              }
+              description={
+                key.passkey
+                  ? t`This wallet can be unlocked with a passkey instead of your password`
+                  : t`Use Touch ID or another passkey to unlock this wallet`
+              }
+              control={
+                key.passkey ? (
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    onClick={async () => {
+                      await commands.removePasskey({
+                        fingerprint: key.fingerprint,
+                      });
+                      await handlePasswordSuccess();
+                    }}
+                  >
+                    <Trans>Remove passkey unlock</Trans>
+                  </Button>
+                ) : (
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    onClick={async () => {
+                      const password = await requestPassword({
+                        has_password: key.has_password,
+                        passkey: null,
+                        fingerprint: key.fingerprint,
+                      });
+                      if (typeof password !== 'string') return;
+                      try {
+                        await enrollPasskey(key.fingerprint, password);
+                        await handlePasswordSuccess();
+                      } catch (e) {
+                        // surface via the app's existing error handling
+                        console.error(e);
+                      }
+                    }}
+                  >
+                    <Trans>Unlock with passkey</Trans>
+                  </Button>
+                )
+              }
+            />
+          )}
         </SettingsSection>
       )}
 

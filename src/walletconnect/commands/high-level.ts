@@ -47,7 +47,11 @@ export async function handleSend(
   params: Params<'chia_send'>,
   context: HandlerContext,
 ): Promise<Return<'chia_send'>> {
-  const password = await context.requestPassword(context.hasPassword);
+  const password = await context.requestPassword({
+    has_password: context.hasPassword,
+    passkey: context.passkey,
+    fingerprint: context.fingerprint,
+  });
   if (password === undefined) throw new Error('Authentication failed');
 
   if (params.assetId) {
@@ -84,7 +88,11 @@ export async function handleSignMessageByAddress(
   params: Params<'chia_signMessageByAddress'>,
   context: HandlerContext,
 ) {
-  const password = await context.requestPassword(context.hasPassword);
+  const password = await context.requestPassword({
+    has_password: context.hasPassword,
+    passkey: context.passkey,
+    fingerprint: context.fingerprint,
+  });
   if (password === undefined) throw new Error('Authentication failed');
 
   return await commands.signMessageByAddress({ ...params, password });
@@ -94,7 +102,11 @@ export async function handleBulkMintNfts(
   params: Params<'chia_bulkMintNfts'>,
   context: HandlerContext,
 ): Promise<Return<'chia_bulkMintNfts'>> {
-  const password = await context.requestPassword(context.hasPassword);
+  const password = await context.requestPassword({
+    has_password: context.hasPassword,
+    passkey: context.passkey,
+    fingerprint: context.fingerprint,
+  });
   if (password === undefined) throw new Error('Authentication failed');
 
   const response = await commands.bulkMintNfts({

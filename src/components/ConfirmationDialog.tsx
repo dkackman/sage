@@ -517,9 +517,11 @@ export default function ConfirmationDialog({
                   <Button
                     size='sm'
                     onClick={async () => {
-                      const password = await requestPassword(
-                        wallet?.has_password ?? false,
-                      );
+                      const password = await requestPassword({
+                        has_password: wallet?.has_password ?? false,
+                        passkey: wallet?.passkey ?? null,
+                        fingerprint: wallet?.fingerprint ?? 0,
+                      });
                       if (password === undefined) return;
 
                       commands
@@ -624,9 +626,11 @@ export default function ConfirmationDialog({
                   response !== null &&
                   'coin_spends' in response
                 ) {
-                  const password = await requestPassword(
-                    wallet?.has_password ?? false,
-                  );
+                  const password = await requestPassword({
+                    has_password: wallet?.has_password ?? false,
+                    passkey: wallet?.passkey ?? null,
+                    fingerprint: wallet?.fingerprint ?? 0,
+                  });
                   if (password === undefined) return;
 
                   const data = await commands

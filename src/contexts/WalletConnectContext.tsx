@@ -106,6 +106,8 @@ export function WalletConnectProvider({ children }: { children: ReactNode }) {
           {
             requestPassword,
             hasPassword: wallet?.has_password ?? false,
+            passkey: wallet?.passkey ?? null,
+            fingerprint: wallet?.fingerprint ?? 0,
           },
         );
 
@@ -140,7 +142,14 @@ export function WalletConnectProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [signClient, addError, requestPassword, wallet?.has_password],
+    [
+      signClient,
+      addError,
+      requestPassword,
+      wallet?.has_password,
+      wallet?.passkey,
+      wallet?.fingerprint,
+    ],
   );
 
   useEffect(() => {
