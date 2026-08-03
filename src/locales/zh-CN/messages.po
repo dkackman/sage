@@ -376,7 +376,7 @@ msgstr ""
 msgid "Amount includes"
 msgstr "金额包括"
 
-#: src/pages/Settings.tsx:1739
+#: src/pages/Settings.tsx:1744
 msgid "Analyze Duration"
 msgstr ""
 
@@ -656,7 +656,7 @@ msgstr "禁用此功能后, 将创建一个冷钱包, 该钱包无法签署交�
 #: src/pages/PeerList.tsx:431
 #: src/pages/PeerList.tsx:487
 #: src/pages/PeerList.tsx:677
-#: src/pages/Settings.tsx:1671
+#: src/pages/Settings.tsx:1676
 msgid "Cancel"
 msgstr "取消"
 
@@ -710,11 +710,11 @@ msgstr ""
 #: src/components/ConfirmationDialog.tsx:344
 #: src/components/ConfirmationDialog.tsx:364
 #: src/components/ConfirmationDialog.tsx:479
-#: src/pages/Settings.tsx:1394
+#: src/pages/Settings.tsx:1397
 msgid "Change"
 msgstr "修改"
 
-#: src/pages/Settings.tsx:1359
+#: src/pages/Settings.tsx:1362
 msgid "Change Address"
 msgstr ""
 
@@ -813,7 +813,7 @@ msgstr ""
 msgid "Click here to go to offer."
 msgstr ""
 
-#: src/pages/Settings.tsx:1774
+#: src/pages/Settings.tsx:1779
 msgid "Close"
 msgstr ""
 
@@ -948,11 +948,11 @@ msgstr ""
 msgid "Combined Swap"
 msgstr ""
 
-#: src/pages/Settings.tsx:1573
+#: src/pages/Settings.tsx:1578
 msgid "Compactable Pages"
 msgstr ""
 
-#: src/pages/Settings.tsx:1556
+#: src/pages/Settings.tsx:1561
 msgid "Compactable Space"
 msgstr ""
 
@@ -1135,6 +1135,10 @@ msgstr ""
 msgid "Copy offer"
 msgstr ""
 
+#: src/pages/Settings.tsx:1463
+msgid "Could not enable passkey unlock"
+msgstr ""
+
 #: src/pages/Login.tsx:124
 msgid "Create"
 msgstr "创建"
@@ -1203,7 +1207,7 @@ msgstr ""
 msgid "Currency Symbol"
 msgstr "货币符号"
 
-#: src/pages/Settings.tsx:1507
+#: src/pages/Settings.tsx:1512
 msgid "Current database statistics and health information"
 msgstr ""
 
@@ -1255,7 +1259,7 @@ msgstr "数据URI"
 msgid "Data URLs"
 msgstr "数据URL"
 
-#: src/pages/Settings.tsx:1712
+#: src/pages/Settings.tsx:1717
 msgid "Database Maintenance Complete"
 msgstr ""
 
@@ -1263,15 +1267,15 @@ msgstr ""
 msgid "Database Migration Required"
 msgstr ""
 
-#: src/pages/Settings.tsx:1715
+#: src/pages/Settings.tsx:1720
 msgid "Database optimization has completed successfully."
 msgstr ""
 
-#: src/pages/Settings.tsx:1548
+#: src/pages/Settings.tsx:1553
 msgid "Database Size"
 msgstr ""
 
-#: src/pages/Settings.tsx:1506
+#: src/pages/Settings.tsx:1511
 msgid "Database Stats"
 msgstr ""
 
@@ -1332,7 +1336,7 @@ msgstr ""
 msgid "Delete All Filtered Offers"
 msgstr ""
 
-#: src/pages/Settings.tsx:1491
+#: src/pages/Settings.tsx:1496
 msgid "Delete and redownload coin data from the network"
 msgstr ""
 
@@ -1379,12 +1383,12 @@ msgstr ""
 msgid "Delta Sync"
 msgstr ""
 
-#: src/pages/Settings.tsx:1629
+#: src/pages/Settings.tsx:1634
 msgid "Derivation index"
 msgstr ""
 
-#: src/pages/Settings.tsx:1473
-#: src/pages/Settings.tsx:1623
+#: src/pages/Settings.tsx:1478
+#: src/pages/Settings.tsx:1628
 msgid "Derivation Index"
 msgstr ""
 
@@ -1546,7 +1550,7 @@ msgstr "输入地址"
 #~ msgid "Enter amount"
 #~ msgstr "输入金额"
 
-#: src/pages/Settings.tsx:1365
+#: src/pages/Settings.tsx:1368
 msgid "Enter change address"
 msgstr ""
 
@@ -1564,7 +1568,7 @@ msgstr ""
 msgid "Enter current password"
 msgstr ""
 
-#: src/pages/Settings.tsx:1628
+#: src/pages/Settings.tsx:1633
 msgid "Enter derivation index"
 msgstr ""
 
@@ -1899,7 +1903,7 @@ msgstr ""
 msgid "General"
 msgstr ""
 
-#: src/pages/Settings.tsx:1683
+#: src/pages/Settings.tsx:1688
 msgid "Generate"
 msgstr ""
 
@@ -1911,7 +1915,7 @@ msgstr ""
 #~ msgid "Generate addresses automatically"
 #~ msgstr "自动生成地址"
 
-#: src/pages/Settings.tsx:1681
+#: src/pages/Settings.tsx:1686
 msgid "Generating"
 msgstr ""
 
@@ -1919,7 +1923,7 @@ msgstr ""
 msgid "Ghost"
 msgstr ""
 
-#: src/pages/Settings.tsx:1289
+#: src/pages/Settings.tsx:1292
 msgid "Give your wallet a memorable name"
 msgstr ""
 
@@ -1976,7 +1980,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/pages/ImportWallet.tsx:253
-#: src/pages/Settings.tsx:1656
+#: src/pages/Settings.tsx:1661
 msgid "Hardened Keys"
 msgstr ""
 
@@ -2128,15 +2132,15 @@ msgstr ""
 msgid "Incorrect password"
 msgstr ""
 
-#: src/pages/Settings.tsx:1483
+#: src/pages/Settings.tsx:1488
 msgid "Increase"
 msgstr ""
 
-#: src/pages/Settings.tsx:1605
+#: src/pages/Settings.tsx:1610
 msgid "Increase Derivation Index"
 msgstr ""
 
-#: src/pages/Settings.tsx:1608
+#: src/pages/Settings.tsx:1613
 msgid "Increase the derivation index to generate new addresses. Setting this too high can cause issues, and it can't be reversed without resyncing the wallet."
 msgstr ""
 
@@ -2318,7 +2322,7 @@ msgstr ""
 #~ msgid "Loading XCH details..."
 #~ msgstr ""
 
-#: src/pages/Settings.tsx:1535
+#: src/pages/Settings.tsx:1540
 msgid "Loading..."
 msgstr ""
 
@@ -2919,11 +2923,11 @@ msgstr ""
 msgid "Open menu"
 msgstr ""
 
-#: src/pages/Settings.tsx:1522
+#: src/pages/Settings.tsx:1527
 msgid "Optimize"
 msgstr ""
 
-#: src/pages/Settings.tsx:1520
+#: src/pages/Settings.tsx:1525
 msgid "Optimizing..."
 msgstr ""
 
@@ -3027,11 +3031,11 @@ msgstr "转出数量"
 #~ msgid "Override Delta Sync"
 #~ msgstr ""
 
-#: src/pages/Settings.tsx:1316
+#: src/pages/Settings.tsx:1319
 msgid "Override Network"
 msgstr ""
 
-#: src/pages/Settings.tsx:1317
+#: src/pages/Settings.tsx:1320
 msgid "Override the default network for this wallet"
 msgstr ""
 
@@ -3076,11 +3080,11 @@ msgstr ""
 #~ msgid "Page size"
 #~ msgstr ""
 
-#: src/pages/Settings.tsx:1581
+#: src/pages/Settings.tsx:1586
 msgid "Page Size"
 msgstr ""
 
-#: src/pages/Settings.tsx:1731
+#: src/pages/Settings.tsx:1736
 msgid "Pages Vacuumed"
 msgstr ""
 
@@ -3088,8 +3092,16 @@ msgstr ""
 msgid "Pagination"
 msgstr ""
 
-#: src/pages/Settings.tsx:1420
+#: src/pages/Settings.tsx:1423
 msgid "Passkey Unlock"
+msgstr ""
+
+#: src/pages/Settings.tsx:1460
+msgid "Passkey unlock enabled"
+msgstr ""
+
+#: src/pages/Settings.tsx:1441
+msgid "Passkey unlock removed"
 msgstr ""
 
 #: src/components/dialogs/PasswordDialog.tsx:65
@@ -3101,15 +3113,15 @@ msgstr ""
 msgid "Password cannot be empty"
 msgstr ""
 
-#: src/pages/Settings.tsx:1238
+#: src/pages/Settings.tsx:1241
 msgid "Password changed successfully"
 msgstr ""
 
-#: src/pages/Settings.tsx:1239
+#: src/pages/Settings.tsx:1242
 msgid "Password removed successfully"
 msgstr ""
 
-#: src/pages/Settings.tsx:1236
+#: src/pages/Settings.tsx:1239
 msgid "Password set successfully"
 msgstr ""
 
@@ -3305,7 +3317,7 @@ msgstr "个人资料名称"
 msgid "Profiles"
 msgstr "个人资料"
 
-#: src/pages/Settings.tsx:1384
+#: src/pages/Settings.tsx:1387
 msgid "Protect signing and secret access with a password"
 msgstr ""
 
@@ -3381,7 +3393,7 @@ msgstr ""
 #~ msgid "Redownloading NFT data"
 #~ msgstr ""
 
-#: src/pages/Settings.tsx:1537
+#: src/pages/Settings.tsx:1542
 msgid "Refresh"
 msgstr ""
 
@@ -3395,7 +3407,7 @@ msgstr "刷新信息"
 msgid "Refreshing token info..."
 msgstr ""
 
-#: src/pages/Settings.tsx:1401
+#: src/pages/Settings.tsx:1404
 msgid "Remove"
 msgstr ""
 
@@ -3403,7 +3415,7 @@ msgstr ""
 msgid "Remove Emoji"
 msgstr ""
 
-#: src/pages/Settings.tsx:1440
+#: src/pages/Settings.tsx:1444
 msgid "Remove passkey unlock"
 msgstr ""
 
@@ -3459,8 +3471,8 @@ msgstr ""
 
 #: src/components/dialogs/ResyncDialog.tsx:46
 #: src/components/dialogs/ResyncDialog.tsx:117
-#: src/pages/Settings.tsx:1490
-#: src/pages/Settings.tsx:1498
+#: src/pages/Settings.tsx:1495
+#: src/pages/Settings.tsx:1503
 msgid "Resync"
 msgstr "重新同步"
 
@@ -3640,7 +3652,7 @@ msgstr ""
 msgid "Secret Key"
 msgstr "私钥"
 
-#: src/pages/Settings.tsx:1378
+#: src/pages/Settings.tsx:1381
 msgid "Security"
 msgstr ""
 
@@ -3678,7 +3690,7 @@ msgid "Select log file"
 msgstr ""
 
 #: src/pages/Settings.tsx:612
-#: src/pages/Settings.tsx:1344
+#: src/pages/Settings.tsx:1347
 msgid "Select network"
 msgstr "选择网络"
 
@@ -3802,14 +3814,14 @@ msgstr ""
 msgid "Set a password to protect transaction signing and secret key access."
 msgstr ""
 
-#: src/pages/Settings.tsx:1360
+#: src/pages/Settings.tsx:1363
 msgid "Set a specific address to send change to"
 msgstr ""
 
 #: src/components/dialogs/PasswordManagementDialog.tsx:163
 #: src/components/dialogs/PasswordManagementDialog.tsx:306
-#: src/pages/Settings.tsx:1380
-#: src/pages/Settings.tsx:1410
+#: src/pages/Settings.tsx:1383
+#: src/pages/Settings.tsx:1413
 msgid "Set Password"
 msgstr ""
 
@@ -4039,7 +4051,7 @@ msgstr ""
 
 #: src/components/confirmations/CancelOfferConfirmation.tsx:87
 #: src/components/OptionColumns.tsx:141
-#: src/pages/Settings.tsx:1504
+#: src/pages/Settings.tsx:1509
 msgid "Status"
 msgstr ""
 
@@ -4149,7 +4161,7 @@ msgstr ""
 msgid "synced to peak {peerMaxHeight}"
 msgstr ""
 
-#: src/pages/Settings.tsx:1471
+#: src/pages/Settings.tsx:1476
 msgid "Syncing"
 msgstr ""
 
@@ -4247,7 +4259,7 @@ msgstr ""
 #~ msgid "The network which this wallet will use"
 #~ msgstr ""
 
-#: src/pages/Settings.tsx:1474
+#: src/pages/Settings.tsx:1479
 msgid "The number of addresses managed by this wallet"
 msgstr ""
 
@@ -4437,7 +4449,7 @@ msgstr ""
 msgid "This profile will be transferred to the address below."
 msgstr ""
 
-#: src/pages/Settings.tsx:1425
+#: src/pages/Settings.tsx:1428
 msgid "This wallet can be unlocked with a passkey instead of your password"
 msgstr ""
 
@@ -4647,7 +4659,7 @@ msgstr ""
 msgid "Total Amount"
 msgstr ""
 
-#: src/pages/Settings.tsx:1723
+#: src/pages/Settings.tsx:1728
 msgid "Total Duration"
 msgstr ""
 
@@ -4663,7 +4675,7 @@ msgstr ""
 msgid "Total items: {total}"
 msgstr ""
 
-#: src/pages/Settings.tsx:1565
+#: src/pages/Settings.tsx:1570
 msgid "Total Pages"
 msgstr ""
 
@@ -4836,7 +4848,7 @@ msgid "Underlying Asset (Locked)"
 msgstr ""
 
 #: src/pages/ImportWallet.tsx:239
-#: src/pages/Settings.tsx:1642
+#: src/pages/Settings.tsx:1647
 msgid "Unhardened Keys"
 msgstr ""
 
@@ -4899,11 +4911,11 @@ msgstr ""
 msgid "Unlock"
 msgstr ""
 
-#: src/pages/Settings.tsx:1462
+#: src/pages/Settings.tsx:1467
 msgid "Unlock with passkey"
 msgstr ""
 
-#: src/pages/Settings.tsx:1421
+#: src/pages/Settings.tsx:1424
 msgid "Unlock with Passkey"
 msgstr ""
 
@@ -5046,7 +5058,7 @@ msgstr ""
 msgid "Use this address to receive {name}"
 msgstr ""
 
-#: src/pages/Settings.tsx:1426
+#: src/pages/Settings.tsx:1429
 msgid "Use Touch ID or another passkey to unlock this wallet"
 msgstr ""
 
@@ -5054,7 +5066,7 @@ msgstr ""
 msgid "UTF-8 string"
 msgstr ""
 
-#: src/pages/Settings.tsx:1763
+#: src/pages/Settings.tsx:1768
 msgid "Vacuum Duration"
 msgstr ""
 
@@ -5159,15 +5171,15 @@ msgstr ""
 #~ msgid "View Unknown CAT token details"
 #~ msgstr ""
 
-#: src/pages/Settings.tsx:1747
+#: src/pages/Settings.tsx:1752
 msgid "WAL Checkpoint Duration"
 msgstr ""
 
-#: src/pages/Settings.tsx:1589
+#: src/pages/Settings.tsx:1594
 msgid "WAL Pages"
 msgstr ""
 
-#: src/pages/Settings.tsx:1755
+#: src/pages/Settings.tsx:1760
 msgid "WAL Pages Checkpointed"
 msgstr ""
 
@@ -5178,7 +5190,7 @@ msgstr ""
 #: src/components/WalletSwitcher.tsx:360
 #: src/pages/Login.tsx:205
 #: src/pages/Settings.tsx:149
-#: src/pages/Settings.tsx:1286
+#: src/pages/Settings.tsx:1289
 msgid "Wallet"
 msgstr "钱包"
 
@@ -5209,11 +5221,11 @@ msgstr "钱包密钥"
 #: src/components/WalletCard.tsx:442
 #: src/pages/CreateWallet.tsx:154
 #: src/pages/ImportWallet.tsx:134
-#: src/pages/Settings.tsx:1288
+#: src/pages/Settings.tsx:1291
 msgid "Wallet Name"
 msgstr "钱包名称"
 
-#: src/pages/Settings.tsx:1380
+#: src/pages/Settings.tsx:1383
 msgid "Wallet Password"
 msgstr ""
 
@@ -5360,6 +5372,6 @@ msgstr ""
 msgid "Your Themes"
 msgstr ""
 
-#: src/pages/Settings.tsx:1383
+#: src/pages/Settings.tsx:1386
 msgid "Your wallet is password-protected"
 msgstr ""

@@ -1223,13 +1223,16 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
     setPasswordDialogOpen(true);
   };
 
-  const handlePasswordSuccess = async () => {
-    setPasswordDialogOpen(false);
-
-    // Refresh key info to update has_password in local and global state
+  const refreshKey = async () => {
+    // Refresh key info to update has_password / passkey in local and global state
     const data = await commands.getKey({ fingerprint });
     setKey(data.key);
     setGlobalWallet(data.key);
+  };
+
+  const handlePasswordSuccess = async () => {
+    setPasswordDialogOpen(false);
+    await refreshKey();
 
     toast.success(
       passwordDialogMode === 'set'
@@ -1434,7 +1437,8 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
                       await commands.removePasskey({
                         fingerprint: key.fingerprint,
                       });
-                      await handlePasswordSuccess();
+                      await refreshKey();
+                      toast.success(t`Passkey unlock removed`);
                     }}
                   >
                     <Trans>Remove passkey unlock</Trans>
@@ -1452,10 +1456,11 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
                       if (typeof password !== 'string') return;
                       try {
                         await enrollPasskey(key.fingerprint, password);
-                        await handlePasswordSuccess();
+                        await refreshKey();
+                        toast.success(t`Passkey unlock enabled`);
                       } catch (e) {
-                        // surface via the app's existing error handling
                         console.error(e);
+                        toast.error(t`Could not enable passkey unlock`);
                       }
                     }}
                   >
