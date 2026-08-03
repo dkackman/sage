@@ -232,6 +232,18 @@ pub enum Error {
 
     #[error("Timeout")]
     Timeout(#[from] Elapsed),
+
+    #[error("Passkey error: {0}")]
+    Passkey(#[from] crate::passkey::PasskeyError),
+
+    #[error("Base64 decode error: {0}")]
+    Base64(#[from] base64::DecodeError),
+
+    #[error("UTF-8 error: {0}")]
+    Utf8(#[from] std::string::FromUtf8Error),
+
+    #[error("No passkey enrollment for this key")]
+    NoPasskeyEnrollment,
 }
 
 impl Error {
@@ -312,6 +324,9 @@ impl Error {
             | Self::InvalidGroup
             | Self::InvalidThemeJson
             | Self::MissingThemeData => ErrorKind::Api,
+            Self::Passkey(..) => ErrorKind::IncorrectPassword,
+            Self::NoPasskeyEnrollment => ErrorKind::Unauthorized,
+            Self::Base64(..) | Self::Utf8(..) => ErrorKind::Internal,
         }
     }
 }

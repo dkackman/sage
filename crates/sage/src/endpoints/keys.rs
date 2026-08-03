@@ -11,15 +11,18 @@ use chia_wallet_sdk::{
     },
     prelude::*,
 };
+use base64::{engine::general_purpose::STANDARD, Engine};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use sage_api::{
     ChangePassword, ChangePasswordResponse, DeleteDatabase, DeleteDatabaseResponse, DeleteKey,
-    DeleteKeyResponse, GenerateMnemonic, GenerateMnemonicResponse, GetKey, GetKeyResponse, GetKeys,
-    GetKeysResponse, GetSecretKey, GetSecretKeyResponse, ImportKey, ImportKeyResponse, KeyInfo,
-    KeyKind, Login, LoginResponse, Logout, LogoutResponse, ReconcileKeyProtection,
-    ReconcileKeyProtectionResponse, RenameKey, RenameKeyResponse, Resync, ResyncResponse,
-    SecretKeyInfo, SetWalletEmoji, SetWalletEmojiResponse,
+    DeleteKeyResponse, EnrollPasskey, EnrollPasskeyResponse, GenerateMnemonic,
+    GenerateMnemonicResponse, GetKey, GetKeyResponse, GetKeys, GetKeysResponse, GetSecretKey,
+    GetSecretKeyResponse, ImportKey, ImportKeyResponse, KeyInfo, KeyKind, Login, LoginResponse,
+    Logout, LogoutResponse, PasskeyInfo, ReconcileKeyProtection, ReconcileKeyProtectionResponse,
+    RemovePasskey, RemovePasskeyResponse, RenameKey, RenameKeyResponse, Resync, ResyncResponse,
+    SecretKeyInfo, SetWalletEmoji, SetWalletEmojiResponse, UnwrapPasskeyPassword,
+    UnwrapPasskeyPasswordResponse,
 };
 use sage_config::Wallet;
 use sage_database::{Database, Derivation};
@@ -356,6 +359,11 @@ impl Sage {
                 has_password: wallet_config.password_protected,
                 network_id,
                 emoji: wallet_config.emoji,
+                passkey: wallet_config.passkey.map(|enrollment| PasskeyInfo {
+                    credential_id: enrollment.credential_id,
+                    rp_id: enrollment.rp_id,
+                    prf_salt: enrollment.prf_salt,
+                }),
             }),
         })
     }
@@ -382,6 +390,18 @@ impl Sage {
         self.keychain
             .change_password(req.fingerprint, &old_password, &new_password)?;
         self.save_keychain()?;
+
+        // A wrapped passkey holds the OLD password; changing or removing the
+        // password invalidates it, so drop the enrollment (user re-enrolls).
+        if let Some(wallet) = self
+            .wallet_config
+            .wallets
+            .iter_mut()
+            .find(|wallet| wallet.fingerprint == req.fingerprint)
+        {
+            wallet.passkey = None;
+        }
+
         self.set_password_protected(req.fingerprint, !new_password.is_empty())?;
         Ok(ChangePasswordResponse {})
     }
@@ -418,9 +438,168 @@ impl Sage {
                 has_password: wallet.password_protected,
                 network_id: wallet.network.clone().unwrap_or_else(|| self.network_id()),
                 emoji: wallet.emoji.clone(),
+                passkey: wallet.passkey.as_ref().map(|enrollment| PasskeyInfo {
+                    credential_id: enrollment.credential_id.clone(),
+                    rp_id: enrollment.rp_id.clone(),
+                    prf_salt: enrollment.prf_salt.clone(),
+                }),
             });
         }
 
         Ok(GetKeysResponse { keys })
+    }
+
+    pub fn enroll_passkey(&mut self, req: EnrollPasskey) -> Result<EnrollPasskeyResponse> {
+        let password = req.password.into_bytes();
+
+        // Prove the caller knows the current password (also rejects public keys).
+        self.keychain.extract_secrets(req.fingerprint, &password)?;
+
+        let prf_secret = STANDARD.decode(&req.prf_secret)?;
+        let mut rng = ChaCha20Rng::from_entropy();
+        let wrapped_password = crate::passkey::wrap_password(&prf_secret, &password, &mut rng)?;
+
+        let Some(wallet) = self
+            .wallet_config
+            .wallets
+            .iter_mut()
+            .find(|wallet| wallet.fingerprint == req.fingerprint)
+        else {
+            return Err(Error::UnknownFingerprint);
+        };
+
+        wallet.passkey = Some(sage_config::PasskeyEnrollment {
+            credential_id: req.credential_id,
+            rp_id: req.rp_id,
+            prf_salt: req.prf_salt,
+            wrapped_password,
+        });
+        self.save_config()?;
+
+        Ok(EnrollPasskeyResponse {})
+    }
+
+    pub fn unwrap_passkey_password(
+        &self,
+        req: UnwrapPasskeyPassword,
+    ) -> Result<UnwrapPasskeyPasswordResponse> {
+        let Some(wallet) = self
+            .wallet_config
+            .wallets
+            .iter()
+            .find(|wallet| wallet.fingerprint == req.fingerprint)
+        else {
+            return Err(Error::UnknownFingerprint);
+        };
+        let enrollment = wallet
+            .passkey
+            .as_ref()
+            .ok_or(Error::NoPasskeyEnrollment)?;
+
+        let prf_secret = STANDARD.decode(&req.prf_secret)?;
+        let password = crate::passkey::unwrap_password(&prf_secret, &enrollment.wrapped_password)?;
+
+        Ok(UnwrapPasskeyPasswordResponse {
+            password: String::from_utf8(password)?,
+        })
+    }
+
+    pub fn remove_passkey(&mut self, req: RemovePasskey) -> Result<RemovePasskeyResponse> {
+        let Some(wallet) = self
+            .wallet_config
+            .wallets
+            .iter_mut()
+            .find(|wallet| wallet.fingerprint == req.fingerprint)
+        else {
+            return Err(Error::UnknownFingerprint);
+        };
+        wallet.passkey = None;
+        self.save_config()?;
+        Ok(RemovePasskeyResponse {})
+    }
+}
+
+#[cfg(test)]
+mod passkey_endpoint_tests {
+    use super::*;
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use bip39::Mnemonic;
+    use tempfile::tempdir;
+
+    fn sage_with_password_key(password: &[u8]) -> (crate::Sage, u32) {
+        let dir = tempdir().unwrap();
+        let mut sage = crate::Sage::new(dir.path(), true);
+        let mnemonic = Mnemonic::from_entropy(&[7u8; 16]).unwrap();
+        let fingerprint = sage.keychain.add_mnemonic(&mnemonic, password).unwrap();
+        sage.wallet_config.wallets.push(sage_config::Wallet {
+            fingerprint,
+            ..Default::default()
+        });
+        std::mem::forget(dir); // keep temp dir alive for save_config writes
+        (sage, fingerprint)
+    }
+
+    #[test]
+    fn test_enroll_then_unwrap_returns_password() {
+        let (mut sage, fingerprint) = sage_with_password_key(b"hunter2");
+        let prf = STANDARD.encode([9u8; 32]);
+        sage.enroll_passkey(EnrollPasskey {
+            fingerprint,
+            password: "hunter2".to_string(),
+            credential_id: "cred".to_string(),
+            rp_id: "webauthn.dkackman.com".to_string(),
+            prf_salt: "salt".to_string(),
+            prf_secret: prf.clone(),
+        })
+        .unwrap();
+
+        let out = sage
+            .unwrap_passkey_password(UnwrapPasskeyPassword { fingerprint, prf_secret: prf })
+            .unwrap();
+        assert_eq!(out.password, "hunter2");
+    }
+
+    #[test]
+    fn test_enroll_rejects_wrong_password() {
+        let (mut sage, fingerprint) = sage_with_password_key(b"hunter2");
+        let prf = STANDARD.encode([9u8; 32]);
+        assert!(sage
+            .enroll_passkey(EnrollPasskey {
+                fingerprint,
+                password: "wrong".to_string(),
+                credential_id: "cred".to_string(),
+                rp_id: "rp".to_string(),
+                prf_salt: "salt".to_string(),
+                prf_secret: prf,
+            })
+            .is_err());
+    }
+
+    #[test]
+    fn test_change_password_drops_enrollment() {
+        let (mut sage, fingerprint) = sage_with_password_key(b"hunter2");
+        let prf = STANDARD.encode([9u8; 32]);
+        sage.enroll_passkey(EnrollPasskey {
+            fingerprint,
+            password: "hunter2".to_string(),
+            credential_id: "cred".to_string(),
+            rp_id: "rp".to_string(),
+            prf_salt: "salt".to_string(),
+            prf_secret: prf,
+        })
+        .unwrap();
+        sage.change_password(ChangePassword {
+            fingerprint,
+            old_password: "hunter2".to_string(),
+            new_password: "newpass".to_string(),
+        })
+        .unwrap();
+        let wallet = sage
+            .wallet_config
+            .wallets
+            .iter()
+            .find(|w| w.fingerprint == fingerprint)
+            .unwrap();
+        assert!(wallet.passkey.is_none());
     }
 }

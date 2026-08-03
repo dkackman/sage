@@ -32,7 +32,20 @@ fn setup_x86_64_android_workaround() {
     }
 }
 
+/// The `tauri-plugin-passkey` Swift bridge links `libswift_Concurrency.dylib`
+/// via `@rpath`, but the final `sage-tauri` binary otherwise has no rpath
+/// entry to resolve it, causing a `Library not loaded` dyld error at startup.
+/// `/usr/lib/swift` is the OS Swift runtime directory (the binary already
+/// links its other Swift libs from there).
+fn setup_macos_swift_rpath() {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set");
+    if target_os == "macos" {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift");
+    }
+}
+
 fn main() {
     setup_x86_64_android_workaround();
+    setup_macos_swift_rpath();
     tauri_build::build();
 }

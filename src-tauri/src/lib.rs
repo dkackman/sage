@@ -143,6 +143,9 @@ pub fn run() {
             commands::is_asset_owned,
             commands::change_password,
             commands::reconcile_key_protection,
+            commands::enroll_passkey,
+            commands::unwrap_passkey_password,
+            commands::remove_passkey,
         ])
         .events(collect_events![SyncEvent]);
 

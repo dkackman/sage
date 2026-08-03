@@ -12,6 +12,16 @@ pub struct KeyInfo {
     pub has_password: bool,
     pub network_id: String,
     pub emoji: Option<String>,
+    pub passkey: Option<PasskeyInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tauri", derive(specta::Type))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct PasskeyInfo {
+    pub credential_id: String,
+    pub rp_id: String,
+    pub prf_salt: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

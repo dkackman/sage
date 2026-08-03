@@ -364,6 +364,15 @@ async changePassword(req: ChangePassword) : Promise<ChangePasswordResponse> {
 },
 async reconcileKeyProtection(req: ReconcileKeyProtection) : Promise<ReconcileKeyProtectionResponse> {
     return await TAURI_INVOKE("reconcile_key_protection", { req });
+},
+async enrollPasskey(req: EnrollPasskey) : Promise<EnrollPasskeyResponse> {
+    return await TAURI_INVOKE("enroll_passkey", { req });
+},
+async unwrapPasskeyPassword(req: UnwrapPasskeyPassword) : Promise<UnwrapPasskeyPasswordResponse> {
+    return await TAURI_INVOKE("unwrap_passkey_password", { req });
+},
+async removePasskey(req: RemovePasskey) : Promise<RemovePasskeyResponse> {
+    return await TAURI_INVOKE("remove_passkey", { req });
 }
 }
 
@@ -881,6 +890,15 @@ export type DeleteUserThemeResponse = Record<string, never>
 export type DerivationRecord = { index: number; public_key: string; address: string }
 export type DidRecord = { launcher_id: string; name: string | null; visible: boolean; coin_id: string; address: string; amount: Amount; recovery_hash: string | null; created_height: number | null }
 export type EmptyResponse = Record<string, never>
+/**
+ * Enroll a passkey as an unlock method for a password-protected key
+ */
+export type EnrollPasskey = { fingerprint: number; password: string; credential_id: string; rp_id: string; prf_salt: string; 
+/**
+ * Standard-base64 of the raw 32-byte PRF secret.
+ */
+prf_secret: string }
+export type EnrollPasskeyResponse = Record<string, never>
 export type Error = { kind: ErrorKind; reason: string }
 export type ErrorKind = "wallet" | "api" | "not_found" | "unauthorized" | "incorrect_password" | "internal" | "database_migration" | "nfc"
 /**
@@ -1832,7 +1850,7 @@ auto_submit?: boolean;
  * Password for signing (required if wallet is password-protected)
  */
 password?: string | null }
-export type KeyInfo = { name: string; fingerprint: number; public_key: string; kind: KeyKind; has_secrets: boolean; has_password: boolean; network_id: string; emoji: string | null }
+export type KeyInfo = { name: string; fingerprint: number; public_key: string; kind: KeyKind; has_secrets: boolean; has_password: boolean; network_id: string; emoji: string | null; passkey: PasskeyInfo | null }
 export type KeyKind = "bls"
 /**
  * Lineage proof for CAT coins
@@ -2139,6 +2157,24 @@ amount: Amount }
 export type OptionAssets = { underlying_asset: Asset; underlying_amount: Amount; strike_asset: Asset; strike_amount: Amount; expiration_seconds: number }
 export type OptionRecord = { launcher_id: string; name: string | null; visible: boolean; coin_id: string; address: string; amount: Amount; underlying_asset: Asset; underlying_amount: Amount; underlying_coin_id: string; strike_asset: Asset; strike_amount: Amount; expiration_seconds: number; created_height: number | null; created_timestamp: number | null }
 export type OptionSortMode = "name" | "created_height" | "expiration_seconds"
+export type PasskeyEnrollment = { 
+/**
+ * WebAuthn credential id (base64url), passed back into allowCredentials.
+ */
+credential_id: string; 
+/**
+ * Relying-party id used at enrollment.
+ */
+rp_id: string; 
+/**
+ * PRF eval salt (base64url) — must be reused verbatim on unlock.
+ */
+prf_salt: string; 
+/**
+ * Standard-base64 of nonce ‖ AES-256-GCM ciphertext of the key's password.
+ */
+wrapped_password: string }
+export type PasskeyInfo = { credential_id: string; rp_id: string; prf_salt: string }
 export type PeerRecord = { ip_addr: string; port: number; peak_height: number; user_managed: boolean }
 export type PendingTransactionRecord = { transaction_id: string; fee: Amount; submitted_at: number | null }
 /**
@@ -2205,6 +2241,11 @@ nft_id: string }
  * Response after re-downloading an `NFT`
  */
 export type RedownloadNftResponse = Record<string, never>
+/**
+ * Remove a key's passkey enrollment
+ */
+export type RemovePasskey = { fingerprint: number }
+export type RemovePasskeyResponse = Record<string, never>
 /**
  * Remove a peer from the connection list
  */
@@ -2786,6 +2827,15 @@ auto_submit?: boolean;
 password?: string | null }
 export type Unit = { ticker: string; precision: number }
 /**
+ * Unwrap a passkey-enrolled key's password using a fresh PRF secret
+ */
+export type UnwrapPasskeyPassword = { fingerprint: number; 
+/**
+ * Standard-base64 of the raw 32-byte PRF secret from the assertion.
+ */
+prf_secret: string }
+export type UnwrapPasskeyPasswordResponse = { password: string }
+/**
  * Update a `CAT` token's metadata and visibility
  */
 export type UpdateCat = { 
@@ -2914,7 +2964,7 @@ offer: OfferSummary;
  * Offer status
  */
 status: OfferRecordStatus }
-export type Wallet = { name: string; fingerprint: number; network?: string | null; delta_sync: boolean | null; emoji?: string | null; change_address?: string | null; password_protected: boolean }
+export type Wallet = { name: string; fingerprint: number; network?: string | null; delta_sync: boolean | null; emoji?: string | null; change_address?: string | null; password_protected: boolean; passkey?: PasskeyEnrollment | null }
 export type WalletDefaults = { delta_sync: boolean }
 
 /** tauri-specta globals **/

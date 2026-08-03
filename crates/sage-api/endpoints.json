@@ -100,5 +100,8 @@
   "increase_derivation_index": true,
   "is_asset_owned": true,
   "change_password": false,
-  "reconcile_key_protection": false
+  "reconcile_key_protection": false,
+  "enroll_passkey": false,
+  "unwrap_passkey_password": false,
+  "remove_passkey": false
 }
