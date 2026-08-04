@@ -34,6 +34,9 @@ export SDKROOT="${SDKROOT:-$(xcrun --show-sdk-path)}"
 ENTITLEMENTS="src-tauri/Entitlements.plist"
 PROVISIONING_PROFILE="src-tauri/embedded.provisionprofile"
 TAURI_CONF="src-tauri/tauri.conf.json"
+# Debug-only Tauri config override: swaps in a dev bundle identifier that can be
+# signed under our own team, leaving the shipping com.rigidnetwork.sage untouched.
+DEV_CONF="src-tauri/tauri.macos-dev.conf.json"
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -84,7 +87,13 @@ fi
 # fail loudly rather than building a path like ".../null.app".
 # ---------------------------------------------------------------------------
 
-BUNDLE_ID=$(jq -er '.identifier' "$TAURI_CONF")
+# The signed bundle's identifier comes from the dev override when present, so it
+# must match the App ID in the provisioning profile and entitlements.
+if [ -f "$DEV_CONF" ]; then
+    BUNDLE_ID=$(jq -er '.identifier' "$DEV_CONF")
+else
+    BUNDLE_ID=$(jq -er '.identifier' "$TAURI_CONF")
+fi
 APP_NAME=$(jq -er '.productName' "$TAURI_CONF")
 TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print :com.apple.developer.team-identifier" "$ENTITLEMENTS")
 
@@ -347,9 +356,14 @@ echo "Signing Identity: $IDENTITY"
 echo "Profile App ID: $PROFILE_APP_ID"
 echo ""
 
-# Step 1: Build the Tauri app as a bundle (debug mode)
+# Step 1: Build the Tauri app as a bundle (debug mode).
+# The dev config override (when present) swaps in the signable dev bundle id.
 echo "Step 1: Building Tauri app bundle..."
-pnpm tauri build --debug --bundles app
+if [ -f "$DEV_CONF" ]; then
+    pnpm tauri build --debug --bundles app --config "$DEV_CONF"
+else
+    pnpm tauri build --debug --bundles app
+fi
 
 BUNDLE_PATH="$TARGET_DIR/debug/bundle/macos/${APP_NAME}.app"
 
