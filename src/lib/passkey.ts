@@ -42,30 +42,12 @@ function bytesToStdBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-// This plugin does NOT use the browser `prf` extension shape. It deserializes
-// options into webauthn-rs-proto types, whose hmac-secret extension is:
-//   register:     extensions.hmacCreateSecret = true          (camelCase input)
-//   authenticate: extensions.hmacGetSecret    = { output1 }   (camelCase input, salt in output1)
-// and returns the secret in the response as (snake_case output):
-//   response.extensions.hmac_get_secret.output1  (base64url)
-// See webauthn-rs-proto 0.5 extensions.rs and the plugin's macos.rs.
-const HMAC_CREATE_SECRET = { hmacCreateSecret: true };
-
-function hmacGetSecretInput(saltBase64Url: string) {
-  return { hmacGetSecret: { output1: saltBase64Url } };
-}
-
-/** Pull the hmac-secret (PRF) output (base64url) from an assertion response. */
-function hmacSecretOutput(response: unknown): string | undefined {
+/** Pull the PRF output (base64url) from an assertion response. */
+function prfSecretOutput(response: unknown): string | undefined {
   const r = response as {
-    extensions?: Record<string, unknown>;
-    clientExtensionResults?: Record<string, unknown>;
+    clientExtensionResults?: { prf?: { results?: { first?: string } } };
   };
-  const container = r?.extensions ?? r?.clientExtensionResults;
-  const hmac = (container?.hmac_get_secret ?? container?.hmacGetSecret) as
-    | { output1?: string; first?: string }
-    | undefined;
-  return hmac?.output1 ?? hmac?.first;
+  return r.clientExtensionResults?.prf?.results?.first;
 }
 
 /** Register a passkey for `fingerprint` and wrap `password` under its hmac-secret. */
@@ -84,18 +66,15 @@ export async function enrollPasskey(fingerprint: number, password: string): Prom
       { type: 'public-key', alg: -7 },
       { type: 'public-key', alg: -257 },
     ],
-    // requireResidentKey is deprecated in the WebAuthn spec (superseded by
-    // residentKey), but the plugin's webauthn-rs-proto wire contract marks it
-    // required, so it must be sent explicitly. false matches 'discouraged'.
     authenticatorSelection: {
       residentKey: 'discouraged',
-      requireResidentKey: false,
       userVerification: 'required',
     },
     attestation: 'none',
     timeout: 60000,
-    extensions: HMAC_CREATE_SECRET,
-  } as unknown as PublicKeyCredentialCreationOptionsJSON);
+    // Enable the PRF extension on this credential.
+    extensions: { prf: {} },
+  } as PublicKeyCredentialCreationOptionsJSON);
 
   const credentialId = created.id;
 
@@ -105,11 +84,11 @@ export async function enrollPasskey(fingerprint: number, password: string): Prom
     allowCredentials: [{ type: 'public-key', id: credentialId }],
     userVerification: 'required',
     timeout: 60000,
-    extensions: hmacGetSecretInput(prfSalt),
-  } as unknown as PublicKeyCredentialRequestOptionsJSON);
+    extensions: { prf: { eval: { first: prfSalt } } },
+  } as PublicKeyCredentialRequestOptionsJSON);
 
-  const secret = hmacSecretOutput(assertion);
-  if (!secret) throw new Error('Authenticator did not return an hmac-secret output');
+  const secret = prfSecretOutput(assertion);
+  if (!secret) throw new Error('Authenticator did not return a PRF secret');
 
   await commands.enrollPasskey({
     fingerprint,
@@ -132,11 +111,11 @@ export async function unlockWithPasskey(info: KeyInfo): Promise<string> {
     allowCredentials: [{ type: 'public-key', id: enrollment.credential_id }],
     userVerification: 'required',
     timeout: 60000,
-    extensions: hmacGetSecretInput(enrollment.prf_salt),
-  } as unknown as PublicKeyCredentialRequestOptionsJSON);
+    extensions: { prf: { eval: { first: enrollment.prf_salt } } },
+  } as PublicKeyCredentialRequestOptionsJSON);
 
-  const secret = hmacSecretOutput(assertion);
-  if (!secret) throw new Error('Authenticator did not return an hmac-secret output');
+  const secret = prfSecretOutput(assertion);
+  if (!secret) throw new Error('Authenticator did not return a PRF secret');
 
   const result = await commands.unwrapPasskeyPassword({
     fingerprint: info.fingerprint,
