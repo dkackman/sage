@@ -414,7 +414,9 @@ echo "  $BUNDLE_PATH"
 echo ""
 echo "To run: open '$BUNDLE_PATH'"
 echo ""
-echo "Or run directly: '$BUNDLE_PATH/Contents/MacOS/$APP_NAME'"
+# The inner executable is the cargo bin name (sage-tauri), not productName.
+EXEC_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$BUNDLE_PATH/Contents/Info.plist" 2>/dev/null || echo "$APP_NAME")
+echo "Or run directly: '$BUNDLE_PATH/Contents/MacOS/$EXEC_NAME'"
 echo ""
 
 # Launch the freshly built bundle. Set NO_OPEN=1 to build/sign without opening.

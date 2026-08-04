@@ -149,14 +149,18 @@ pub fn run() {
         ])
         .events(collect_events![SyncEvent]);
 
-    // On mobile or release mode we should not export the TypeScript bindings
+    // On mobile or release mode we should not export the TypeScript bindings.
+    // The export targets a repo-relative path, so it only works when the working
+    // directory is the crate (e.g. `cargo tauri dev`). A signed debug bundle
+    // launched from Finder/`open` runs with cwd `/` and the write fails on the
+    // read-only root fs — log and continue rather than panicking the whole app.
     #[cfg(all(debug_assertions, not(mobile)))]
-    builder
-        .export(
-            Typescript::default().bigint(BigIntExportBehavior::Number),
-            "../src/bindings.ts",
-        )
-        .expect("Failed to export TypeScript bindings");
+    if let Err(error) = builder.export(
+        Typescript::default().bigint(BigIntExportBehavior::Number),
+        "../src/bindings.ts",
+    ) {
+        eprintln!("Skipping TypeScript bindings export: {error}");
+    }
 
     let mut tauri_builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
