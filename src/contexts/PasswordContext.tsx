@@ -39,9 +39,7 @@ export function PasswordProvider({ children }: { children: ReactNode }) {
   const lastBiometricPromptRef = useRef<number | null>(null);
 
   const requestPassword = useCallback(
-    async (
-      info: RequestPasswordInfo,
-    ): Promise<string | null | undefined> => {
+    async (info: RequestPasswordInfo): Promise<string | null | undefined> => {
       // Case 0: passkey-enrolled → try passkey first, password dialog as fallback.
       if (info.passkey) {
         try {

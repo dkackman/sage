@@ -574,7 +574,10 @@ pub struct EnrollPasskey {
     pub prf_secret: String,
 }
 
-#[cfg_attr(feature = "openapi", crate::openapi_attr(tag = "Authentication & Keys"))]
+#[cfg_attr(
+    feature = "openapi",
+    crate::openapi_attr(tag = "Authentication & Keys")
+)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[cfg_attr(feature = "tauri", derive(specta::Type))]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -594,7 +597,10 @@ pub struct UnwrapPasskeyPassword {
     pub prf_secret: String,
 }
 
-#[cfg_attr(feature = "openapi", crate::openapi_attr(tag = "Authentication & Keys"))]
+#[cfg_attr(
+    feature = "openapi",
+    crate::openapi_attr(tag = "Authentication & Keys")
+)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tauri", derive(specta::Type))]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -603,7 +609,10 @@ pub struct UnwrapPasskeyPasswordResponse {
 }
 
 /// Remove a key's passkey enrollment
-#[cfg_attr(feature = "openapi", crate::openapi_attr(tag = "Authentication & Keys"))]
+#[cfg_attr(
+    feature = "openapi",
+    crate::openapi_attr(tag = "Authentication & Keys")
+)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[cfg_attr(feature = "tauri", derive(specta::Type))]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -611,7 +620,10 @@ pub struct RemovePasskey {
     pub fingerprint: u32,
 }
 
-#[cfg_attr(feature = "openapi", crate::openapi_attr(tag = "Authentication & Keys"))]
+#[cfg_attr(
+    feature = "openapi",
+    crate::openapi_attr(tag = "Authentication & Keys")
+)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[cfg_attr(feature = "tauri", derive(specta::Type))]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]

@@ -1418,11 +1418,7 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
 
           {key?.has_password && (
             <SettingItem
-              label={
-                key.passkey
-                  ? t`Passkey Unlock`
-                  : t`Unlock with Passkey`
-              }
+              label={key.passkey ? t`Passkey Unlock` : t`Unlock with Passkey`}
               description={
                 key.passkey
                   ? t`This wallet can be unlocked with a passkey instead of your password`
@@ -1434,11 +1430,29 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
                     variant='outline'
                     size='sm'
                     onClick={async () => {
-                      await commands.removePasskey({
+                      // Gate removal behind the passkey itself (biometric),
+                      // with the password dialog as fallback — the same bar as
+                      // removing the password. The fallback matters most when
+                      // the passkey is gone and you need to clear a stale one.
+                      const auth = await requestPassword({
+                        has_password: key.has_password,
+                        passkey: key.passkey,
                         fingerprint: key.fingerprint,
                       });
-                      await refreshKey();
-                      toast.success(t`Passkey unlock removed`);
+                      if (typeof auth !== 'string') return;
+                      try {
+                        await commands.removePasskey({
+                          fingerprint: key.fingerprint,
+                        });
+                        await refreshKey();
+                        toast.success(t`Passkey unlock removed`);
+                      } catch (e) {
+                        console.error(e);
+                        toast.error(
+                          `${t`Could not remove passkey unlock`}: ${passkeyErrorMessage(e)}`,
+                          { autoClose: false },
+                        );
+                      }
                     }}
                   >
                     <Trans>Remove passkey unlock</Trans>

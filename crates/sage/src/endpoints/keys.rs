@@ -1,5 +1,6 @@
 use std::{fs, str::FromStr};
 
+use base64::{Engine, engine::general_purpose::STANDARD};
 use bip39::Mnemonic;
 use chia_wallet_sdk::{
     chia::{
@@ -11,7 +12,6 @@ use chia_wallet_sdk::{
     },
     prelude::*,
 };
-use base64::{engine::general_purpose::STANDARD, Engine};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use sage_api::{
@@ -525,10 +525,7 @@ impl Sage {
         else {
             return Err(Error::UnknownFingerprint);
         };
-        let enrollment = wallet
-            .passkey
-            .as_ref()
-            .ok_or(Error::NoPasskeyEnrollment)?;
+        let enrollment = wallet.passkey.as_ref().ok_or(Error::NoPasskeyEnrollment)?;
 
         let prf_secret = STANDARD.decode(&req.prf_secret)?;
         let password = crate::passkey::unwrap_password(&prf_secret, &enrollment.wrapped_password)?;
@@ -556,7 +553,7 @@ impl Sage {
 #[cfg(test)]
 mod passkey_endpoint_tests {
     use super::*;
-    use base64::{engine::general_purpose::STANDARD, Engine};
+    use base64::{Engine, engine::general_purpose::STANDARD};
     use bip39::Mnemonic;
     use std::path::PathBuf;
     use tempfile::tempdir;
@@ -597,7 +594,10 @@ mod passkey_endpoint_tests {
         .unwrap();
 
         let out = sage
-            .unwrap_passkey_password(UnwrapPasskeyPassword { fingerprint, prf_secret: prf })
+            .unwrap_passkey_password(UnwrapPasskeyPassword {
+                fingerprint,
+                prf_secret: prf,
+            })
             .unwrap();
         assert_eq!(out.password, "hunter2");
     }
@@ -606,8 +606,8 @@ mod passkey_endpoint_tests {
     fn test_enroll_rejects_wrong_password() {
         let (mut sage, fingerprint, _path) = sage_with_password_key(b"hunter2");
         let prf = STANDARD.encode([9u8; 32]);
-        assert!(sage
-            .enroll_passkey(EnrollPasskey {
+        assert!(
+            sage.enroll_passkey(EnrollPasskey {
                 fingerprint,
                 password: "wrong".to_string(),
                 credential_id: "cred".to_string(),
@@ -615,7 +615,8 @@ mod passkey_endpoint_tests {
                 prf_salt: "salt".to_string(),
                 prf_secret: prf,
             })
-            .is_err());
+            .is_err()
+        );
     }
 
     #[test]

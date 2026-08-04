@@ -24,37 +24,46 @@
 ### Task 1: Wire the plugin (build-green checkpoint)
 
 **Files:**
+
 - Modify: `src-tauri/Cargo.toml` (`[dependencies]`)
 - Modify: `package.json` (`dependencies`)
 - Modify: `src-tauri/src/lib.rs:158-161` (base `tauri_builder`)
 - Modify: `src-tauri/capabilities/default.json`
 
 **Interfaces:**
+
 - Produces: the `tauri_plugin_passkey::init()` plugin registered on all platforms and the `plugin:passkey|*` commands available to the frontend via `tauri-plugin-passkey-api`.
 
 - [ ] **Step 1: Build the plugin's JS bindings** (its `dist-js/` must exist before sage's frontend can resolve the `file:` dep)
 
 Run:
+
 ```bash
 cd /Users/don/src/dkackman/tauri-plugin-passkey && pnpm install && pnpm build
 ```
+
 Expected: `tauri-plugin-passkey/tauri-plugin-passkey/dist-js/index.js` (and `.cjs`, `.d.ts`) exist.
 
 - [ ] **Step 2: Add the Rust path dependency**
 
 In `src-tauri/Cargo.toml`, under `[dependencies]` (near the other `tauri-plugin-*` entries), add:
+
 ```toml
 tauri-plugin-passkey = { path = "../../tauri-plugin-passkey/tauri-plugin-passkey" }
 ```
+
 (Path dependencies need not be workspace members; this keeps the plugin's own edition/lints.)
 
 - [ ] **Step 3: Add the JS dependency**
 
 In `package.json` `dependencies`, add:
+
 ```json
 "tauri-plugin-passkey-api": "file:../tauri-plugin-passkey/tauri-plugin-passkey",
 ```
+
 Then:
+
 ```bash
 cd /Users/don/src/dkackman/sage && pnpm install
 ```
@@ -62,6 +71,7 @@ cd /Users/don/src/dkackman/sage && pnpm install
 - [ ] **Step 4: Register the plugin on all platforms**
 
 In `src-tauri/src/lib.rs`, add the passkey plugin to the BASE builder (it is cross-platform, unlike the mobile-only block). Change lines 158-161:
+
 ```rust
     let mut tauri_builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -77,17 +87,21 @@ In `src-tauri/capabilities/default.json`, add `"passkey:default"` to the `permis
 - [ ] **Step 6: Verify the backend compiles**
 
 Run:
+
 ```bash
 cd /Users/don/src/dkackman/sage && export SDKROOT="$(xcrun --show-sdk-path)" && cargo check -p sage-tauri
 ```
+
 Expected: compiles (the plugin links).
 
 - [ ] **Step 7: Verify the frontend resolves the plugin package**
 
 Create a throwaway import to prove resolution, then remove it. Run:
+
 ```bash
 cd /Users/don/src/dkackman/sage && node -e "require.resolve('tauri-plugin-passkey-api')" && echo OK
 ```
+
 Expected: prints `OK`.
 
 - [ ] **Step 8: Commit**
@@ -102,11 +116,13 @@ git commit -m "feat(passkey): wire tauri-plugin-passkey into sage"
 ### Task 2: Passkey wrap/unwrap crypto module
 
 **Files:**
+
 - Create: `crates/sage/src/passkey.rs`
 - Modify: `crates/sage/src/lib.rs` (add `mod passkey;`)
 - Modify: `crates/sage/Cargo.toml` (`[dependencies]`)
 
 **Interfaces:**
+
 - Produces:
   - `pub fn wrap_password(prf_secret: &[u8], password: &[u8], rng: &mut (impl rand::CryptoRng + rand::Rng)) -> Result<String, PasskeyError>` — returns standard-base64 of `nonce(12) ‖ ciphertext`.
   - `pub fn unwrap_password(prf_secret: &[u8], wrapped: &str) -> Result<Vec<u8>, PasskeyError>`
@@ -115,6 +131,7 @@ git commit -m "feat(passkey): wire tauri-plugin-passkey into sage"
 - [ ] **Step 1: Add the `aes-gcm` dependency**
 
 `crates/sage/Cargo.toml` already has `rand`, `rand_chacha`, and `base64`. Add under `[dependencies]`:
+
 ```toml
 aes-gcm = { workspace = true }
 ```
@@ -122,6 +139,7 @@ aes-gcm = { workspace = true }
 - [ ] **Step 2: Write the failing tests**
 
 Create `crates/sage/src/passkey.rs`:
+
 ```rust
 use aes_gcm::{aead::Aead, AeadCore, Aes256Gcm, Key, KeyInit, Nonce};
 use base64::{engine::general_purpose::STANDARD, Engine};
@@ -181,14 +199,17 @@ mod tests {
 - [ ] **Step 3: Run tests to verify they fail**
 
 Run:
+
 ```bash
 cd /Users/don/src/dkackman/sage && export SDKROOT="$(xcrun --show-sdk-path)" && cargo test -p sage passkey:: 2>&1 | head -30
 ```
+
 Expected: FAIL — `wrap_password`/`unwrap_password` not found.
 
 - [ ] **Step 4: Implement the functions**
 
 Add above the `#[cfg(test)]` block in `crates/sage/src/passkey.rs`:
+
 ```rust
 pub fn wrap_password(
     prf_secret: &[u8],
@@ -230,6 +251,7 @@ pub fn unwrap_password(prf_secret: &[u8], wrapped: &str) -> Result<Vec<u8>, Pass
 - [ ] **Step 5: Register the module**
 
 In `crates/sage/src/lib.rs`, add alongside the other `mod` declarations:
+
 ```rust
 mod passkey;
 ```
@@ -237,9 +259,11 @@ mod passkey;
 - [ ] **Step 6: Run tests to verify they pass**
 
 Run:
+
 ```bash
 cd /Users/don/src/dkackman/sage && export SDKROOT="$(xcrun --show-sdk-path)" && cargo test -p sage passkey::
 ```
+
 Expected: 3 passed.
 
 - [ ] **Step 7: Commit**
@@ -254,14 +278,17 @@ git commit -m "feat(passkey): add AES-GCM password wrap/unwrap keyed by PRF secr
 ### Task 3: PasskeyEnrollment model on Wallet
 
 **Files:**
+
 - Modify: `crates/sage-config/src/wallet.rs`
 
 **Interfaces:**
+
 - Produces: `pub struct PasskeyEnrollment { credential_id: String, rp_id: String, prf_salt: String, wrapped_password: String }` and `Wallet.passkey: Option<PasskeyEnrollment>`.
 
 - [ ] **Step 1: Write the failing tests**
 
 Add to the `mod tests` block in `crates/sage-config/src/wallet.rs`:
+
 ```rust
     #[test]
     fn test_passkey_roundtrips_through_toml() {
@@ -297,14 +324,17 @@ Add to the `mod tests` block in `crates/sage-config/src/wallet.rs`:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run:
+
 ```bash
 cd /Users/don/src/dkackman/sage && export SDKROOT="$(xcrun --show-sdk-path)" && cargo test -p sage-config passkey 2>&1 | head -20
 ```
+
 Expected: FAIL — `PasskeyEnrollment` not found / no field `passkey`.
 
 - [ ] **Step 3: Add the struct**
 
 In `crates/sage-config/src/wallet.rs`, after the `Wallet` struct definition:
+
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct PasskeyEnrollment {
@@ -322,19 +352,23 @@ pub struct PasskeyEnrollment {
 - [ ] **Step 4: Add the field**
 
 Add to the `Wallet` struct (after `password_protected`):
+
 ```rust
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub passkey: Option<PasskeyEnrollment>,
 ```
+
 And add `passkey: None,` to `impl Default for Wallet`.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run:
+
 ```bash
 cd /Users/don/src/dkackman/sage && export SDKROOT="$(xcrun --show-sdk-path)" && cargo test -p sage-config
 ```
+
 Expected: the two new tests pass AND the pre-existing `test_wallet_config_default` / `test_wallet_config_override` snapshots still pass (a `None` passkey is skipped, so the snapshots are unchanged).
 
 - [ ] **Step 6: Commit**
@@ -349,6 +383,7 @@ git commit -m "feat(passkey): add PasskeyEnrollment to wallet config"
 ### Task 4: Backend endpoints — enroll, unwrap, remove; KeyInfo.passkey; drop-on-change
 
 **Files:**
+
 - Modify: `crates/sage-api/src/requests/keys.rs` (new request/response structs)
 - Modify: `crates/sage-api/src/types/key_info.rs` (`PasskeyInfo`, `KeyInfo.passkey`)
 - Modify: `crates/sage-api/endpoints.json`
@@ -357,12 +392,14 @@ git commit -m "feat(passkey): add PasskeyEnrollment to wallet config"
 - Modify: `src-tauri/src/lib.rs` (`collect_commands!`)
 
 **Interfaces:**
+
 - Consumes: `crate::passkey::{wrap_password, unwrap_password, PasskeyError}` (Task 2); `sage_config::PasskeyEnrollment` (Task 3).
 - Produces: commands `enroll_passkey`, `unwrap_passkey_password`, `remove_passkey`; `KeyInfo.passkey: Option<PasskeyInfo>`.
 
 - [ ] **Step 1: Add the API request/response structs**
 
 In `crates/sage-api/src/requests/keys.rs`, following the exact 3-attribute derive stack used by `ChangePassword`:
+
 ```rust
 /// Enroll a passkey as an unlock method for a password-protected key
 #[cfg_attr(
@@ -428,15 +465,19 @@ pub struct RemovePasskey {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RemovePasskeyResponse {}
 ```
+
 (These auto-re-export via `pub use keys::*;` in `crates/sage-api/src/requests.rs`.)
 
 - [ ] **Step 2: Add `PasskeyInfo` and the `KeyInfo.passkey` field**
 
 In `crates/sage-api/src/types/key_info.rs`, add the field to `KeyInfo` (after `emoji`):
+
 ```rust
     pub passkey: Option<PasskeyInfo>,
 ```
+
 And add the struct:
+
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tauri", derive(specta::Type))]
@@ -451,6 +492,7 @@ pub struct PasskeyInfo {
 - [ ] **Step 3: Declare the endpoints (sync) in the manifest**
 
 In `crates/sage-api/endpoints.json`, add near the other key endpoints:
+
 ```json
   "enroll_passkey": false,
   "unwrap_passkey_password": false,
@@ -460,6 +502,7 @@ In `crates/sage-api/endpoints.json`, add near the other key endpoints:
 - [ ] **Step 4: Add error variants**
 
 In `crates/sage/src/error.rs`, add to the `Error` enum:
+
 ```rust
     #[error("Passkey error: {0}")]
     Passkey(#[from] crate::passkey::PasskeyError),
@@ -473,17 +516,21 @@ In `crates/sage/src/error.rs`, add to the `Error` enum:
     #[error("No passkey enrollment for this key")]
     NoPasskeyEnrollment,
 ```
+
 And add matching arms to `Error::kind()`:
+
 ```rust
             Self::Passkey(..) => ErrorKind::IncorrectPassword,
             Self::NoPasskeyEnrollment => ErrorKind::Unauthorized,
             Self::Base64(..) | Self::Utf8(..) => ErrorKind::Internal,
 ```
+
 (Map `Passkey` — which fires when the PRF secret can't decrypt the wrapped password — to `IncorrectPassword`, consistent with `KeychainError::Decrypt`.)
 
 - [ ] **Step 5: Write the failing endpoint tests**
 
 Append to `crates/sage/src/endpoints/keys.rs` a test module (fields `keychain`, `wallet_config`, `config` are crate-visible, so in-crate tests can populate them):
+
 ```rust
 #[cfg(test)]
 mod passkey_endpoint_tests {
@@ -574,14 +621,17 @@ mod passkey_endpoint_tests {
 - [ ] **Step 6: Run tests to verify they fail**
 
 Run:
+
 ```bash
 cd /Users/don/src/dkackman/sage && export SDKROOT="$(xcrun --show-sdk-path)" && cargo test -p sage passkey_endpoint 2>&1 | head -30
 ```
+
 Expected: FAIL — `enroll_passkey` / `unwrap_passkey_password` not found.
 
 - [ ] **Step 7: Implement the endpoint methods**
 
 In `crates/sage/src/endpoints/keys.rs`, add to the `impl Sage` block. Ensure imports at the top of the file include `use base64::{engine::general_purpose::STANDARD, Engine};` and `use rand::SeedableRng;` and `use rand_chacha::ChaCha20Rng;` (add any missing), plus `EnrollPasskey, EnrollPasskeyResponse, UnwrapPasskeyPassword, UnwrapPasskeyPasswordResponse, RemovePasskey, RemovePasskeyResponse, PasskeyInfo` to the `sage_api` import group.
+
 ```rust
     pub fn enroll_passkey(&mut self, req: EnrollPasskey) -> Result<EnrollPasskeyResponse> {
         let password = req.password.into_bytes();
@@ -656,6 +706,7 @@ In `crates/sage/src/endpoints/keys.rs`, add to the `impl Sage` block. Ensure imp
 - [ ] **Step 8: Populate `KeyInfo.passkey` in `get_key`**
 
 In `get_key` (`crates/sage/src/endpoints/keys.rs`), the `KeyInfo { ... }` literal currently ends at `emoji: wallet_config.emoji`. Add:
+
 ```rust
                 passkey: wallet_config.passkey.map(|enrollment| PasskeyInfo {
                     credential_id: enrollment.credential_id,
@@ -663,11 +714,13 @@ In `get_key` (`crates/sage/src/endpoints/keys.rs`), the `KeyInfo { ... }` litera
                     prf_salt: enrollment.prf_salt,
                 }),
 ```
+
 (`wallet_config` here is the `.cloned().unwrap_or_default()` local, so `.passkey` is owned.)
 
 - [ ] **Step 9: Drop enrollment on password change/removal**
 
 In `change_password` (`crates/sage/src/endpoints/keys.rs`), after `self.save_keychain()?;` and before `self.set_password_protected(...)`, add:
+
 ```rust
         // A wrapped passkey holds the OLD password; changing or removing the
         // password invalidates it, so drop the enrollment (user re-enrolls).
@@ -680,11 +733,13 @@ In `change_password` (`crates/sage/src/endpoints/keys.rs`), after `self.save_key
             wallet.passkey = None;
         }
 ```
+
 (Key deletion already drops the enrollment: `delete_key` retains `wallets` by fingerprint, discarding the `Wallet` and its `passkey`.)
 
 - [ ] **Step 10: Register the commands**
 
 In `src-tauri/src/lib.rs` `collect_commands![]` (after `commands::change_password,`), add:
+
 ```rust
             commands::enroll_passkey,
             commands::unwrap_passkey_password,
@@ -694,17 +749,21 @@ In `src-tauri/src/lib.rs` `collect_commands![]` (after `commands::change_passwor
 - [ ] **Step 11: Run tests to verify they pass**
 
 Run:
+
 ```bash
 cd /Users/don/src/dkackman/sage && export SDKROOT="$(xcrun --show-sdk-path)" && cargo test -p sage passkey_endpoint && cargo check -p sage-tauri
 ```
+
 Expected: 3 endpoint tests pass; `sage-tauri` compiles (macro-generated Tauri wrappers + RPC routes resolve).
 
 - [ ] **Step 12: Regenerate TypeScript bindings**
 
 Run the app once in debug to rewrite `src/bindings.ts` (this is the only way bindings regenerate):
+
 ```bash
 cd /Users/don/src/dkackman/sage && export SDKROOT="$(xcrun --show-sdk-path)" && cargo tauri dev
 ```
+
 Let it boot, confirm `src/bindings.ts` now contains `enrollPasskey`, `unwrapPasskeyPassword`, `removePasskey`, and `PasskeyInfo` / `KeyInfo.passkey`, then quit the app.
 
 - [ ] **Step 13: Commit**
@@ -719,18 +778,21 @@ git commit -m "feat(passkey): enroll/unwrap/remove endpoints + KeyInfo.passkey +
 ### Task 5: Frontend — passkey WebAuthn helper, enroll UI, passkey-first unlock
 
 **Files:**
+
 - Create: `src/lib/passkey.ts`
 - Modify: `src/contexts/PasswordContext.tsx` (Case 0 + signature)
 - Modify: `src/components/WalletCard.tsx:82,180` and `src/pages/Settings.tsx:1237` (call-site signature update)
 - Modify: `src/pages/Settings.tsx` (Security section: enroll/remove control)
 
 **Interfaces:**
+
 - Consumes: `commands.enrollPasskey`, `commands.unwrapPasskeyPassword`, `commands.removePasskey`, `KeyInfo.passkey` (Task 4 bindings); `register`/`authenticate` from `tauri-plugin-passkey-api`.
 - Produces: `enrollPasskey(fingerprint, password)`, `unlockWithPasskey(info)` in `src/lib/passkey.ts`; a `requestPassword(info)` that tries passkey before the dialog.
 
 - [ ] **Step 1: Write the WebAuthn helper**
 
 Create `src/lib/passkey.ts`:
+
 ```ts
 import { register, authenticate } from 'tauri-plugin-passkey-api';
 import { commands, type KeyInfo, type PasskeyInfo } from '@/bindings';
@@ -766,13 +828,19 @@ function bytesToStdBase64(bytes: Uint8Array): string {
 
 // The plugin returns WebAuthn JSON; PRF results arrive as base64url strings.
 function prfFirst(response: unknown): string | undefined {
-  const ext = (response as { clientExtensionResults?: { prf?: { results?: { first?: string } } } })
-    .clientExtensionResults;
+  const ext = (
+    response as {
+      clientExtensionResults?: { prf?: { results?: { first?: string } } };
+    }
+  ).clientExtensionResults;
   return ext?.prf?.results?.first;
 }
 
 /** Register a passkey for `fingerprint` and wrap `password` under its PRF secret. */
-export async function enrollPasskey(fingerprint: number, password: string): Promise<void> {
+export async function enrollPasskey(
+  fingerprint: number,
+  password: string,
+): Promise<void> {
   const prfSalt = bytesToBase64Url(randomBytes(32));
 
   const created = await register(RP_ORIGIN, {
@@ -787,7 +855,10 @@ export async function enrollPasskey(fingerprint: number, password: string): Prom
       { type: 'public-key', alg: -7 },
       { type: 'public-key', alg: -257 },
     ],
-    authenticatorSelection: { residentKey: 'discouraged', userVerification: 'required' },
+    authenticatorSelection: {
+      residentKey: 'discouraged',
+      userVerification: 'required',
+    },
     attestation: 'none',
     timeout: 60000,
     extensions: { prf: { eval: { first: prfSalt } } },
@@ -845,35 +916,43 @@ export async function unlockWithPasskey(info: KeyInfo): Promise<string> {
 - [ ] **Step 2: Verify types compile**
 
 Run:
+
 ```bash
 cd /Users/don/src/dkackman/sage && npx tsc -b 2>&1 | head -20
 ```
+
 Expected: no errors in `src/lib/passkey.ts`. (If the plugin's option types complain about `extensions.prf`, cast the options object with `as PublicKeyCredentialCreationOptionsJSON` / `as PublicKeyCredentialRequestOptionsJSON` — PRF is a valid but sometimes-untyped extension.)
 
 - [ ] **Step 3: Add passkey-first unlock to PasswordContext**
 
 In `src/contexts/PasswordContext.tsx`, change the `requestPassword` signature from `(hasPassword: boolean)` to accept the fields needed for passkey. Update the interface (lines 15-17):
+
 ```ts
 export interface PasswordContextType {
-  requestPassword: (
-    info: { has_password: boolean; passkey: PasskeyInfo | null; fingerprint: number },
-  ) => Promise<string | null | undefined>;
+  requestPassword: (info: {
+    has_password: boolean;
+    passkey: PasskeyInfo | null;
+    fingerprint: number;
+  }) => Promise<string | null | undefined>;
 }
 ```
+
 Import `PasskeyInfo` and `KeyInfo` from `@/bindings` and `unlockWithPasskey` from `@/lib/passkey`. At the very top of the `requestPassword` callback (before Case 1 at line 34), add Case 0:
+
 ```ts
-      // Case 0: passkey-enrolled → try passkey first, password dialog as fallback.
-      if (info.passkey) {
-        try {
-          return await unlockWithPasskey({
-            fingerprint: info.fingerprint,
-            passkey: info.passkey,
-          } as KeyInfo);
-        } catch {
-          // fall through to the password dialog
-        }
-      }
+// Case 0: passkey-enrolled → try passkey first, password dialog as fallback.
+if (info.passkey) {
+  try {
+    return await unlockWithPasskey({
+      fingerprint: info.fingerprint,
+      passkey: info.passkey,
+    } as KeyInfo);
+  } catch {
+    // fall through to the password dialog
+  }
+}
 ```
+
 Then replace the `if (hasPassword)` check on line 34 with `if (info.has_password)`. Update the `useCallback` dependency array as needed.
 
 - [ ] **Step 4: Update the three call sites**
@@ -888,6 +967,7 @@ Then replace the `if (hasPassword)` check on line 34 with `if (info.has_password
   ```
 - `src/components/WalletCard.tsx:180`: same replacement (uses `info`).
 - `src/pages/Settings.tsx:1237`:
+
   ```ts
   const password = await requestPassword({
     has_password: key?.has_password ?? false,
@@ -899,58 +979,65 @@ Then replace the `if (hasPassword)` check on line 34 with `if (info.has_password
 - [ ] **Step 5: Add the enroll/remove control to the Security section**
 
 In `src/pages/Settings.tsx`, in the Security section (the `key?.has_secrets` block ending near line 1401), add a control that appears only when the key has a password:
+
 ```tsx
-{key?.has_password && (
-  key.passkey ? (
-    <Button
-      variant='outline'
-      onClick={async () => {
-        await commands.removePasskey({ fingerprint: key.fingerprint });
-        await handlePasswordSuccess();
-      }}
-    >
-      <Trans>Remove passkey unlock</Trans>
-    </Button>
-  ) : (
-    <Button
-      variant='outline'
-      onClick={async () => {
-        const password = await requestPassword({
-          has_password: key.has_password,
-          passkey: null,
-          fingerprint: key.fingerprint,
-        });
-        if (typeof password !== 'string') return;
-        try {
-          await enrollPasskey(key.fingerprint, password);
+{
+  key?.has_password &&
+    (key.passkey ? (
+      <Button
+        variant='outline'
+        onClick={async () => {
+          await commands.removePasskey({ fingerprint: key.fingerprint });
           await handlePasswordSuccess();
-        } catch (e) {
-          // surface via the app's existing error handling
-          console.error(e);
-        }
-      }}
-    >
-      <Trans>Unlock with passkey</Trans>
-    </Button>
-  )
-)}
+        }}
+      >
+        <Trans>Remove passkey unlock</Trans>
+      </Button>
+    ) : (
+      <Button
+        variant='outline'
+        onClick={async () => {
+          const password = await requestPassword({
+            has_password: key.has_password,
+            passkey: null,
+            fingerprint: key.fingerprint,
+          });
+          if (typeof password !== 'string') return;
+          try {
+            await enrollPasskey(key.fingerprint, password);
+            await handlePasswordSuccess();
+          } catch (e) {
+            // surface via the app's existing error handling
+            console.error(e);
+          }
+        }}
+      >
+        <Trans>Unlock with passkey</Trans>
+      </Button>
+    ));
+}
 ```
+
 Import `enrollPasskey` from `@/lib/passkey`, `commands` from `@/bindings`, and reuse the existing `requestPassword` (from `usePassword`) and `handlePasswordSuccess` (Settings.tsx:1217). `handlePasswordSuccess` already re-fetches `getKey`, refreshing `key.passkey`.
 
 - [ ] **Step 6: Verify frontend compiles and lints**
 
 Run:
+
 ```bash
 cd /Users/don/src/dkackman/sage && npx tsc -b && pnpm lint
 ```
+
 Expected: no type errors, no new lint errors.
 
 - [ ] **Step 7: Extract i18n strings**
 
 Run:
+
 ```bash
 cd /Users/don/src/dkackman/sage && pnpm extract
 ```
+
 Expected: the two new `<Trans>` strings appear in the catalogs.
 
 - [ ] **Step 8: Commit**
@@ -965,23 +1052,29 @@ git commit -m "feat(passkey): WebAuthn helper, enroll UI, passkey-first unlock"
 ### Task 6: macOS entitlements, AASA, and dev-bundle signing
 
 **Files:**
+
 - Create: `src-tauri/Entitlements.plist`
 - Create: `build-macos-dev.sh` (adapted from the plugin test-app)
 - External: AASA on `webauthn.dkackman.com` (Cloudflare Worker); Apple Developer portal (App ID + provisioning profile)
 
 **Interfaces:**
+
 - Produces: a signed `Sage.app` whose entitlements permit platform-authenticator WebAuthn against `webauthn.dkackman.com`.
 
 - [ ] **Step 1: Add sage's App ID to the AASA**
 
 In the Cloudflare Worker serving `https://webauthn.dkackman.com/.well-known/apple-app-site-association`, add sage's App ID to the `webcredentials.apps` array:
+
 ```
 86TDY6D9V2.com.rigidnetwork.sage
 ```
+
 Verify:
+
 ```bash
 curl -s https://webauthn.dkackman.com/.well-known/apple-app-site-association | jq '.webcredentials'
 ```
+
 Expected: the array includes `86TDY6D9V2.com.rigidnetwork.sage`.
 
 - [ ] **Step 2: Register the App ID + provisioning profile (Apple Developer portal)**
@@ -991,6 +1084,7 @@ At https://developer.apple.com/account/resources/identifiers/list register/enabl
 - [ ] **Step 3: Create the entitlements file**
 
 Create `src-tauri/Entitlements.plist` (modeled on the plugin test-app's):
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -1017,13 +1111,17 @@ Copy `/Users/don/src/dkackman/tauri-plugin-passkey/test-app/build-macos-dev.sh` 
 - [ ] **Step 5: Build and sign**
 
 Run:
+
 ```bash
 cd /Users/don/src/dkackman/sage && export SDKROOT="$(xcrun --show-sdk-path)" && ./build-macos-dev.sh
 ```
+
 Expected: a signed `Sage.app`. Verify the entitlements are embedded:
+
 ```bash
 codesign -d --entitlements :- src-tauri/target/debug/bundle/macos/Sage.app 2>/dev/null | grep -A1 associated-domains
 ```
+
 Expected: shows `webcredentials:webauthn.dkackman.com`.
 
 - [ ] **Step 6: Commit**
@@ -1032,6 +1130,7 @@ Expected: shows `webcredentials:webauthn.dkackman.com`.
 git add src-tauri/Entitlements.plist build-macos-dev.sh .gitignore
 git commit -m "chore(passkey): macOS entitlements + dev-bundle signing for WebAuthn"
 ```
+
 (Add `src-tauri/embedded.provisionprofile` to `.gitignore` — it is developer-specific and must not be committed.)
 
 ---
@@ -1045,6 +1144,7 @@ git commit -m "chore(passkey): macOS entitlements + dev-bundle signing for WebAu
 ```bash
 open /Users/don/src/dkackman/sage/src-tauri/target/debug/bundle/macos/Sage.app
 ```
+
 (Running the raw binary via `cargo tauri dev` will NOT work — ASAuthorization requires the signed bundle. Rebuild+sign with `./build-macos-dev.sh` after any change you want to test here.)
 
 - [ ] **Step 2: Enroll**
@@ -1072,6 +1172,7 @@ Note any plugin integration issues discovered (this is the pre-publish shakeout)
 ## Self-Review
 
 **Spec coverage:**
+
 - Plugin wiring (spec Increment 1) → Task 1. ✓
 - Rust core: model, config, wrap/unwrap, endpoints, tests (Increment 2) → Tasks 2, 3, 4. ✓
 - macOS enablement (Increment 3) → Task 6. ✓

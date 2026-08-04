@@ -1,4 +1,8 @@
-import { register, authenticate, isPasskeyError } from 'tauri-plugin-passkey-api';
+import {
+  register,
+  authenticate,
+  isPasskeyError,
+} from 'tauri-plugin-passkey-api';
 import { commands, type KeyInfo, type PasskeyInfo } from '@/bindings';
 
 export const RP_ID = 'webauthn.dkackman.com';
@@ -50,8 +54,25 @@ function prfSecretOutput(response: unknown): string | undefined {
   return r.clientExtensionResults?.prf?.results?.first;
 }
 
+/**
+ * Whether the credential we just registered can actually do PRF. The plugin
+ * reports `prf.enabled` after registration on every platform; a platform with
+ * no PRF (e.g. Windows) succeeds registration but returns `enabled: false`
+ * instead of silently dropping the extension. Treat an explicit `false` as
+ * unsupported so we fail before asking for a secret we'll never get.
+ */
+function prfEnabledAfterRegistration(response: unknown): boolean | undefined {
+  const r = response as {
+    clientExtensionResults?: { prf?: { enabled?: boolean } };
+  };
+  return r.clientExtensionResults?.prf?.enabled;
+}
+
 /** Register a passkey for `fingerprint` and wrap `password` under its hmac-secret. */
-export async function enrollPasskey(fingerprint: number, password: string): Promise<void> {
+export async function enrollPasskey(
+  fingerprint: number,
+  password: string,
+): Promise<void> {
   const prfSalt = bytesToBase64Url(randomBytes(32));
 
   const created = await register(RP_ORIGIN, {
@@ -67,7 +88,11 @@ export async function enrollPasskey(fingerprint: number, password: string): Prom
       { type: 'public-key', alg: -257 },
     ],
     authenticatorSelection: {
-      residentKey: 'discouraged',
+      // `preferred`, not `discouraged`: Android's Credential Manager only
+      // creates discoverable credentials and the plugin now rejects
+      // `discouraged` there outright. Unlock always uses `allowCredentials`
+      // with the stored `credential_id`, so discoverability is immaterial to us.
+      residentKey: 'preferred',
       userVerification: 'required',
     },
     attestation: 'none',
@@ -75,6 +100,12 @@ export async function enrollPasskey(fingerprint: number, password: string): Prom
     // Enable the PRF extension on this credential.
     extensions: { prf: {} },
   } as PublicKeyCredentialCreationOptionsJSON);
+
+  if (prfEnabledAfterRegistration(created) === false) {
+    throw new Error(
+      "This device can't unlock with a passkey — its authenticator doesn't support the PRF extension.",
+    );
+  }
 
   const credentialId = created.id;
 

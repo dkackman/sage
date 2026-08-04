@@ -1,5 +1,5 @@
-use aes_gcm::{aead::Aead, AeadCore, Aes256Gcm, Key, KeyInit, Nonce};
-use base64::{engine::general_purpose::STANDARD, Engine};
+use aes_gcm::{AeadCore, Aes256Gcm, Key, KeyInit, Nonce, aead::Aead};
+use base64::{Engine, engine::general_purpose::STANDARD};
 use rand::{CryptoRng, Rng};
 use thiserror::Error;
 
@@ -56,8 +56,8 @@ pub fn unwrap_password(prf_secret: &[u8], wrapped: &str) -> Result<Vec<u8>, Pass
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand_chacha::ChaCha20Rng;
     use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
 
     #[test]
     fn test_wrap_unwrap_roundtrip() {

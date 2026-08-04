@@ -10,7 +10,7 @@ Integrate the local (unpublished) `tauri-plugin-passkey` into sage and build the
 first real feature on top of it: letting a user **unlock a password-protected key
 with a passkey** (Face ID / Touch ID / security key) instead of typing the password.
 
-The passkey is a *convenience door* to the existing password gate — never a
+The passkey is a _convenience door_ to the existing password gate — never a
 replacement for it. The typed password always remains a working fallback, and the
 key's at-rest encryption is unchanged. A secondary goal is served for free:
 exercising the plugin in a real host app to shake out packaging/build/runtime
@@ -44,20 +44,20 @@ password, then decrypts through the existing path.
 
 Rationale for this over the alternatives considered during brainstorming:
 
-- *Envelope (either factor unlocks)* — cleanest multi-factor model but requires a
+- _Envelope (either factor unlocks)_ — cleanest multi-factor model but requires a
   `KeyData::Secret` schema change and migration of every existing `keys.bin`.
   Rejected as too heavy for the first increment.
-- *Passkey as alternative factor (swap the KEK source)* — passkey **or** password,
+- _Passkey as alternative factor (swap the KEK source)_ — passkey **or** password,
   mutually exclusive per key; does not let the typed password remain a fallback.
   Rejected: we want the password to always work.
-- *Passkey wraps the password (chosen)* — near-zero change to the keychain crypto
+- _Passkey wraps the password (chosen)_ — near-zero change to the keychain crypto
   core; passkey is an alternate door to the same lock; password is always a
   fallback.
 
 ## Why no relying-party server is needed
 
 A normal WebAuthn deployment needs a backend to mint challenges and verify
-attestation/assertion signatures. This feature does not authenticate *to* anything
+attestation/assertion signatures. This feature does not authenticate _to_ anything
 — it only needs the PRF secret to be **stable** for a given `(credential, salt)`.
 So sage generates the challenge and registration options locally, calls the
 plugin, and extracts only `credential_id` and the PRF output. Security rests on:
@@ -73,7 +73,7 @@ No server, no network round-trip.
 ### 1. Plugin wiring (mechanical)
 
 Follows the pattern `tauri-plugin-sage` already uses, with the one wrinkle that
-the plugin lives *outside* the sage repo.
+the plugin lives _outside_ the sage repo.
 
 **Plugin modification is in-scope.** The plugin is unpublished and locally owned;
 if the local-challenge / PRF-only flow (or any integration gap) needs plugin
@@ -85,7 +85,7 @@ handles the PRF / hmac-secret extension on every platform — but the authorizat
 to change it exists if needed.
 
 - `src-tauri/Cargo.toml`: `tauri-plugin-passkey = { path =
-  "../../tauri-plugin-passkey/tauri-plugin-passkey" }`. It is **not** a workspace
+"../../tauri-plugin-passkey/tauri-plugin-passkey" }`. It is **not** a workspace
   member (path deps need not be), so it keeps its own edition/lints.
 - `package.json`: `"tauri-plugin-passkey-api": "file:../tauri-plugin-passkey/tauri-plugin-passkey"`
   (its `dist-js/` must be built first — the plugin repo's `pnpm build` handles that).
@@ -156,16 +156,16 @@ Enrollment read/removal go through existing wallet-config endpoints.
 
 1. Prompt for the current password `P`; verify via `extract_secrets`.
 2. Frontend generates a random `prf_salt`; calls plugin `register(rpOrigin,
-   options)` with the PRF extension → `credential_id`. Non-discoverable is fine
+options)` with the PRF extension → `credential_id`. Non-discoverable is fine
    (we store `credential_id`).
 3. Frontend calls `authenticate(rpOrigin, { allowCredentials: [credential_id],
-   prf eval = salt })` → PRF secret `S`.
+prf eval = salt })` → PRF secret `S`.
 4. Frontend calls `passkey_wrap_password(fingerprint, S, P)` → enrollment stored.
 
 ### Unlock (Case 0 in `requestPassword`)
 
 1. If passkey-enrolled: `authenticate(rpOrigin, { allowCredentials:
-   [credential_id], prf eval = salt })` → `S`; then
+[credential_id], prf eval = salt })` → `S`; then
    `passkey_unwrap_password(fingerprint, S)` → `P`; resolve `P`.
 2. On cancel/error: fall through to the existing password dialog. The typed
    password always works.
@@ -173,7 +173,7 @@ Enrollment read/removal go through existing wallet-config endpoints.
 ## Interaction with the existing biometric gate
 
 The existing biometric gate (`BiometricContext` / `PasswordContext` Case 2) is
-mobile-only and encrypts nothing — it is a *presence check* in front of an
+mobile-only and encrypts nothing — it is a _presence check_ in front of an
 effectively-plaintext (empty-password) key. Passkey and biometric occupy different
 axes: password and passkey-PRF both do real at-rest encryption; biometric only
 proves presence.
@@ -223,7 +223,7 @@ The wrapped password goes stale if the key's password changes or is removed. Rul
 
 1. **Plugin wiring only** — Cargo `path` + `file:` deps, `init()`,
    `passkey:default` capability; build green on all platforms, no feature yet.
-   *(reviewable checkpoint)*
+   _(reviewable checkpoint)_
 2. **Rust core** — `PasskeyEnrollment` model, config plumbing,
    `passkey_wrap/unwrap_password` endpoints, unit tests, snapshot updates.
 3. **macOS build enablement** — associated-domains entitlement, sage's App ID added
