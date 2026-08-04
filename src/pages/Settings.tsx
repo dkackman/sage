@@ -50,7 +50,7 @@ import { usePassword } from '@/hooks/usePassword';
 import { useScannerOrClipboard } from '@/hooks/useScannerOrClipboard';
 import { useWalletConnect } from '@/hooks/useWalletConnect';
 import { exportText, ExportType } from '@/lib/exportText';
-import { enrollPasskey } from '@/lib/passkey';
+import { enrollPasskey, passkeyErrorMessage } from '@/lib/passkey';
 import {
   clearState,
   fetchState,
@@ -1460,7 +1460,10 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
                         toast.success(t`Passkey unlock enabled`);
                       } catch (e) {
                         console.error(e);
-                        toast.error(t`Could not enable passkey unlock`);
+                        toast.error(
+                          `${t`Could not enable passkey unlock`}: ${passkeyErrorMessage(e)}`,
+                          { autoClose: false },
+                        );
                       }
                     }}
                   >
