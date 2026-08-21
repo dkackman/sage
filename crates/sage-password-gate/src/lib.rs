@@ -5,7 +5,7 @@ mod types;
 use sage_api::ErrorKind;
 
 pub use prompter::{PasswordVerifier, Prompter, SAGE_WEBVIEW_LABEL};
-pub use resolve::{CANCELLED_REASON, MAX_ATTEMPTS, resolve_with};
+pub use resolve::{CANCELLED_REASON, MAX_ATTEMPTS, PROMPT_TIMEOUT, resolve_with};
 pub use types::{PasswordAttemptError, PasswordOutcome, PasswordRequest};
 
 /// This crate's error. Structurally identical to `sage-tauri`'s `Error`, so the
@@ -62,6 +62,37 @@ impl PasswordGateState {
             kind: ErrorKind::Internal,
             reason: "password request was abandoned".to_string(),
         })
+    }
+
+    /// Waits for `request_id`'s outcome on `rx`, bounded by `PROMPT_TIMEOUT`.
+    /// `request_id` must already be registered (see [`Self::register`]) —
+    /// this only owns the waiting and timeout cleanup, so callers can emit
+    /// the request to the frontend between registering and calling this,
+    /// without risking a race where a reply arrives before registration.
+    ///
+    /// On timeout, removes the pending entry (so the map never leaks a
+    /// request no one will ever answer, e.g. because the `main` webview is
+    /// absent or unresponsive) and returns an `Unauthorized` error so the
+    /// caller does not proceed.
+    pub(crate) async fn await_outcome(
+        &self,
+        request_id: &str,
+        rx: oneshot::Receiver<PasswordOutcome>,
+    ) -> Result<PasswordOutcome> {
+        match tokio::time::timeout(PROMPT_TIMEOUT, rx).await {
+            Ok(Ok(outcome)) => Ok(outcome),
+            Ok(Err(_)) => Err(Error {
+                kind: ErrorKind::Internal,
+                reason: "password request channel closed".to_string(),
+            }),
+            Err(_) => {
+                self.cancel(&request_id).await;
+                Err(Error {
+                    kind: ErrorKind::Unauthorized,
+                    reason: "Password prompt timed out".to_string(),
+                })
+            }
+        }
     }
 }
 
@@ -163,5 +194,33 @@ mod tests {
         gate.deliver("req-2", PasswordOutcome::Cancelled).await.unwrap();
 
         assert!(gate.deliver("req-2", PasswordOutcome::Cancelled).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_request_that_is_never_answered_times_out_and_is_cleared() {
+        tokio::time::pause();
+
+        let gate = Arc::new(PasswordGateState::default());
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        gate.register("req-timeout".to_string(), tx).await;
+
+        // Keep the sender alive for the whole wait so the failure is a
+        // genuine timeout, not the channel being dropped.
+        let waiting_gate = gate.clone();
+        let waiter = tokio::spawn(async move { waiting_gate.await_outcome("req-timeout", rx).await });
+
+        tokio::time::advance(PROMPT_TIMEOUT + std::time::Duration::from_secs(1)).await;
+
+        let error = waiter.await.unwrap().expect_err("must time out");
+        assert!(matches!(error.kind, ErrorKind::Unauthorized));
+        assert_eq!(error.reason, "Password prompt timed out");
+
+        // The pending entry must not leak: a late delivery now errors as
+        // unknown, rather than silently succeeding into a dropped receiver.
+        let deliver_error = gate
+            .deliver("req-timeout", PasswordOutcome::Cancelled)
+            .await
+            .expect_err("entry should have been cleared on timeout");
+        assert!(matches!(deliver_error.kind, ErrorKind::NotFound));
     }
 }

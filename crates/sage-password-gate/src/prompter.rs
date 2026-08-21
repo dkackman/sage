@@ -57,9 +57,6 @@ impl Prompter for TauriPrompter<'_> {
             });
         }
 
-        rx.await.map_err(|_| Error {
-            kind: ErrorKind::Internal,
-            reason: "password request channel closed".to_string(),
-        })
+        self.gate.await_outcome(&request_id, rx).await
     }
 }

@@ -18,6 +18,7 @@ commands.allow = [
     "get_wallet_address",
     "change_password",
     "reconcile_key_protection",
+    "submit_password_response",
     "send_xch",
     "bulk_send_xch",
     "combine",

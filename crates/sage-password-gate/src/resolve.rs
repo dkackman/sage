@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use sage_api::ErrorKind;
 
 use super::types::{PasswordAttemptError, PasswordOutcome, PasswordRequest};
@@ -9,6 +11,11 @@ pub const MAX_ATTEMPTS: u8 = 3;
 /// Reason string used when the user dismisses the prompt, so the frontend can
 /// distinguish a deliberate cancel from a genuine auth failure and stay silent.
 pub const CANCELLED_REASON: &str = "Password entry cancelled";
+
+/// How long the resolve loop waits for a frontend reply before giving up.
+/// Generous enough that a human typing a password is never cut off, while
+/// still bounding the hang if the `main` webview is absent or unresponsive.
+pub const PROMPT_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn unauthorized(reason: &str) -> Error {
     Error { kind: ErrorKind::Unauthorized, reason: reason.to_string() }
