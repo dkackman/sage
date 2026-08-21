@@ -25,3 +25,6 @@ serde = { workspace = true, features = ["derive"] }
 tauri-specta = { workspace = true, features = ["derive"], optional = true }
 specta = { workspace = true, features = ["derive", "bigdecimal"], optional = true }
 utoipa = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -80,10 +80,14 @@ fn generate(input: &TokenStream, tauri: bool) -> TokenStream {
         endpoints.extend(tauri_endpoints);
     }
 
+    let password_gated: std::collections::BTreeSet<String> =
+        serde_json::from_str(include_str!("../../password-gated.json"))
+            .expect("Invalid password-gated endpoint file");
+
     let mut output = proc_macro2::TokenStream::new();
 
     for token in input.clone() {
-        convert(token, &endpoints, None, &mut output);
+        convert(token, &endpoints, &password_gated, None, &mut output);
     }
 
     output.into()
@@ -92,6 +96,7 @@ fn generate(input: &TokenStream, tauri: bool) -> TokenStream {
 fn convert(
     tree: TokenTree,
     endpoints: &IndexMap<String, bool>,
+    password_gated: &std::collections::BTreeSet<String>,
     endpoint: Option<&str>,
     output: &mut proc_macro2::TokenStream,
 ) {
@@ -114,6 +119,12 @@ fn convert(
             } else if ident == "maybe_await" {
                 if is_async {
                     output.extend(quote!(.await));
+                }
+            } else if ident == "maybe_unlock" {
+                if password_gated.contains(endpoint) {
+                    output.extend(quote!(
+                        req.password = sage_password_gate::resolve(&app_handle, state.inner(), gate.inner()).await?;
+                    ));
                 }
             } else if ident.is_case(Case::Snake) {
                 let ident = proc_macro2::Ident::new(
@@ -152,14 +163,14 @@ fn convert(
             if repeat {
                 for endpoint in endpoints.keys() {
                     for tree in stream.clone() {
-                        convert(tree, endpoints, Some(endpoint), output);
+                        convert(tree, endpoints, password_gated, Some(endpoint), output);
                     }
                 }
             } else {
                 let mut inner = proc_macro2::TokenStream::new();
 
                 for tree in stream {
-                    convert(tree, endpoints, endpoint, &mut inner);
+                    convert(tree, endpoints, password_gated, endpoint, &mut inner);
                 }
 
                 output.extend(proc_macro2::TokenStream::from(TokenStream::from(
