@@ -148,6 +148,7 @@ macro_rules! sage_commands {
             commands::move_key,
             commands::download_cni_offercode,
             commands::get_logs,
+            commands::submit_password_response,
             commands::is_asset_owned,
             commands::change_password,
             commands::reconcile_key_protection,
@@ -185,7 +186,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             apps::apps_get_auto_update_enabled,
             apps::apps_set_auto_update_enabled,
         ])
-        .events(collect_events![SyncEvent])
+        .events(collect_events![SyncEvent, password_gate::PasswordRequest])
 }
 
 #[cfg(all(debug_assertions, not(mobile)))]
@@ -213,7 +214,7 @@ pub fn run() {
     let builder = Builder::<tauri::Wry>::new()
         .error_handling(ErrorHandlingMode::Throw)
         .commands(sage_commands![])
-        .events(collect_events![SyncEvent]);
+        .events(collect_events![SyncEvent, password_gate::PasswordRequest]);
 
     let mut tauri_builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -284,6 +285,7 @@ pub fn run() {
             app.manage(Initialized(Mutex::new(false)));
             app.manage(RpcTask(Mutex::new(None)));
             app.manage(app_state);
+            app.manage(password_gate::PasswordGateState::default());
 
             #[cfg(not(mobile))]
             {

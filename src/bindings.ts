@@ -359,6 +359,9 @@ async downloadCniOffercode(code: string) : Promise<string> {
 async getLogs() : Promise<LogFile[]> {
     return await TAURI_INVOKE("get_logs");
 },
+async submitPasswordResponse(requestId: string, outcome: PasswordOutcome) : Promise<null> {
+    return await TAURI_INVOKE("submit_password_response", { requestId, outcome });
+},
 async isAssetOwned(req: IsAssetOwned) : Promise<IsAssetOwnedResponse> {
     return await TAURI_INVOKE("is_asset_owned", { req });
 },
@@ -443,8 +446,10 @@ async appsSetAutoUpdateEnabled(enabled: boolean) : Promise<boolean> {
 
 
 export const events = __makeEvents__<{
+passwordRequest: PasswordRequest,
 syncEvent: SyncEvent
 }>({
+passwordRequest: "password-request",
 syncEvent: "sync-event"
 })
 
@@ -2238,6 +2243,40 @@ amount: Amount }
 export type OptionAssets = { underlying_asset: Asset; underlying_amount: Amount; strike_asset: Asset; strike_amount: Amount; expiration_seconds: number }
 export type OptionRecord = { launcher_id: string; name: string | null; visible: boolean; coin_id: string; address: string; amount: Amount; underlying_asset: Asset; underlying_amount: Amount; underlying_coin_id: string; strike_asset: Asset; strike_amount: Amount; expiration_seconds: number; created_height: number | null; created_timestamp: number | null }
 export type OptionSortMode = "name" | "created_height" | "expiration_seconds"
+/**
+ * Attached to a re-prompt after an incorrect password.
+ */
+export type PasswordAttemptError = { attemptsRemaining: number }
+/**
+ * How the frontend answered a password request.
+ */
+export type PasswordOutcome = 
+/**
+ * The user supplied a password.
+ */
+{ kind: "password"; password: string } | 
+/**
+ * No authentication was required, or a biometric gate already passed.
+ */
+{ kind: "no_auth_needed" } | 
+/**
+ * The user dismissed the prompt.
+ */
+{ kind: "cancelled" }
+/**
+ * Emitted to the `main` webview only. Never broadcast.
+ */
+export type PasswordRequest = { requestId: string; fingerprint: number; 
+/**
+ * Advisory: the wallet's stored `password_protected` flag. The frontend
+ * still decides between password dialog, biometric gate, and no auth,
+ * because Rust does not know whether biometrics are enabled.
+ */
+requiresPassword: boolean; 
+/**
+ * 1-based. Increments on each incorrect-password re-prompt.
+ */
+attempt: number; error: PasswordAttemptError | null }
 export type PeerRecord = { ip_addr: string; port: number; peak_height: number; user_managed: boolean }
 export type PendingTransactionRecord = { transaction_id: string; fee: Amount; submitted_at: number | null; spent: TransactionCoinRecord[]; created: TransactionCoinRecord[] }
 /**

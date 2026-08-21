@@ -12,6 +12,7 @@ use sage_api_macro::impl_endpoints_tauri;
 #[cfg(not(mobile))]
 use sage_apps::ensure_initial_sandbox_run;
 use sage_config::{NetworkConfig, Wallet, WalletDefaults};
+use sage_password_gate::{PasswordGateState, PasswordOutcome};
 use sage_rpc::start_rpc;
 use serde::{Deserialize, Serialize};
 use specta::{Type, specta};
@@ -257,4 +258,14 @@ pub async fn get_logs(state: State<'_, AppState>) -> Result<Vec<LogFile>> {
     }
 
     Ok(log_files)
+}
+
+#[command]
+#[specta]
+pub async fn submit_password_response(
+    gate: State<'_, PasswordGateState>,
+    request_id: String,
+    outcome: PasswordOutcome,
+) -> Result<()> {
+    Ok(gate.deliver(&request_id, outcome).await?)
 }
