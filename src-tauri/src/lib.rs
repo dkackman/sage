@@ -17,6 +17,7 @@ mod error;
 
 #[cfg(not(mobile))]
 use sage_apps as apps;
+use sage_password_gate as password_gate;
 
 #[cfg(not(mobile))]
 use sage_apps::{

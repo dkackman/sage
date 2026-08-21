@@ -6665,6 +6665,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sage-password-gate"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bip39",
+ "sage",
+ "sage-api",
+ "sage-keychain",
+ "serde",
+ "specta",
+ "tauri",
+ "tauri-specta",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "sage-rpc"
 version = "0.13.0"
 dependencies = [
@@ -6706,6 +6723,7 @@ dependencies = [
  "sage-api-macro",
  "sage-apps",
  "sage-config",
+ "sage-password-gate",
  "sage-rpc",
  "sage-wallet",
  "serde",

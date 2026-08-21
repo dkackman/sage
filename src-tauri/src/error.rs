@@ -19,6 +19,15 @@ impl From<sage::Error> for Error {
     }
 }
 
+impl From<sage_password_gate::Error> for Error {
+    fn from(error: sage_password_gate::Error) -> Self {
+        Self {
+            kind: error.kind,
+            reason: error.reason,
+        }
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.reason)

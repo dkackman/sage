@@ -1,0 +1,23 @@
+[package]
+name = "sage-password-gate"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+sage = { workspace = true }
+sage-api = { workspace = true, features = ["tauri"] }
+sage-keychain = { workspace = true }
+async-trait = "0.1.89"
+serde = { workspace = true, features = ["derive"] }
+specta = { workspace = true }
+tauri = { workspace = true }
+tauri-specta = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+uuid = { version = "1.19.0", features = ["v4"] }
+
+[dev-dependencies]
+bip39 = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
