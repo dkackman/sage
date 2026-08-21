@@ -6521,6 +6521,7 @@ dependencies = [
  "sage-api-macro",
  "sage-config",
  "serde",
+ "serde_json",
  "specta",
  "tauri-specta",
  "utoipa",
