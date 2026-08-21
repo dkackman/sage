@@ -31,15 +31,30 @@ mod password_gate_drift {
         let gated: BTreeSet<String> =
             serde_json::from_str(include_str!("../password-gated.json")).unwrap();
 
+        let requests_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/requests");
+        let entries = std::fs::read_dir(&requests_dir).unwrap_or_else(|error| {
+            panic!("failed to read request sources at {requests_dir:?}: {error}")
+        });
+
+        let mut sources = Vec::new();
+        for entry in entries {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
+                sources.push(std::fs::read_to_string(&path).unwrap_or_else(|error| {
+                    panic!("failed to read {path:?}: {error}")
+                }));
+            }
+        }
+
+        assert!(
+            sources.len() >= 6,
+            "expected at least 6 request source files under {requests_dir:?}, found {}",
+            sources.len(),
+        );
+
         let mut discovered = BTreeSet::new();
-        for source in [
-            include_str!("requests/action_system.rs"),
-            include_str!("requests/actions.rs"),
-            include_str!("requests/keys.rs"),
-            include_str!("requests/offers.rs"),
-            include_str!("requests/transactions.rs"),
-            include_str!("requests/wallet_connect.rs"),
-        ] {
+        for source in &sources {
             discovered.extend(structs_with_password_field(source));
         }
 
