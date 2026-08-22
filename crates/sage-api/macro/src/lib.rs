@@ -80,37 +80,41 @@ fn generate(input: &TokenStream, tauri: bool) -> TokenStream {
         endpoints.extend(tauri_endpoints);
     }
 
-    let password_gated: std::collections::BTreeSet<String> =
-        serde_json::from_str(include_str!("../../password-gated.json"))
-            .expect("Invalid password-gated endpoint file");
-
-    // The subset of the gated endpoints whose request type carries a
-    // `fingerprint` field. These act on a *named* wallet rather than the
-    // active one, so the gate must verify against that wallet.
-    let fingerprint_gated: std::collections::BTreeSet<String> =
-        serde_json::from_str(include_str!("../../password-gated-fingerprint.json"))
-            .expect("Invalid fingerprint-gated endpoint file");
-
-    let gating = Gating {
-        password_gated: &password_gated,
-        fingerprint_gated: &fingerprint_gated,
-    };
+    // How the host-layer password gate treats each endpoint. Endpoints absent
+    // from this map take no password at all. `sage-api`'s drift tests keep the
+    // manifest in sync with the request types and with how each endpoint's
+    // implementation consumes the password.
+    let gating: std::collections::BTreeMap<String, GateMode> =
+        serde_json::from_str(include_str!("../../password-gating.json"))
+            .expect("Invalid password gating file");
 
     let mut output = proc_macro2::TokenStream::new();
 
     for token in input.clone() {
-        convert(token, &endpoints, gating, None, &mut output);
+        convert(token, &endpoints, &gating, None, &mut output);
     }
 
     output.into()
 }
 
-/// Which endpoints the password gate applies to, and how.
-#[derive(Clone, Copy)]
-struct Gating<'a> {
-    password_gated: &'a std::collections::BTreeSet<String>,
-    fingerprint_gated: &'a std::collections::BTreeSet<String>,
+/// How the host-layer password gate treats an endpoint.
+#[derive(Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum GateMode {
+    /// Prompt on every call, verifying against the active wallet.
+    Always,
+    /// Prompt only when `req.auto_submit` is set. These endpoints build a
+    /// transaction for confirmation first and reach no secret until the caller
+    /// asks for it to be signed and submitted, so prompting unconditionally
+    /// would collect a password that is then discarded.
+    AutoSubmit,
+    /// Prompt on every call, verifying against `req.fingerprint`. These act on
+    /// a *named* wallet rather than the active one -- and may run with no
+    /// wallet active at all, from the logged-out wallet list.
+    Fingerprint,
 }
+
+type Gating<'a> = &'a std::collections::BTreeMap<String, GateMode>;
 
 fn convert(
     tree: TokenTree,
@@ -140,17 +144,36 @@ fn convert(
                     output.extend(quote!(.await));
                 }
             } else if ident == "maybe_unlock" {
-                if gating.fingerprint_gated.contains(endpoint) {
-                    // Acts on `req.fingerprint`, which may be a wallet other
-                    // than the active one -- and may run with no wallet
-                    // active at all, from the logged-out wallet list.
-                    output.extend(quote!(
-                        req.password = sage_password_gate::resolve_for_fingerprint(&app_handle, state.inner(), gate.inner(), req.fingerprint).await?;
-                    ));
-                } else if gating.password_gated.contains(endpoint) {
-                    output.extend(quote!(
-                        req.password = sage_password_gate::resolve(&app_handle, state.inner(), gate.inner()).await?;
-                    ));
+                match gating.get(endpoint) {
+                    Some(GateMode::Fingerprint) => {
+                        output.extend(quote!(
+                            req.password = sage_password_gate::resolve_for_fingerprint(&app_handle, state.inner(), gate.inner(), req.fingerprint).await?;
+                        ));
+                    }
+                    Some(GateMode::Always) => {
+                        output.extend(quote!(
+                            req.password = sage_password_gate::resolve(&app_handle, state.inner(), gate.inner()).await?;
+                        ));
+                    }
+                    Some(GateMode::AutoSubmit) => {
+                        // Without `auto_submit` the endpoint only builds the
+                        // transaction for the confirmation dialog and never
+                        // touches the key, so prompting here would ask twice.
+                        // The `else` keeps the host layer the sole source of
+                        // the password: every gated command overwrites whatever
+                        // the caller sent, on both branches.
+                        output.extend(quote!(if req.auto_submit {
+                            req.password = sage_password_gate::resolve(
+                                &app_handle,
+                                state.inner(),
+                                gate.inner(),
+                            )
+                            .await?;
+                        } else {
+                            req.password = None;
+                        }));
+                    }
+                    None => {}
                 }
             } else if ident.is_case(Case::Snake) {
                 let ident = proc_macro2::Ident::new(

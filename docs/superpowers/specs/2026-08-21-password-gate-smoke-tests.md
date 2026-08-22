@@ -17,7 +17,10 @@ pnpm run tauri:dev
 
 ## 1. Main window, protected wallet
 
-- [ ] Send a small amount of XCH. The password dialog appears.
+- [ ] Send a small amount of XCH. **No dialog appears while the transaction is being
+      built** — the password dialog comes up only after Submit on the confirmation
+      dialog, and exactly once. Two dialogs for one send means an endpoint is filed
+      as `always` in `password-gating.json` when it should be `auto_submit`.
 - [ ] Enter the wrong password twice. It re-prompts each time, showing the remaining
       attempt count, and reads "1 attempt remaining" (singular) on the last try.
 - [ ] Enter the correct password. The transaction proceeds.
@@ -27,7 +30,7 @@ pnpm run tauri:dev
 
 ## 2. Main window, unprotected wallet
 
-- [ ] Send XCH. No dialog appears at all.
+- [ ] Send XCH. No dialog appears at all, at either stage.
 - [ ] Mobile only, biometrics enabled: the biometric gate appears, and a second
       operation within five minutes does not re-prompt.
 

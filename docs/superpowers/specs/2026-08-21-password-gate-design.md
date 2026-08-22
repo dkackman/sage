@@ -70,8 +70,32 @@ active one, and are driven from the logged-out wallet list where there is no act
 `resolve` would both prompt for the wrong wallet's password and fail with `NotLoggedIn`, so those
 endpoints use the fingerprint-targeted form. The `password_protected` lookup searches
 `wallet_config.wallets` by fingerprint and needs no active wallet, so this path never calls
-`Sage::wallet()`. The macro picks the form from `crates/sage-api/password-gated-fingerprint.json`,
-a subset of `password-gated.json` kept honest by a drift test in `crates/sage-api/src/lib.rs`.
+`Sage::wallet()`.
+
+### Gating manifest
+
+`crates/sage-api/password-gating.json` maps each password-bearing endpoint to one of three modes,
+and the macro's `maybe_unlock` expands accordingly:
+
+| Mode | Expansion | Applies to |
+| --- | --- | --- |
+| `always` | `resolve(...)` on every call | endpoints that reach a secret unconditionally |
+| `fingerprint` | `resolve_for_fingerprint(..., req.fingerprint)` on every call | `delete_key`, `get_secret_key` |
+| `auto_submit` | `resolve(...)` only when `req.auto_submit` is set, `req.password = None` otherwise | endpoints that only forward the password to `Sage::transact`/`transact_with` |
+
+The `auto_submit` mode exists because those endpoints build a transaction for the confirmation
+dialog first and touch no key until the caller asks for it to be signed and submitted. Prompting
+unconditionally there asks the user for a password that is then discarded, and then asks again after
+they confirm — two dialogs for one send.
+
+Note that carrying an `auto_submit` field is *not* the criterion: `sign_coin_spends` and `take_offer`
+both have one but reach the keychain on every call, so both are `always`. The criterion is how the
+implementation consumes the password, and a drift test in `crates/sage-api/src/lib.rs` enforces
+exactly that by scanning `crates/sage/src/endpoints/` — an endpoint whose body calls
+`extract_secrets` or `self.sign` must not be `auto_submit`, and one that only forwards to
+`transact`/`transact_with` must be. Sibling tests keep the manifest's key set equal to the set of
+request types carrying a `password` field, keep `fingerprint` equal to those carrying a
+`fingerprint` field, and reject unknown mode strings.
 
 ### Transport
 
