@@ -18,7 +18,10 @@ pub const CANCELLED_REASON: &str = "Password entry cancelled";
 pub const PROMPT_TIMEOUT: Duration = Duration::from_mins(5);
 
 fn unauthorized(reason: &str) -> Error {
-    Error { kind: ErrorKind::Unauthorized, reason: reason.to_string() }
+    Error {
+        kind: ErrorKind::Unauthorized,
+        reason: reason.to_string(),
+    }
 }
 
 /// Prompts the frontend for a password and verifies it against the keychain,
@@ -99,7 +102,12 @@ mod tests {
     impl Prompter for MockPrompter {
         async fn prompt(&self, request: PasswordRequest) -> Result<PasswordOutcome> {
             self.seen.lock().unwrap().push(request);
-            Ok(self.scripted.lock().unwrap().pop().expect("prompted more times than scripted"))
+            Ok(self
+                .scripted
+                .lock()
+                .unwrap()
+                .pop()
+                .expect("prompted more times than scripted"))
         }
     }
 
@@ -112,10 +120,16 @@ mod tests {
     #[async_trait]
     impl PasswordVerifier for KeychainVerifier {
         async fn verify(&self, fingerprint: u32, password: &str) -> Result<bool> {
-            match self.keychain.extract_secrets(fingerprint, password.as_bytes()) {
+            match self
+                .keychain
+                .extract_secrets(fingerprint, password.as_bytes())
+            {
                 Ok(_) => Ok(true),
                 Err(KeychainError::Decrypt) => Ok(false),
-                Err(err) => Err(Error { kind: ErrorKind::Internal, reason: err.to_string() }),
+                Err(err) => Err(Error {
+                    kind: ErrorKind::Internal,
+                    reason: err.to_string(),
+                }),
             }
         }
     }
@@ -130,7 +144,9 @@ mod tests {
     }
 
     fn pw(s: &str) -> PasswordOutcome {
-        PasswordOutcome::Password { password: s.to_string() }
+        PasswordOutcome::Password {
+            password: s.to_string(),
+        }
     }
 
     #[tokio::test]
@@ -138,7 +154,9 @@ mod tests {
         let (verifier, fingerprint) = protected_keychain("hunter2");
         let prompter = MockPrompter::new(vec![pw("hunter2")]);
 
-        let result = resolve_with(&prompter, &verifier, fingerprint, true).await.unwrap();
+        let result = resolve_with(&prompter, &verifier, fingerprint, true)
+            .await
+            .unwrap();
 
         assert_eq!(result, Some("hunter2".to_string()));
         let seen = prompter.seen();
@@ -153,7 +171,9 @@ mod tests {
         let (verifier, fingerprint) = protected_keychain("hunter2");
         let prompter = MockPrompter::new(vec![pw("wrong"), pw("hunter2")]);
 
-        let result = resolve_with(&prompter, &verifier, fingerprint, true).await.unwrap();
+        let result = resolve_with(&prompter, &verifier, fingerprint, true)
+            .await
+            .unwrap();
 
         assert_eq!(result, Some("hunter2".to_string()));
         let seen = prompter.seen();
@@ -167,7 +187,9 @@ mod tests {
         let (verifier, fingerprint) = protected_keychain("hunter2");
         let prompter = MockPrompter::new(vec![pw("a"), pw("b"), pw("c")]);
 
-        let error = resolve_with(&prompter, &verifier, fingerprint, true).await.unwrap_err();
+        let error = resolve_with(&prompter, &verifier, fingerprint, true)
+            .await
+            .unwrap_err();
 
         assert!(matches!(error.kind, ErrorKind::Unauthorized));
         assert_eq!(prompter.seen().len(), MAX_ATTEMPTS as usize);
@@ -178,7 +200,9 @@ mod tests {
         let (verifier, fingerprint) = protected_keychain("hunter2");
         let prompter = MockPrompter::new(vec![PasswordOutcome::Cancelled]);
 
-        let error = resolve_with(&prompter, &verifier, fingerprint, true).await.unwrap_err();
+        let error = resolve_with(&prompter, &verifier, fingerprint, true)
+            .await
+            .unwrap_err();
 
         assert!(matches!(error.kind, ErrorKind::Unauthorized));
         assert_eq!(error.reason, CANCELLED_REASON);
@@ -190,7 +214,9 @@ mod tests {
         let (verifier, fingerprint) = protected_keychain("hunter2");
         let prompter = MockPrompter::new(vec![PasswordOutcome::NoAuthNeeded]);
 
-        let result = resolve_with(&prompter, &verifier, fingerprint, false).await.unwrap();
+        let result = resolve_with(&prompter, &verifier, fingerprint, false)
+            .await
+            .unwrap();
 
         assert_eq!(result, None);
         assert_eq!(prompter.seen().len(), 1);

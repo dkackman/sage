@@ -113,8 +113,7 @@ mod tests {
     #[test]
     fn protected_wallet_forces_approval_despite_auto_submit_grant() {
         assert!(super::requires_approval(
-            /* auto_submit_granted */ true,
-            /* wallet_protected */ true,
+            /* auto_submit_granted */ true, /* wallet_protected */ true,
         ));
     }
 

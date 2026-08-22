@@ -41,9 +41,10 @@ mod password_gate_drift {
             let entry = entry.unwrap();
             let path = entry.path();
             if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
-                sources.push(std::fs::read_to_string(&path).unwrap_or_else(|error| {
-                    panic!("failed to read {path:?}: {error}")
-                }));
+                sources.push(
+                    std::fs::read_to_string(&path)
+                        .unwrap_or_else(|error| panic!("failed to read {path:?}: {error}")),
+                );
             }
         }
 
@@ -59,7 +60,8 @@ mod password_gate_drift {
         }
 
         assert_eq!(
-            gated, discovered,
+            gated,
+            discovered,
             "password-gated.json is out of sync with the request types.\n\
              Only in password-gated.json: {:?}\n\
              Only in request types: {:?}",

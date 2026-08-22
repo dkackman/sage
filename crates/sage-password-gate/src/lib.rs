@@ -119,7 +119,10 @@ pub async fn resolve(
         let sage = state.lock().await;
         let fingerprint = sage
             .wallet()
-            .map_err(|err| Error { kind: err.kind(), reason: err.to_string() })?
+            .map_err(|err| Error {
+                kind: err.kind(),
+                reason: err.to_string(),
+            })?
             .fingerprint;
         let requires_password = sage
             .wallet_config
@@ -145,7 +148,10 @@ struct SageVerifier<'a> {
 impl PasswordVerifier for SageVerifier<'_> {
     async fn verify(&self, fingerprint: u32, password: &str) -> Result<bool> {
         let sage = self.state.lock().await;
-        match sage.keychain.extract_secrets(fingerprint, password.as_bytes()) {
+        match sage
+            .keychain
+            .extract_secrets(fingerprint, password.as_bytes())
+        {
             Ok(_) => Ok(true),
             Err(sage_keychain::KeychainError::Decrypt) => Ok(false),
             Err(err) => Err(Error {
@@ -191,9 +197,15 @@ mod tests {
         let (tx, _rx) = tokio::sync::oneshot::channel();
         gate.register("req-2".to_string(), tx).await;
 
-        gate.deliver("req-2", PasswordOutcome::Cancelled).await.unwrap();
+        gate.deliver("req-2", PasswordOutcome::Cancelled)
+            .await
+            .unwrap();
 
-        assert!(gate.deliver("req-2", PasswordOutcome::Cancelled).await.is_err());
+        assert!(
+            gate.deliver("req-2", PasswordOutcome::Cancelled)
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
@@ -207,7 +219,8 @@ mod tests {
         // Keep the sender alive for the whole wait so the failure is a
         // genuine timeout, not the channel being dropped.
         let waiting_gate = gate.clone();
-        let waiter = tokio::spawn(async move { waiting_gate.await_outcome("req-timeout", rx).await });
+        let waiter =
+            tokio::spawn(async move { waiting_gate.await_outcome("req-timeout", rx).await });
 
         tokio::time::advance(PROMPT_TIMEOUT + std::time::Duration::from_secs(1)).await;
 
