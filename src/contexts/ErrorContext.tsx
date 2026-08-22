@@ -33,13 +33,15 @@ export const ErrorContext = createContext<ErrorContextType | undefined>(
 // silently comes back.
 const PASSWORD_CANCELLED_REASON = 'Password entry cancelled';
 
-// Must match the reason returned at crates/sage-password-gate/src/resolve.rs:64
-// when the user exhausts MAX_ATTEMPTS incorrect password attempts.
+// Must match the reason returned by `resolve_with` in
+// crates/sage-password-gate/src/resolve.rs when the user exhausts
+// MAX_ATTEMPTS incorrect password attempts.
 const PASSWORD_TOO_MANY_ATTEMPTS_REASON =
   'Too many incorrect password attempts';
 
-// Must match the reason returned at crates/sage-password-gate/src/lib.rs:92
-// when the password prompt is not answered within PROMPT_TIMEOUT.
+// Must match the reason returned by `PasswordGateState::await_outcome` in
+// crates/sage-password-gate/src/lib.rs when the password prompt is not
+// answered within PROMPT_TIMEOUT.
 const PASSWORD_PROMPT_TIMED_OUT_REASON = 'Password prompt timed out';
 
 export function ErrorProvider({ children }: { children: ReactNode }) {
@@ -63,14 +65,19 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
     }
     if (error.kind === 'unauthorized') {
       const reason = error.reason ?? '';
-      if (
-        reason.includes('not found') ||
-        reason.includes('No secret') ||
-        reason === PASSWORD_TOO_MANY_ATTEMPTS_REASON ||
-        reason === PASSWORD_PROMPT_TIMED_OUT_REASON
-      ) {
-        // KeyNotFound / NoSecretKey (wallet-level issue, not a transition),
-        // or a genuine password-gate failure (too many attempts / timeout).
+      // The two password-gate failures are matched on the Rust reason string
+      // and then rendered as translated text, rather than echoing the raw
+      // English reason the way the wallet-level cases below do.
+      if (reason === PASSWORD_TOO_MANY_ATTEMPTS_REASON) {
+        toast.error(t`Too many incorrect password attempts`);
+        return;
+      }
+      if (reason === PASSWORD_PROMPT_TIMED_OUT_REASON) {
+        toast.error(t`Password prompt timed out`);
+        return;
+      }
+      if (reason.includes('not found') || reason.includes('No secret')) {
+        // KeyNotFound / NoSecretKey: a wallet-level issue, not a transition.
         toast.error(error.reason);
       }
       // NotLoggedIn / NoSigningKey during wallet transitions are silently ignored
