@@ -1164,7 +1164,6 @@ function RpcSettings() {
 
 function WalletSettings({ fingerprint }: { fingerprint: number }) {
   const { addError } = useErrors();
-  const { requestPassword } = usePassword();
   const { setWallet: setGlobalWallet } = useWallet();
 
   const walletState = useWalletState();
@@ -1364,16 +1363,12 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
   const handler = async (values: z.infer<typeof schema>) => {
     const needsPassword = key?.has_secrets && hardened;
     if (needsPassword) {
-      const password = await requestPassword(key?.has_password ?? false);
-      if (password === undefined) return;
-
       setPending(true);
       commands
         .increaseDerivationIndex({
           index: parseInt(values.index),
           hardened: true,
           unhardened,
-          password,
         })
         .then(() => {
           setDeriveOpen(false);
