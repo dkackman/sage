@@ -1,5 +1,5 @@
 import { t } from '@lingui/core/macro';
-import { Trans } from '@lingui/react/macro';
+import { Plural, Trans } from '@lingui/react/macro';
 import { KeyRoundIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '../ui/button';
@@ -63,9 +63,12 @@ export function PasswordDialog({
         </DialogHeader>
         {attemptsRemaining !== undefined && (
           <p className='text-sm text-destructive'>
-            <Trans>
-              Incorrect password. {attemptsRemaining} attempts remaining.
-            </Trans>
+            <Trans>Incorrect password.</Trans>{' '}
+            <Plural
+              value={attemptsRemaining}
+              one='# attempt remaining.'
+              other='# attempts remaining.'
+            />
           </p>
         )}
         <Input
