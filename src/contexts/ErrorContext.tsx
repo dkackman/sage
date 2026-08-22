@@ -27,10 +27,23 @@ export const ErrorContext = createContext<ErrorContextType | undefined>(
   undefined,
 );
 
+// Must match `CANCELLED_REASON` in crates/sage-password-gate/src/resolve.rs.
+// That constant is returned with ErrorKind::Unauthorized when the user
+// dismisses the password prompt; if the two strings drift, the cancel toast
+// silently comes back.
+const PASSWORD_CANCELLED_REASON = 'Password entry cancelled';
+
 export function ErrorProvider({ children }: { children: ReactNode }) {
   const [errors, setErrors] = useState<CustomError[]>([]);
 
   const addError = useCallback((error: CustomError) => {
+    if (
+      error.kind === 'unauthorized' &&
+      error.reason === PASSWORD_CANCELLED_REASON
+    ) {
+      // Deliberate user cancellation of the password prompt, not a failure.
+      return;
+    }
     if (error.kind === 'incorrect_password') {
       // Wrong password — AES decryption failed
       toast.error(t`Incorrect password`);
