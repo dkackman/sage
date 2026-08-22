@@ -1080,7 +1080,7 @@ function ColdWalletSettings() {
 
 function RpcSettings() {
   const { addError } = useErrors();
-  const { requestPassword } = usePassword();
+  const { requireLocalAuth } = usePassword();
 
   const [isRunning, setIsRunning] = useState(false);
   const [runOnStartup, setRunOnStartup] = useState(false);
@@ -1103,8 +1103,7 @@ function RpcSettings() {
   }, [addError]);
 
   const start = async () => {
-    const auth = await requestPassword(false);
-    if (auth === undefined) return;
+    if (!(await requireLocalAuth())) return;
 
     commands
       .startRpcServer()
@@ -1120,8 +1119,7 @@ function RpcSettings() {
   };
 
   const toggleRunOnStartup = async (checked: boolean) => {
-    const auth = await requestPassword(false);
-    if (auth === undefined) return;
+    if (!(await requireLocalAuth())) return;
 
     commands
       .setRpcRunOnStartup(checked)
@@ -1166,7 +1164,6 @@ function RpcSettings() {
 
 function WalletSettings({ fingerprint }: { fingerprint: number }) {
   const { addError } = useErrors();
-  const { requestPassword } = usePassword();
   const { setWallet: setGlobalWallet } = useWallet();
 
   const walletState = useWalletState();
@@ -1366,16 +1363,12 @@ function WalletSettings({ fingerprint }: { fingerprint: number }) {
   const handler = async (values: z.infer<typeof schema>) => {
     const needsPassword = key?.has_secrets && hardened;
     if (needsPassword) {
-      const password = await requestPassword(key?.has_password ?? false);
-      if (password === undefined) return;
-
       setPending(true);
       commands
         .increaseDerivationIndex({
           index: parseInt(values.index),
           hardened: true,
           unhardened,
-          password,
         })
         .then(() => {
           setDeriveOpen(false);

@@ -42,8 +42,12 @@ impl BridgeMethod for WalletGetSecretKey {
         tools: BridgeTools<'_>,
         request: &RustBridgeRequest,
     ) -> BridgeHandleResult {
-        let params: GetSecretKey = parse_required_params(self, request)?;
+        let mut params: GetSecretKey = parse_required_params(self, request)?;
         require_scoped_fingerprint(&ctx, Some(params.fingerprint))?;
+
+        // The gate in the main window is the only source of a password here;
+        // anything the app sent in its params is discarded.
+        params.password = tools.password.clone();
 
         let sage = tools.app_state.lock().await;
 

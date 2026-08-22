@@ -1,6 +1,4 @@
 import { commands, OfferAmount } from '@/bindings';
-import { useWallet } from '@/contexts/WalletContext';
-import { usePassword } from '@/hooks/usePassword';
 import { toMojos } from '@/lib/utils';
 import { OfferState, useWalletState } from '@/state';
 import { t } from '@lingui/core/macro';
@@ -28,8 +26,6 @@ export function useOfferProcessor({
   onProgress,
 }: UseOfferProcessorProps): UseOfferProcessorReturn {
   const walletState = useWalletState();
-  const { requestPassword } = usePassword();
-  const { wallet } = useWallet();
   const [createdOffers, setCreatedOffers] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const isCancelled = useRef(false);
@@ -60,11 +56,6 @@ export function useOfferProcessor({
         throw new Error(t`Expiration must be at least 1 second in the future`);
       }
       expiresAtSecond = Math.ceil(Date.now() / 1000) + totalSeconds;
-    }
-
-    const password = await requestPassword(wallet?.has_password ?? false);
-    if (password === undefined) {
-      throw new Error(t`Authentication was cancelled`);
     }
 
     const offeredTokens = offerState.offered.tokens.map((token) => ({
@@ -121,7 +112,6 @@ export function useOfferProcessor({
               walletState.sync.unit.precision,
             ),
             expires_at_second: expiresAtSecond,
-            password,
           });
           if (!isCancelled.current) {
             newOffers.push(data.offer);
@@ -165,7 +155,6 @@ export function useOfferProcessor({
             walletState.sync.unit.precision,
           ),
           expires_at_second: expiresAtSecond,
-          password,
         });
         if (!isCancelled.current) {
           setCreatedOffers([data.offer]);
@@ -185,8 +174,6 @@ export function useOfferProcessor({
     offerState,
     splitNftOffers,
     walletState.sync.unit.precision,
-    requestPassword,
-    wallet?.has_password,
     onProcessingEnd,
     onProgress,
   ]);

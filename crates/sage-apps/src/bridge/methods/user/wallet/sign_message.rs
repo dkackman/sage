@@ -72,11 +72,14 @@ impl BridgeMethod for WalletSignMessage {
         request: &RustBridgeRequest,
     ) -> BridgeHandleResult {
         let params: WalletSignMessageParams = parse_required_params(self, request)?;
+        let mut req: SignMessageWithPublicKey = params.into();
+        req.password = tools.password.clone();
+
         let response = tools
             .app_state
             .lock()
             .await
-            .sign_message_with_public_key(params.into())
+            .sign_message_with_public_key(req)
             .await
             .map_err(|err| {
                 BridgeMethodHandleError::internal_error(format!("{} failed: {err}", self.name()))

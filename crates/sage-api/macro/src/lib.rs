@@ -80,18 +80,46 @@ fn generate(input: &TokenStream, tauri: bool) -> TokenStream {
         endpoints.extend(tauri_endpoints);
     }
 
+    // How the host-layer password gate treats each endpoint. Endpoints absent
+    // from this map take no password at all. `sage-api`'s drift tests keep the
+    // manifest in sync with the request types and with how each endpoint's
+    // implementation consumes the password.
+    let gating: std::collections::BTreeMap<String, GateMode> =
+        serde_json::from_str(include_str!("../../password-gating.json"))
+            .expect("Invalid password gating file");
+
     let mut output = proc_macro2::TokenStream::new();
 
     for token in input.clone() {
-        convert(token, &endpoints, None, &mut output);
+        convert(token, &endpoints, &gating, None, &mut output);
     }
 
     output.into()
 }
 
+/// How the host-layer password gate treats an endpoint.
+#[derive(Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum GateMode {
+    /// Prompt on every call, verifying against the active wallet.
+    Always,
+    /// Prompt only when `req.auto_submit` is set. These endpoints build a
+    /// transaction for confirmation first and reach no secret until the caller
+    /// asks for it to be signed and submitted, so prompting unconditionally
+    /// would collect a password that is then discarded.
+    AutoSubmit,
+    /// Prompt on every call, verifying against `req.fingerprint`. These act on
+    /// a *named* wallet rather than the active one -- and may run with no
+    /// wallet active at all, from the logged-out wallet list.
+    Fingerprint,
+}
+
+type Gating<'a> = &'a std::collections::BTreeMap<String, GateMode>;
+
 fn convert(
     tree: TokenTree,
     endpoints: &IndexMap<String, bool>,
+    gating: Gating<'_>,
     endpoint: Option<&str>,
     output: &mut proc_macro2::TokenStream,
 ) {
@@ -114,6 +142,38 @@ fn convert(
             } else if ident == "maybe_await" {
                 if is_async {
                     output.extend(quote!(.await));
+                }
+            } else if ident == "maybe_unlock" {
+                match gating.get(endpoint) {
+                    Some(GateMode::Fingerprint) => {
+                        output.extend(quote!(
+                            req.password = sage_password_gate::resolve_for_fingerprint(&app_handle, state.inner(), gate.inner(), req.fingerprint).await?;
+                        ));
+                    }
+                    Some(GateMode::Always) => {
+                        output.extend(quote!(
+                            req.password = sage_password_gate::resolve(&app_handle, state.inner(), gate.inner()).await?;
+                        ));
+                    }
+                    Some(GateMode::AutoSubmit) => {
+                        // Without `auto_submit` the endpoint only builds the
+                        // transaction for the confirmation dialog and never
+                        // touches the key, so prompting here would ask twice.
+                        // The `else` keeps the host layer the sole source of
+                        // the password: every gated command overwrites whatever
+                        // the caller sent, on both branches.
+                        output.extend(quote!(if req.auto_submit {
+                            req.password = sage_password_gate::resolve(
+                                &app_handle,
+                                state.inner(),
+                                gate.inner(),
+                            )
+                            .await?;
+                        } else {
+                            req.password = None;
+                        }));
+                    }
+                    None => {}
                 }
             } else if ident.is_case(Case::Snake) {
                 let ident = proc_macro2::Ident::new(
@@ -152,14 +212,14 @@ fn convert(
             if repeat {
                 for endpoint in endpoints.keys() {
                     for tree in stream.clone() {
-                        convert(tree, endpoints, Some(endpoint), output);
+                        convert(tree, endpoints, gating, Some(endpoint), output);
                     }
                 }
             } else {
                 let mut inner = proc_macro2::TokenStream::new();
 
                 for tree in stream {
-                    convert(tree, endpoints, endpoint, &mut inner);
+                    convert(tree, endpoints, gating, endpoint, &mut inner);
                 }
 
                 output.extend(proc_macro2::TokenStream::from(TokenStream::from(

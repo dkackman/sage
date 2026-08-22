@@ -27,6 +27,7 @@ required-features = ["dev-tools"]
 sage = { workspace = true }
 sage-api = { workspace = true, features = ["tauri"] }
 sage-api-macro = { workspace = true }
+sage-password-gate = { workspace = true }
 sage-config = { workspace = true }
 sage-wallet = { workspace = true }
 sage-rpc = { workspace = true }

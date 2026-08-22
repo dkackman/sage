@@ -6521,6 +6521,7 @@ dependencies = [
  "sage-api-macro",
  "sage-config",
  "serde",
+ "serde_json",
  "specta",
  "tauri-specta",
  "utoipa",
@@ -6534,6 +6535,7 @@ dependencies = [
  "indexmap 2.12.1",
  "proc-macro2",
  "quote",
+ "serde",
  "serde_json",
  "syn 2.0.111",
 ]
@@ -6552,6 +6554,7 @@ dependencies = [
  "reqwest 0.12.24",
  "sage",
  "sage-api",
+ "sage-password-gate",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -6665,6 +6668,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sage-password-gate"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bip39",
+ "sage",
+ "sage-api",
+ "sage-keychain",
+ "serde",
+ "specta",
+ "tauri",
+ "tauri-specta",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "sage-rpc"
 version = "0.13.0"
 dependencies = [
@@ -6706,6 +6726,7 @@ dependencies = [
  "sage-api-macro",
  "sage-apps",
  "sage-config",
+ "sage-password-gate",
  "sage-rpc",
  "sage-wallet",
  "serde",
