@@ -127,6 +127,18 @@ pub(crate) async fn process_after_approval(
             "wallet_changed",
             "Active wallet changed since the approval was requested".to_string(),
         )
+    } else if !approval_requires_password(&pending) {
+        // Nothing here reaches a wallet secret, so there is nothing to unlock.
+        process_shared(
+            app_handle,
+            app_state,
+            &origin,
+            pending.registry_kind,
+            &pending.request,
+            true,
+            None,
+        )
+        .await?
     } else {
         // Hide the approval app before prompting: app runtimes are sibling
         // webviews inside the same window and would cover the main webview's
@@ -332,6 +344,25 @@ async fn active_wallet_fingerprint(app_state: &State<'_, AppState>) -> Option<u3
         .wallet()
         .map(|wallet| wallet.fingerprint)
         .ok()
+}
+
+/// Whether resuming this approval needs the master-key password.
+///
+/// Only bodies whose handler reaches a wallet secret are gated. Capability and
+/// network-whitelist grants touch no secret, so prompting for them would ask
+/// the user for nothing and would fail outright when no wallet is active.
+/// Listed exhaustively on purpose: a new approval body must opt into the
+/// prompt deliberately rather than inherit one from a catch-all arm.
+fn approval_requires_password(pending: &PendingBridgeApproval) -> bool {
+    match pending.approval.body {
+        RustBridgeApprovalBody::GetSecretKey { .. }
+        | RustBridgeApprovalBody::SendXch { .. }
+        | RustBridgeApprovalBody::SignCoinSpends { .. }
+        | RustBridgeApprovalBody::SignMessage { .. } => true,
+
+        RustBridgeApprovalBody::CapabilityGrant { .. }
+        | RustBridgeApprovalBody::NetworkWhitelistGrant { .. } => false,
+    }
 }
 
 async fn wallet_binding_violated(

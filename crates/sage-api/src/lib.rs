@@ -69,7 +69,7 @@ mod password_gate_drift {
     }
 
     /// Scans Rust source for `pub struct Name {` blocks containing a
-    /// `pub password: Option<String>` field, returning snake_case names.
+    /// `pub password: Option<String>` field, returning `snake_case` names.
     fn structs_with_password_field(source: &str) -> BTreeSet<String> {
         let mut found = BTreeSet::new();
         let lines: Vec<&str> = source.lines().collect();

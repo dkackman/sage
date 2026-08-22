@@ -86,7 +86,7 @@ impl PasswordGateState {
                 reason: "password request channel closed".to_string(),
             }),
             Err(_) => {
-                self.cancel(&request_id).await;
+                self.cancel(request_id).await;
                 Err(Error {
                     kind: ErrorKind::Unauthorized,
                     reason: "Password prompt timed out".to_string(),

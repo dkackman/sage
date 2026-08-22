@@ -15,7 +15,7 @@ pub const CANCELLED_REASON: &str = "Password entry cancelled";
 /// How long the resolve loop waits for a frontend reply before giving up.
 /// Generous enough that a human typing a password is never cut off, while
 /// still bounding the hang if the `main` webview is absent or unresponsive.
-pub const PROMPT_TIMEOUT: Duration = Duration::from_secs(300);
+pub const PROMPT_TIMEOUT: Duration = Duration::from_mins(5);
 
 fn unauthorized(reason: &str) -> Error {
     Error { kind: ErrorKind::Unauthorized, reason: reason.to_string() }
