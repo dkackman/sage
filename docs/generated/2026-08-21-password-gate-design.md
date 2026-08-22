@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-21
 **Branch:** `password-gate` (off `password`)
-**Status:** Approved design, ready for implementation planning
+**Status:** Implemented
 
 ## Problem
 
@@ -146,37 +146,37 @@ decrypt, not a partially built transaction.
 
 ### Gating the endpoints
 
-Every endpoint command is generated from a single `repeat` block (`src-tauri/src/commands.rs:67-75`)
+Every endpoint command is generated from a single `repeat` block (`src-tauri/src/commands.rs:68-83`)
 driven by `crates/sage-api/endpoints.json`. The gate therefore goes in exactly one place.
 
-Add a `maybe_unlock` token to `crates/sage-api/macro/src/lib.rs` alongside `maybe_async` and
-`maybe_await`, driven by a new gated-endpoint set. The repeat block becomes:
+A `maybe_unlock` token in `crates/sage-api/macro/src/lib.rs` sits alongside `maybe_async` and
+`maybe_await`, driven by the gating manifest above. The repeat block is:
 
 ```rust
+#[command]
+#[specta]
+#[allow(unused_variables, unused_mut)]
 pub async fn endpoint(
     app_handle: AppHandle,
     state: State<'_, AppState>,
     gate: State<'_, PasswordGateState>,
     mut req: Endpoint,
 ) -> Result<EndpointResponse> {
-    maybe_unlock;  // expands to: req.password = gate.resolve(&app_handle, &state).await?;
+    maybe_unlock
     Ok(state.lock().await.endpoint(req) maybe_await?)
 }
 ```
 
-`maybe_unlock` expands to nothing for ungated endpoints.
-
-Drift is prevented by `sage-api` tests asserting that the gated set is exactly the set of request
-types carrying a `password` field, and that the fingerprint-targeted subset is exactly the gated
-request types that also carry a `fingerprint` field. Adding a signing endpoint without gating it
-fails the build; adding a fingerprint to a gated request type without listing it fails the test.
+`maybe_unlock` expands to nothing for endpoints absent from the manifest, so the ~91 ungated
+commands are byte-identical to what they were before the gate existed. The `#[allow]` covers those
+expansions, where `app_handle`, `gate`, and `mut` all go unused.
 
 ### Bridge path (apps)
 
 The two dialogs are sequential. The user approves the request summary in the `bridge-approval` system
 app exactly as today; the password is then collected in the main webview.
 
-In `process_after_approval` (`crates/sage-apps/src/bridge/bridge_request.rs:83`), after `approved ==
+In `process_after_approval` (`crates/sage-apps/src/bridge/bridge_request.rs:86`), after `approved ==
 true` and the wallet-binding check passes, and before `process_shared`:
 
 1. If the target wallet is password-protected, hide the `bridge-approval` runtime via
@@ -194,9 +194,19 @@ Because approval and password are now two phases, the original `expires_at_ms` k
 the prompt. A lapse mid-prompt fails with `approval_timeout`. One clock, no new concept, and an app
 cannot hold a signing path open indefinitely.
 
+Only the four approval bodies that reach a wallet secret are gated — `GetSecretKey`, `SendXch`,
+`SignCoinSpends`, `SignMessage`. `approval_requires_password` matches on the body exhaustively, with
+no catch-all, so `CapabilityGrant` and `NetworkWhitelistGrant` prompt for nothing and a new body must
+opt in deliberately.
+
 The verified password is threaded into the handler through `BridgeTools`, so the conversions in
-`send_xch.rs`, `sign_message.rs`, and `sign_coin_spends.rs` set `Some(...)` instead of the hardcoded
-`None`.
+`send_xch.rs`, `sign_message.rs`, `sign_coin_spends.rs`, and `get_secret_key.rs` set `Some(...)`
+instead of the hardcoded `None`. `BridgeTools` carries a hand-written `Debug` that prints the field
+as `Some("<redacted>")`.
+
+The bridge does not go through the endpoint macro, so the gating manifest does not apply to it. Both
+`send_xch` and `sign_coin_spends` reach a secret on every bridge call — the former hardcodes
+`auto_submit: true`, the latter signs unconditionally — so the bridge gate is unconditional too.
 
 Separately, `WalletSendXch::approval_request` stops returning `Ok(None)` on a protected wallet even
 when `WalletSendXchAutoSubmit` is granted. A password-protected wallet always gets an approval; silent
@@ -215,7 +225,7 @@ All call sites then drop their password plumbing:
 - `src/walletconnect/` — `chip0002.ts`, `high-level.ts`, and `offers.ts` lose their prompts;
   `handler.ts` and `WalletConnectContext.tsx` drop `requestPassword` and `hasPassword` from the
   handler context entirely.
-- `Settings.tsx:1106` and `:1123` gate starting the RPC server and toggling run-on-startup. No wallet
+- Two sites in `Settings.tsx` gate starting the RPC server and toggling run-on-startup. No wallet
   secret is involved, so there is no Rust unlock operation to hang them off. They get a new,
   explicitly named `requireLocalAuth()` from the same provider: a UI-only biometric gate with no Rust
   round-trip.
@@ -236,8 +246,10 @@ All call sites then drop their password plumbing:
 **Rust**
 
 - Gate unit tests against a mock responder: correct password; wrong-then-right; three strikes;
-  cancellation; expiry mid-prompt.
-- The drift test asserting gated set == request types with a `password` field.
+  cancellation; prompt timeout.
+- The drift tests over `password-gating.json` described under **Gating manifest**: key set ==
+  request types with a `password` field, `fingerprint` mode == those with a `fingerprint` field,
+  `auto_submit` mode == endpoints that only forward the password to `transact`/`transact_with`.
 - A bridge test that a protected wallet forces an approval despite the `WalletSendXchAutoSubmit` grant.
 - Existing `sage-rpc` password tests must pass **unchanged** — the regression canary proving the core
   was not disturbed.
@@ -262,10 +274,13 @@ with biometrics on, and immediate `NoAuthNeeded` otherwise.
 - `src-tauri/src/lib.rs` — register state, command, and event
 - `src-tauri/src/error.rs` — `From<sage_password_gate::Error>`
 - `crates/sage-apps/Cargo.toml`, `src-tauri/Cargo.toml`, root `Cargo.toml` — new crate wiring
-- `crates/sage-api/macro/src/lib.rs` — `maybe_unlock`
-- `crates/sage-api/endpoints.json` (or a sibling gated-endpoint set)
+- `crates/sage-api/macro/src/lib.rs` — `maybe_unlock` and `GateMode`
+- `crates/sage-api/password-gating.json` — the gating manifest
+- `crates/sage-api/src/lib.rs` — the drift tests
 - `crates/sage-apps/src/bridge/bridge_request.rs` — gate call in `process_after_approval`
-- `crates/sage-apps/src/bridge/methods/user/wallet/{send_xch,sign_message,sign_coin_spends}.rs`
+- `crates/sage-apps/src/bridge/methods/user/wallet/{send_xch,sign_message,sign_coin_spends,get_secret_key}.rs`
+- `crates/sage-apps/src/bridge/methods/shared.rs` — `BridgeTools.password`
+- `src-tauri/permissions/main-host.toml` — `submit_password_response` in `commands.allow`
 
 **TypeScript**
 

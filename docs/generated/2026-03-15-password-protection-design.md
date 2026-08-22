@@ -2,17 +2,29 @@
 
 **Issue:** [xch-dev/sage#206](https://github.com/xch-dev/sage/issues/206)
 **Date:** 2026-03-15
-**Status:** Implemented
+**Status:** Implemented; the frontend half superseded by
+[2026-08-21-password-gate-design.md](2026-08-21-password-gate-design.md)
+
+> **What is still current:** the keychain and encryption model, the sentinel convention, the set of
+> protected operations, and password management in Settings.
+>
+> **What has moved:** who decides that authentication is needed, and who collects it. This document
+> describes a frontend that calls `requestPassword(hasPassword)` at ~16 call sites and threads the
+> result into each command. That is no longer how it works. Rust now decides and prompts, and no
+> caller supplies a password. The sections below marked _(superseded)_ are kept for the history of
+> why the backend looks the way it does; read the password-gate design for current behaviour.
 
 ## Overview
 
 Add opt-in password protection to Sage wallet, requiring authentication for three categories of sensitive operations: displaying secrets, signing transactions/offers, and generating hardened keys. Biometric unlock (Touch ID, Face ID) is available as a standalone gate for wallets without passwords. Biometric and password are mutually exclusive — password takes precedence.
 
+The prompt itself is now driven from Rust rather than from the call site; the decision tree below survives intact, but it runs inside `PasswordContext` as a _responder_ to a `PasswordRequest` event.
+
 ## Design Decisions
 
 - **Per-operation authentication** — every protected operation prompts for the password. No session caching.
 - **Opt-in** — existing wallets continue working without a password. Users can enable protection via "Set Password."
-- **Per-key passwords** — each key in the keychain has its own password (or no password). This follows from the existing data model where each `KeyData::Secret` has its own `Encrypted` struct with its own salt. The frontend should use the active wallet's fingerprint to determine which key's password to prompt for.
+- **Per-key passwords** — each key in the keychain has its own password (or no password). This follows from the existing data model where each `KeyData::Secret` has its own `Encrypted` struct with its own salt. Which key's password is being asked for is resolved in Rust: the gate uses the active wallet, except for endpoints carrying a `fingerprint`, which name their own wallet.
 - **Biometric is mutually exclusive with password** — biometric is a standalone gate for no-password wallets. If a wallet has a password, the password dialog is always shown regardless of biometric settings. The two never interact.
 
 ## Architecture
@@ -36,9 +48,21 @@ The empty byte string `b""` is the "no password" sentinel. This is what existing
 
 ### Has-Password Indicator
 
-Add a `has_password: bool` field to the `KeyInfo` struct returned by `get_key()` / `get_keys()`. Determined by attempting a trial decryption with `b""` at key load time and caching the result, or by adding a `password_protected: bool` field to `KeyData::Secret`.
+`KeyInfo` carries `has_password: bool`, returned by `get_key()` / `get_keys()`.
 
-Preferred approach: add `password_hint: Option<String>` or a simple `password_protected: bool` to `KeyData::Secret`. This avoids trial decryption and is serialized into `keys.bin`. Set to `true` when a non-empty password is used at encryption time. Exposed via `KeyInfo` to the frontend.
+**As implemented**, the flag is read from `Wallet::password_protected` in the wallet config
+(`crates/sage/src/endpoints/keys.rs:357` and `:419`) — a cheap field lookup, not a trial decrypt.
+`keys.bin` is untouched; `KeyData::Secret` has no such field. An early draft proposed storing it in
+`KeyData::Secret`, which would have changed the `keys.bin` serialization format and required a
+versioned deserialization fallback. That draft was not built.
+
+Because a config file and a `keys.bin` can drift apart, two things reconcile the flag against
+reality, both by trial-decrypting with `b""` via `Keychain::is_password_protected`:
+
+- `Sage::switch_wallet` self-heals on login.
+- The `reconcile_key_protection` endpoint self-heals on demand. The frontend calls it from
+  `ErrorContext` when a decrypt fails on a wallet whose flag says "no password" — that mismatch is
+  the drift signal — so the next attempt prompts correctly.
 
 ### Biometric Gate (Mobile)
 
@@ -54,13 +78,15 @@ Biometric is a frontend-only concern, mutually exclusive with password. It serve
 
 ## Protected Operations
 
-There are 7 code points where `b""` is passed to `extract_secrets` or `add_mnemonic`/`add_secret_key`, plus 2 encrypt-at-creation sites. However, because `sign()` is called through `transact()` and `transact_with()`, the password must flow through a much larger API surface.
+There are 8 `extract_secrets` call sites, plus 2 encrypt-at-creation sites that still use the `b""`
+sentinel. Because `sign()` is reached through `transact()` and `transact_with()`, the password flows
+through a much larger API surface than that count suggests.
 
 ### 1. Display mnemonic/secret key (1 site)
 
 | Call site                               | Function           |
 | --------------------------------------- | ------------------ |
-| `crates/sage/src/endpoints/keys.rs:353` | `get_secret_key()` |
+| `crates/sage/src/endpoints/keys.rs:367` | `get_secret_key()` |
 
 ### 2. Sign transactions and offers
 
@@ -74,11 +100,12 @@ endpoint method → transact() / transact_with() → sign() → extract_secrets(
 
 | Call site                                         | Function                                                        |
 | ------------------------------------------------- | --------------------------------------------------------------- |
-| `crates/sage/src/utils/spends.rs:15`              | `sign()` — called by `transact_with()` and `sign_coin_spends()` |
-| `crates/sage/src/endpoints/offers.rs:170`         | `make_offer()` — calls `extract_secrets` directly               |
-| `crates/sage/src/endpoints/offers.rs:208`         | `take_offer()` — calls `extract_secrets` directly               |
-| `crates/sage/src/endpoints/wallet_connect.rs:181` | `sign_message_with_public_key()`                                |
-| `crates/sage/src/endpoints/wallet_connect.rs:220` | `sign_message_by_address()`                                     |
+| `crates/sage/src/utils/spends.rs:17`              | `sign()` — called by `transact_with()` and `sign_coin_spends()` |
+| `crates/sage/src/endpoints/offers.rs:172`         | `make_offer()` — calls `extract_secrets` directly               |
+| `crates/sage/src/endpoints/offers.rs:212`         | `take_offer()` — calls `extract_secrets` directly               |
+| `crates/sage/src/endpoints/wallet_connect.rs:186` | `sign_message_with_public_key()`                                |
+| `crates/sage/src/endpoints/wallet_connect.rs:227` | `sign_message_by_address()`                                     |
+| `crates/sage/src/endpoints/keys.rs:279`           | `delete_key()` — verifies before an irreversible delete         |
 
 **Transaction endpoints that flow through `transact()` → `sign()`** (21 endpoints):
 
@@ -88,24 +115,35 @@ Plus `cancel_offer`, `cancel_offers`, and `create_transaction` (action system) w
 
 ### 3. Delete wallet key
 
-Password-protected wallets require password verification before deletion. Since the Rust `delete_key()` endpoint does not accept a password, verification is performed on the frontend by calling `get_secret_key()` first — if decryption fails, the delete is blocked.
+Password-protected wallets require password verification before deletion. This is enforced in Rust:
+`delete_key()` takes a `password` and calls `extract_secrets` itself when
+`keychain.is_password_protected(req.fingerprint)`
+(`crates/sage/src/endpoints/keys.rs:277`). Deletion is irreversible, so it does not trust a caller to
+have checked.
 
-| Call site           | Function                                                        |
-| ------------------- | --------------------------------------------------------------- |
-| `WalletCard.tsx:81` | `deleteSelf()` — verifies via `getSecretKey` before `deleteKey` |
+An earlier draft verified on the frontend by calling `get_secret_key()` first and blocking the delete
+if decryption failed. `WalletCard.deleteSelf()` now simply calls `deleteKey`.
+
+| Call site        | Function                                            |
+| ---------------- | --------------------------------------------------- |
+| `WalletCard.tsx` | `deleteSelf()` — calls `deleteKey` and nothing else |
 
 ### 4. Generate hardened keys (1 site)
 
 | Call site                                  | Function                      |
 | ------------------------------------------ | ----------------------------- |
-| `crates/sage/src/endpoints/actions.rs:201` | `increase_derivation_index()` |
+| `crates/sage/src/endpoints/actions.rs:204` | `increase_derivation_index()` |
 
-### 4. Key import — encrypt at creation (2 sites)
+### 5. Key import — encrypt at creation (2 sites)
 
 | Call site                               | Function                         |
 | --------------------------------------- | -------------------------------- |
-| `crates/sage/src/endpoints/keys.rs:141` | `import_key()` — secret key path |
-| `crates/sage/src/endpoints/keys.rs:178` | `import_key()` — mnemonic path   |
+| `crates/sage/src/endpoints/keys.rs:143` | `import_key()` — secret key path |
+| `crates/sage/src/endpoints/keys.rs:180` | `import_key()` — mnemonic path   |
+
+**Import takes no password.** Both sites pass the `b""` sentinel, and `ImportKey` has no `password`
+field at all — an early draft added one, but the shipped design sets a password afterwards through
+Settings instead. This is why `import_key` is absent from the gating manifest.
 
 Note: `import_key()` also generates hardened derivations using the in-memory master key during import. This does NOT need the password since the key is already decrypted at that point.
 
@@ -140,7 +178,6 @@ Add `password: Option<String>` to **all request structs that trigger signing, se
 
 **Direct secret access:**
 
-- `ImportKey`
 - `GetSecretKey`
 - `DeleteKey` — deletion is irreversible, so `delete_key` verifies the password itself rather than trusting the frontend to have checked
 
@@ -160,12 +197,19 @@ Add `password: Option<String>` to **all request structs that trigger signing, se
 
 - `SignMessageWithPublicKey`, `SignMessageByAddress`
 
-**New request/response pair:**
+**New request/response pairs:**
 
 - `ChangePassword { fingerprint: u32, old_password: String, new_password: String }`
 - `ChangePasswordResponse {}`
+- `ReconcileKeyProtection { fingerprint: u32 }`
+- `ReconcileKeyProtectionResponse { has_password: bool }`
 
 **`KeyInfo`** — add `has_password: bool` field.
+
+Every request type carrying `password: Option<String>` is now also an entry in
+`crates/sage-api/password-gating.json`, and a drift test fails the build if the two sets diverge. The
+field stays because `sage-rpc` clients supply it over mTLS; the Tauri host layer overwrites it with a
+password it resolved itself.
 
 ### `sage` crate (endpoints)
 
@@ -173,7 +217,7 @@ Add `password: Option<String>` to **all request structs that trigger signing, se
 
 **`transactions.rs`**: `transact()` and `transact_with()` take `password: &[u8]` parameter, pass to `sign()`. Every transaction endpoint extracts password from its request struct via `req.password.unwrap_or_default().into_bytes()` and passes to `transact()`.
 
-**`keys.rs`**: `import_key()` passes password to `add_mnemonic()`/`add_secret_key()`. `get_secret_key()` passes password to `extract_secrets()`. `get_key()`/`get_keys()` populate `has_password` from `KeyData`.
+**`keys.rs`**: `get_secret_key()` and `delete_key()` pass password to `extract_secrets()`. `get_key()`/`get_keys()` populate `has_password` from the wallet config. `import_key()` is unchanged — it still encrypts with `b""`.
 
 **`offers.rs`**: `make_offer()`, `take_offer()` pass password to `extract_secrets()`. `cancel_offer()`, `cancel_offers()` pass password to `transact()`.
 
@@ -185,21 +229,16 @@ New `change_password()` endpoint.
 
 ### Frontend (TypeScript/React)
 
-#### PasswordContext (`src/contexts/PasswordContext.tsx`)
+#### PasswordContext (`src/contexts/PasswordContext.tsx`) — _(superseded)_
 
-A React context provider that serves as the **single entry point for all operation authentication** — password or biometric (never both). Provides:
+**As originally built**, this provider was the single entry point callers invoked:
 
 ```typescript
-requestPassword(hasPassword: boolean, fingerprint?: number): Promise<string | null | undefined>
+requestPassword(hasPassword: boolean, fingerprint?: number): Promise<string | null | undefined>;
 ```
 
-**Return values:**
-
-- `string` → use this password (typed by user via dialog)
-- `null` → no password needed, all auth passed (biometric gate passed or no auth required)
-- `undefined` → auth cancelled or failed, abort the operation
-
-**Internal decision tree (mutually exclusive):**
+`string` meant "use this password", `null` meant "no auth needed", `undefined` meant "cancelled —
+abort". Its decision tree was:
 
 ```text
 hasPassword=true                          → show password dialog (password always takes precedence)
@@ -208,53 +247,63 @@ hasPassword=false, biometric not enabled  → return null (no auth needed)
 cancelled at any point                    → return undefined
 ```
 
-On desktop (no biometric available), the biometric path is skipped — behaves as if biometric is not enabled.
+**As it works now**, the provider is a responder, not a callable. It subscribes to the Rust
+`PasswordRequest` event, runs that same three-way decision tree unchanged, and replies with
+`submit_password_response(request_id, Password | NoAuthNeeded | Cancelled)`. Requests are queued by
+`requestId`, so overlapping prompts cannot interleave. `requestPassword` is gone; the only export is
+`requireLocalAuth()`, a UI-only biometric gate for the two `Settings.tsx` actions that touch no wallet
+secret (starting the RPC server, toggling run-on-startup) and therefore have no Rust operation to hang
+a prompt off.
 
-Uses a `useRef`-based pending promise pattern to bridge the dialog UI with the async call site.
+The mutual-exclusivity rule, the 5-minute biometric cache, and the desktop fallback are all preserved
+bit-for-bit. What changed is the direction of the call. See
+[2026-08-21-password-gate-design.md](2026-08-21-password-gate-design.md).
 
-**Provider placement:** Inside `I18nProvider` and `WalletProvider`. Wraps `WalletConnectProvider` and all downstream providers, so `usePassword()` is available everywhere.
+**Provider placement:** Inside `I18nProvider` and `WalletProvider`. Wraps `WalletConnectProvider` and
+all downstream providers.
 
-Provider tree: `BiometricProvider` → `I18nProvider` → `WalletProvider` → `PasswordProvider` → `PeerProvider` → `WalletConnectProvider` → `PriceProvider` → `RouterProvider`
+Provider tree: `BiometricProvider` → `I18nProvider` → `WalletProvider` → `PasswordProvider` →
+`PeerProvider` → `WalletConnectProvider` → `PriceProvider` → `RouterProvider`
 
 #### PasswordDialog (`src/components/dialogs/PasswordDialog.tsx`)
 
-A reusable modal dialog rendered by `PasswordProvider`. Features:
+A reusable modal dialog rendered by `PasswordProvider`. Unchanged by the password gate. Features:
 
 - Auto-focuses the password input on open
 - Clears password state on open/close
 - Supports Enter key to submit
-- Cancel closes the dialog and resolves the promise with `undefined` (auth cancelled)
+- Cancel resolves the prompt as cancelled
+
+Retries are driven from Rust: a wrong password re-emits the same `requestId` with an incremented
+`attempt` and the remaining-attempt count, up to three attempts.
 
 #### usePassword hook (`src/hooks/usePassword.ts`)
 
 Thin wrapper around `PasswordContext` with a guard that throws if used outside `PasswordProvider`.
+`Settings.tsx` is its only consumer.
 
-#### Call site pattern
+#### Call site pattern — _(superseded)_
 
-Every protected operation follows the same unified pattern — a single call that handles password or biometric:
+Every protected operation used to open with:
 
 ```typescript
 const password = await requestPassword(wallet?.has_password ?? false);
 if (password === undefined) return; // auth cancelled or failed
 ```
 
-The separate `promptIfEnabled()` biometric call is removed from all call sites. `requestPassword` is now the sole auth gate. Password is then passed to the backend command. Call sites that were updated:
+**No call site does this any more.** `requestPassword` has no remaining references in `src/`. Call
+sites simply invoke the command; if authentication is needed, Rust prompts before executing and
+returns `Unauthorized` if it is refused. The files that carried the old plumbing —
+`ConfirmationDialog.tsx`, `WalletCard.tsx`, `Settings.tsx` (`increaseDerivationIndex`), `Offers.tsx`,
+`OfferRowCard.tsx`, `useOfferProcessor.ts`, `Offer.tsx`, and the WalletConnect command layer — were
+all stripped.
 
-| File                       | Operations                                                                                                                 |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `ConfirmationDialog.tsx`   | `signCoinSpends` (Sign Transaction button, Submit button)                                                                  |
-| `WalletCard.tsx`           | `getSecretKey` (View Details dialog), `deleteKey` (password verified via `getSecretKey` before deletion)                   |
-| `Settings.tsx`             | `increaseDerivationIndex` (when hardened keys enabled)                                                                     |
-| `Offers.tsx`               | `cancelOffers` (Cancel All Active)                                                                                         |
-| `OfferRowCard.tsx`         | `cancelOffer` (individual offer cancel)                                                                                    |
-| `useOfferProcessor.ts`     | `makeOffer` (create offer flow)                                                                                            |
-| `Offer.tsx`                | `takeOffer` (take offer flow)                                                                                              |
-| `WalletConnectContext.tsx` | All WC command handling via `HandlerContext`                                                                               |
-| WalletConnect commands     | `signCoinSpends`, `signMessage`, `signMessageByAddress`, `send`, `createOffer`, `takeOffer`, `cancelOffer`, `bulkMintNfts` |
+#### WalletConnect integration — _(superseded)_
 
-#### WalletConnect integration
-
-The `HandlerContext` interface was extended with `requestPassword` and `hasPassword`. WalletConnect command handlers prompt for the password before executing protected operations, using the same pattern as direct UI call sites.
+`HandlerContext` was extended with `requestPassword` and `hasPassword`, and each handler prompted
+before executing. Both fields have since been removed from the handler context, and
+`src/walletconnect/commands/{chip0002,high-level,offers}.ts` no longer prompt. Because these
+handlers set `auto_submit: true`, the gate fires inside the Rust command.
 
 #### Password management in Settings
 
@@ -268,7 +317,19 @@ All three operations call `commands.changePassword()` with appropriate `old_pass
 
 #### Error feedback
 
-Wrong password errors (`ErrorKind::Unauthorized` with reason containing "decrypt") are surfaced as a toast notification "Incorrect password" via the global `ErrorContext.addError` handler. This provides consistent feedback across all password-protected operations without requiring per-call-site error handling. Other unauthorized errors (e.g., wallet transition race conditions) continue to be silently discarded.
+All password feedback is centralized in `ErrorContext.addError`, so no call site handles it:
+
+| Error                                                   | Result                                                                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `incorrect_password`                                    | "Incorrect password" toast, then a `reconcileKeyProtection` probe if the flag says the wallet is unprotected |
+| `unauthorized` / "Password entry cancelled"             | Silent — a deliberate cancellation is not a failure                                                          |
+| `unauthorized` / "Too many incorrect password attempts" | Translated toast                                                                                             |
+| `unauthorized` / "Password prompt timed out"            | Translated toast                                                                                             |
+| `unauthorized` containing "not found" / "No secret"     | Toast with the raw reason                                                                                    |
+| other `unauthorized`                                    | Silent — `NotLoggedIn` / `NoSigningKey` during wallet transitions                                            |
+
+The three gate reasons are matched on the exact Rust reason string and re-rendered as translated
+text; the constants are duplicated in `ErrorContext.tsx` with comments naming their Rust source.
 
 #### Settings UI changes
 
@@ -279,7 +340,7 @@ The biometric toggle remains in the **Preferences** section of Global Settings (
 - **No password at import time** — users set a password later via Settings. Simpler UX, same security outcome.
 - **No session caching** — every protected operation prompts independently. Passwords are never stored on device.
 - **Single dialog instance** — `PasswordProvider` renders one `PasswordDialog` at the provider level, avoiding duplicate dialog instances across components.
-- **Unified auth entry point** — `requestPassword` subsumes the standalone `promptIfEnabled()` biometric check. Call sites make one auth call instead of two. The `BiometricContext` continues to exist for state management (`enabled`, `available`) but `promptIfEnabled()` is no longer called directly at operation sites.
+- **Unified auth entry point** — a single decision tree handles password and biometric, subsuming the standalone `promptIfEnabled()` check. `BiometricContext` continues to exist for state management (`enabled`, `available`) and to run the prompt, but nothing calls `promptIfEnabled()` at an operation site. Since the password gate, the entry point is a Rust event rather than a function call.
 - **Mutual exclusivity** — biometric and password are mutually exclusive. Password takes precedence. If a wallet has a password, the password dialog is always shown regardless of biometric settings. Biometric is a standalone gate for no-password wallets only.
 - **Global biometric setting** — one toggle applies to all wallets. No per-wallet biometric configuration needed.
 
@@ -295,7 +356,11 @@ The biometric toggle remains in the **Preferences** section of Global Settings (
 
 Existing keys encrypted with `b""` continue to work — the user simply never gets prompted. To add protection, the user triggers "Set Password" which calls `change_password(fingerprint, b"", new_password)`.
 
-The `keys.bin` format change (adding `password_protected` to `KeyData::Secret`) requires a deserialization fallback: try new format first, fall back to old format with `password_protected: false`. On next save, the file is written in the new format.
+**No `keys.bin` migration is needed.** The has-password flag lives in the wallet config, which
+defaults `password_protected` to `false`, so existing `config.toml` files deserialize unchanged and
+existing `keys.bin` files are read by the same code as before. (An earlier draft put the flag in
+`KeyData::Secret` and would have needed a versioned deserialization fallback; see
+**Has-Password Indicator**.)
 
 ## What's NOT Changing
 
@@ -303,5 +368,6 @@ The `keys.bin` format change (adding `password_protected` to `KeyData::Secret`) 
 - `keys.bin` encryption scheme — same Argon2 + AES-256-GCM, just with real passwords instead of `b""`
 - Any sync, peer, or database logic
 - `SendTransactionImmediately`, `SubmitTransaction`, `ViewCoinSpends` — these operate on pre-signed spend bundles or read-only data and do not call `extract_secrets()` or `sign()`
-- Backend — no backend changes for the biometric gate. It's entirely frontend.
+- Backend — no backend changes for the biometric gate. Rust never learns whether biometrics are enabled; it emits a prompt request and the frontend decides how to satisfy it.
+- `keys.bin` format — `KeyData::Secret` is unchanged.
 - Biometric — remains as a standalone gate for no-password wallets. `BiometricContext` provides `enabled`/`available` state; `PasswordContext` handles the actual biometric prompt internally.
