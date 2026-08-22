@@ -69,7 +69,14 @@ impl_endpoints_tauri! {
     (repeat
         #[command]
         #[specta]
-        pub async fn endpoint(state: State<'_, AppState>, req: Endpoint) -> Result<EndpointResponse> {
+        #[allow(unused_variables, unused_mut)]
+        pub async fn endpoint(
+            app_handle: AppHandle,
+            state: State<'_, AppState>,
+            gate: State<'_, PasswordGateState>,
+            mut req: Endpoint,
+        ) -> Result<EndpointResponse> {
+            maybe_unlock
             Ok(state.lock().await.endpoint(req) maybe_await?)
         }
     )
