@@ -350,7 +350,7 @@ async fn test_change_password() -> Result<()> {
     // Set password
     app.change_password(ChangePassword {
         fingerprint,
-        old_password: "".to_string(),
+        old_password: String::new(),
         new_password: "secret".to_string(),
     })
     .await?;
