@@ -392,7 +392,7 @@ async fn show_runtime_inner(
     Ok(())
 }
 
-fn hide_runtime_inner(
+pub(crate) fn hide_runtime_inner(
     app_handle: &AppHandle,
     runtime: &SharedRuntime,
     changes: &mut RuntimeChangeSet,

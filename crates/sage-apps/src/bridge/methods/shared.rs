@@ -53,6 +53,9 @@ pub(crate) struct BridgeTools<'a> {
     pub app_handle: &'a tauri::AppHandle,
     pub app_state: &'a tauri::State<'a, AppState>,
     pub host_state: &'a tauri::State<'a, AppsHostState>,
+    /// Password resolved by the main-window gate, for methods that sign.
+    /// `None` when the wallet is unprotected or the method does not sign.
+    pub password: Option<String>,
 }
 
 #[derive(Debug, Clone)]

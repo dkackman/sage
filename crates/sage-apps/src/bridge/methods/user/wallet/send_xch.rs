@@ -81,7 +81,8 @@ impl BridgeMethod for WalletSendXch {
         request: &RustBridgeRequest,
     ) -> BridgeHandleResult {
         let params: WalletSendXchParams = parse_required_params(self, request)?;
-        let req: SendXch = params.into();
+        let mut req: SendXch = params.into();
+        req.password = tools.password.clone();
 
         let result = tools
             .app_state

@@ -5,12 +5,14 @@ use crate::{
     BridgeMethod, BridgeMethodCapability, BridgeOrigin, BridgeRegistry, BridgeRegistryKind,
     BridgeTools, PendingBridgeApproval, ResolveBridgeApprovalArgs, RustBridgeApprovalBody,
     RustBridgeApprovalRequest, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse,
-    SharedSageApp, SystemBridgeCapability, UserBridgeCapability, assert_bridge_origin,
-    emit_bridge_response_to_app, emit_system_runtime_event_to_listeners,
-    ensure_app_is_enabled_for_scope, ensure_approval_expiry_loop, get_system_capability_definition,
-    get_user_capability_definition, list_pending_approvals, resolve_app,
-    start_bridge_approval_runtime, sync_bridge_approval_runtime, take_pending_approval,
-    unix_timestamp_ms, write_pending_approval,
+    RuntimeChangeSet, SYSTEM_APP_BRIDGE_APPROVAL_ID, SharedSageApp, SystemBridgeCapability,
+    UserBridgeCapability, assert_bridge_origin, emit_bridge_response_to_app,
+    emit_system_runtime_event_to_listeners, ensure_app_is_enabled_for_scope,
+    ensure_approval_expiry_loop, find_runtime_by_app_id_optional,
+    get_system_capability_definition, get_user_capability_definition, hide_runtime_inner,
+    list_pending_approvals, resolve_app, start_bridge_approval_runtime,
+    sync_bridge_approval_runtime, take_pending_approval, unix_timestamp_ms,
+    write_pending_approval,
 };
 
 pub(crate) async fn process(
@@ -43,6 +45,7 @@ pub(crate) async fn process(
         BridgeRegistryKind::User,
         &request,
         false,
+        None,
     )
     .await
 }
@@ -76,6 +79,7 @@ pub(crate) async fn process_system(
         BridgeRegistryKind::System,
         &request,
         false,
+        None,
     )
     .await
 }
@@ -124,15 +128,35 @@ pub(crate) async fn process_after_approval(
             "Active wallet changed since the approval was requested".to_string(),
         )
     } else {
-        process_shared(
-            app_handle,
-            app_state,
-            &origin,
-            pending.registry_kind,
-            &pending.request,
-            true,
-        )
-        .await?
+        // Hide the approval app before prompting: app runtimes are sibling
+        // webviews inside the same window and would cover the main webview's
+        // password dialog.
+        hide_bridge_approval_runtime(app_handle, apps_state).await;
+
+        match password_gate_resolve(app_handle, app_state).await {
+            // The expiry check above ran before the prompt, and the prompt can
+            // outlive the deadline, so the approval window is re-checked here.
+            Ok(_) if unix_timestamp_ms() as u64 > pending.expires_at_ms => {
+                RustBridgeInvokeResult::error(
+                    &pending.request.id,
+                    "approval_timeout",
+                    "Approval expired during password entry".to_string(),
+                )
+            }
+            Ok(password) => {
+                process_shared(
+                    app_handle,
+                    app_state,
+                    &origin,
+                    pending.registry_kind,
+                    &pending.request,
+                    true,
+                    password,
+                )
+                .await?
+            }
+            Err(err) => RustBridgeInvokeResult::error(&pending.request.id, "unauthorized", err),
+        }
     };
 
     emit_bridge_response_to_app(app_handle, &origin.app, &invoke_result.try_into()?).await?;
@@ -146,6 +170,7 @@ async fn process_shared(
     registry_kind: BridgeRegistryKind,
     request: &RustBridgeRequest,
     approved: bool,
+    password: Option<String>,
 ) -> Result<RustBridgeInvokeResult, String> {
     let registry = BridgeRegistry::new(registry_kind);
 
@@ -175,7 +200,8 @@ async fn process_shared(
 
     if approved {
         let response =
-            execute_bridge_request(app_handle, app_state, origin, registry, request).await;
+            execute_bridge_request(app_handle, app_state, origin, registry, request, password)
+                .await;
 
         return Ok(response.into());
     }
@@ -187,6 +213,7 @@ async fn process_shared(
                 app_handle,
                 app_state,
                 host_state: &app_handle.state::<AppsHostState>(),
+                password: None,
             },
             request,
         )
@@ -206,7 +233,8 @@ async fn process_shared(
         }
         Ok(None) => {
             let response =
-                execute_bridge_request(app_handle, app_state, origin, registry, request).await;
+                execute_bridge_request(app_handle, app_state, origin, registry, request, password)
+                    .await;
 
             Ok(response.into())
         }
@@ -224,6 +252,7 @@ async fn execute_bridge_request(
     origin: &BridgeOrigin,
     registry: BridgeRegistry,
     request: &RustBridgeRequest,
+    password: Option<String>,
 ) -> RustBridgeResponse {
     let method = match assert_method(&registry, request) {
         Ok(method) => method,
@@ -237,6 +266,7 @@ async fn execute_bridge_request(
                 app_handle,
                 app_state,
                 host_state: &app_handle.state::<AppsHostState>(),
+                password,
             },
             request,
         )
@@ -253,6 +283,46 @@ async fn execute_bridge_request(
         },
         Err(err) => RustBridgeResponse::error(&request.id, err.code, err.message),
     }
+}
+
+/// Hides the `bridge-approval` runtime so it cannot cover the `main` webview's
+/// password dialog. Best effort: a covered dialog is a UX problem, not a
+/// security one, so every failure is logged and the request continues.
+async fn hide_bridge_approval_runtime(
+    app_handle: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+) {
+    let Some(runtime) =
+        find_runtime_by_app_id_optional(apps_state, SYSTEM_APP_BRIDGE_APPROVAL_ID).await
+    else {
+        return;
+    };
+
+    let mut changes = RuntimeChangeSet::default();
+
+    if let Err(err) = hide_runtime_inner(app_handle, &runtime, &mut changes) {
+        tracing::warn!(
+            error = %err,
+            "failed to hide the bridge approval runtime before the password prompt"
+        );
+        return;
+    }
+
+    changes.emit(app_handle, apps_state).await;
+}
+
+/// Resolves the master-key password in the trusted `main` webview. The value
+/// never crosses into an app runtime: it is handed straight to the wallet
+/// method through `BridgeTools`.
+async fn password_gate_resolve(
+    app_handle: &AppHandle,
+    app_state: &State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let gate = app_handle.state::<sage_password_gate::PasswordGateState>();
+
+    sage_password_gate::resolve(app_handle, app_state.inner(), &gate)
+        .await
+        .map_err(|err| err.reason)
 }
 
 async fn active_wallet_fingerprint(app_state: &State<'_, AppState>) -> Option<u32> {
