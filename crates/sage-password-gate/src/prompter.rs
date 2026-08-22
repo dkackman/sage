@@ -32,9 +32,16 @@ use super::Error;
 use crate::PasswordGateState;
 use sage_api::ErrorKind;
 
-/// The Sage React webview. App runtimes are sibling webviews in the same
-/// window, so emission MUST target this label — a plain `emit` would deliver
-/// the request to app-land.
+/// The Sage React webview, and the label every password request is emitted to.
+///
+/// Targeting this label is where the request is *meant* to land, not a
+/// guarantee of where it can land. Tauri resolves an `AnyLabel` target through
+/// `match_any_or_filter`, which short-circuits to true for any listener
+/// registered with `EventTarget::Any`, and `src-tauri/capabilities/apps.json`
+/// grants app webviews `core:event:allow-listen`. An app runtime that listens
+/// for `password-request` will therefore see it. `PasswordRequest` is kept free
+/// of anything sensitive for exactly that reason; the password travels back on
+/// `submit_password_response`, a command app webviews are not granted.
 pub const SAGE_WEBVIEW_LABEL: &str = "main";
 
 pub struct TauriPrompter<'a> {

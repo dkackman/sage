@@ -2264,9 +2264,19 @@ export type PasswordOutcome =
  */
 { kind: "cancelled" }
 /**
- * Emitted to the `main` webview only. Never broadcast.
+ * The password prompt as it crosses to JavaScript.
+ * 
+ * Emission targets the `main` webview (see `prompter::SAGE_WEBVIEW_LABEL`),
+ * but that is **not** an isolation guarantee: Tauri's event filter
+ * short-circuits for listeners registered with `EventTarget::Any`, and
+ * `src-tauri/capabilities/apps.json` grants app webviews
+ * `core:event:allow-listen`. Any app runtime can therefore observe this
+ * payload. It deliberately carries nothing sensitive -- no fingerprint, no
+ * wallet identity, and of course no password. The password itself only ever
+ * travels the other way, through the `submit_password_response` command,
+ * which is not granted to app webviews.
  */
-export type PasswordRequest = { requestId: string; fingerprint: number; 
+export type PasswordRequest = { requestId: string; 
 /**
  * Advisory: the wallet's stored `password_protected` flag. The frontend
  * still decides between password dialog, biometric gate, and no auth,
@@ -2276,7 +2286,14 @@ requiresPassword: boolean;
 /**
  * 1-based. Increments on each incorrect-password re-prompt.
  */
-attempt: number; error: PasswordAttemptError | null }
+attempt: number; 
+/**
+ * Retained despite being observable by app webviews: the dialog needs it
+ * to show "N attempts remaining", and a bare retry counter identifies no
+ * wallet and reveals nothing an observer could not already infer from the
+ * re-prompts themselves.
+ */
+error: PasswordAttemptError | null }
 export type PeerRecord = { ip_addr: string; port: number; peak_height: number; user_managed: boolean }
 export type PendingTransactionRecord = { transaction_id: string; fee: Amount; submitted_at: number | null; spent: TransactionCoinRecord[]; created: TransactionCoinRecord[] }
 /**
