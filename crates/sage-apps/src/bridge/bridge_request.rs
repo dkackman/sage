@@ -139,18 +139,37 @@ pub(crate) async fn process_after_approval(
         )
         .await?
     } else {
+        // The gate targets the wallet the approval actually acts on, which for
+        // `GetSecretKey` is the fingerprint in the approval body rather than
+        // the active wallet.
+        let target_fingerprint = approval_password_fingerprint(&pending);
+
+        // Only a password-protected wallet can produce a password dialog. On
+        // the unprotected path the gate still runs (the frontend may still put
+        // a biometric gate in front of it) but nothing covers the main webview,
+        // so hiding and re-syncing the approval runtime would be a pure
+        // flicker.
+        let protected = match target_fingerprint {
+            Some(fingerprint) => wallet_password_protected(app_state, fingerprint).await,
+            None => active_wallet_password_protected(app_state).await,
+        };
+
         // Hide the approval app before prompting: app runtimes are sibling
         // webviews inside the same window and would cover the main webview's
         // password dialog.
-        hide_bridge_approval_runtime(app_handle, apps_state).await;
+        if protected {
+            hide_bridge_approval_runtime(app_handle, apps_state).await;
+        }
 
-        let resolved = password_gate_resolve(app_handle, app_state).await;
+        let resolved = password_gate_resolve(app_handle, app_state, target_fingerprint).await;
 
         // The prompt hid the approval runtime, so recompute visibility on every
         // exit path from the password phase -- success, cancel, error, and the
         // post-gate expiry check below alike. Without this a still-queued
         // approval stays invisible with no way for the user to reach it.
-        restore_bridge_approval_runtime(app_handle, apps_state).await;
+        if protected {
+            restore_bridge_approval_runtime(app_handle, apps_state).await;
+        }
 
         match resolved {
             // The expiry check above ran before the prompt, and the prompt can
@@ -362,12 +381,24 @@ async fn restore_bridge_approval_runtime(
 async fn password_gate_resolve(
     app_handle: &AppHandle,
     app_state: &State<'_, AppState>,
+    fingerprint: Option<u32>,
 ) -> Result<Option<String>, String> {
     let gate = app_handle.state::<sage_password_gate::PasswordGateState>();
 
-    sage_password_gate::resolve(app_handle, app_state.inner(), &gate)
-        .await
-        .map_err(|err| err.reason)
+    let resolved = match fingerprint {
+        Some(fingerprint) => {
+            sage_password_gate::resolve_for_fingerprint(
+                app_handle,
+                app_state.inner(),
+                &gate,
+                fingerprint,
+            )
+            .await
+        }
+        None => sage_password_gate::resolve(app_handle, app_state.inner(), &gate).await,
+    };
+
+    resolved.map_err(|err| err.reason)
 }
 
 async fn active_wallet_fingerprint(app_state: &State<'_, AppState>) -> Option<u32> {
@@ -389,6 +420,37 @@ async fn active_wallet_password_protected(app_state: &State<'_, AppState>) -> bo
         .await
         .wallet_config()
         .is_some_and(|wallet| wallet.password_protected)
+}
+
+/// Whether `fingerprint`'s wallet is password-protected, per its entry in
+/// `sage.wallet_config.wallets`. Unlike [`active_wallet_password_protected`]
+/// this needs no wallet to be logged in.
+async fn wallet_password_protected(app_state: &State<'_, AppState>, fingerprint: u32) -> bool {
+    app_state
+        .lock()
+        .await
+        .wallet_config
+        .wallets
+        .iter()
+        .find(|wallet| wallet.fingerprint == fingerprint)
+        .is_some_and(|wallet| wallet.password_protected)
+}
+
+/// The wallet the password gate must target for this approval.
+///
+/// `None` means "the active wallet". `GetSecretKey` names its own fingerprint,
+/// which need not be the active wallet, so prompting for and verifying the
+/// active wallet's password there would hand the keychain the wrong secret.
+fn approval_password_fingerprint(pending: &PendingBridgeApproval) -> Option<u32> {
+    match pending.approval.body {
+        RustBridgeApprovalBody::GetSecretKey { fingerprint } => Some(fingerprint),
+
+        RustBridgeApprovalBody::SendXch { .. }
+        | RustBridgeApprovalBody::SignCoinSpends { .. }
+        | RustBridgeApprovalBody::SignMessage { .. }
+        | RustBridgeApprovalBody::CapabilityGrant { .. }
+        | RustBridgeApprovalBody::NetworkWhitelistGrant { .. } => None,
+    }
 }
 
 /// Whether resuming this approval needs the master-key password.
