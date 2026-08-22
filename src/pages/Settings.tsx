@@ -1080,7 +1080,7 @@ function ColdWalletSettings() {
 
 function RpcSettings() {
   const { addError } = useErrors();
-  const { requestPassword } = usePassword();
+  const { requireLocalAuth } = usePassword();
 
   const [isRunning, setIsRunning] = useState(false);
   const [runOnStartup, setRunOnStartup] = useState(false);
@@ -1103,8 +1103,7 @@ function RpcSettings() {
   }, [addError]);
 
   const start = async () => {
-    const auth = await requestPassword(false);
-    if (auth === undefined) return;
+    if (!(await requireLocalAuth())) return;
 
     commands
       .startRpcServer()
@@ -1120,8 +1119,7 @@ function RpcSettings() {
   };
 
   const toggleRunOnStartup = async (checked: boolean) => {
-    const auth = await requestPassword(false);
-    if (auth === undefined) return;
+    if (!(await requireLocalAuth())) return;
 
     commands
       .setRpcRunOnStartup(checked)
