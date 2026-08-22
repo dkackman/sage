@@ -33,6 +33,15 @@ export const ErrorContext = createContext<ErrorContextType | undefined>(
 // silently comes back.
 const PASSWORD_CANCELLED_REASON = 'Password entry cancelled';
 
+// Must match the reason returned at crates/sage-password-gate/src/resolve.rs:64
+// when the user exhausts MAX_ATTEMPTS incorrect password attempts.
+const PASSWORD_TOO_MANY_ATTEMPTS_REASON =
+  'Too many incorrect password attempts';
+
+// Must match the reason returned at crates/sage-password-gate/src/lib.rs:92
+// when the password prompt is not answered within PROMPT_TIMEOUT.
+const PASSWORD_PROMPT_TIMED_OUT_REASON = 'Password prompt timed out';
+
 export function ErrorProvider({ children }: { children: ReactNode }) {
   const [errors, setErrors] = useState<CustomError[]>([]);
 
@@ -54,8 +63,14 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
     }
     if (error.kind === 'unauthorized') {
       const reason = error.reason ?? '';
-      if (reason.includes('not found') || reason.includes('No secret')) {
-        // KeyNotFound or NoSecretKey — wallet-level issue, not a transition
+      if (
+        reason.includes('not found') ||
+        reason.includes('No secret') ||
+        reason === PASSWORD_TOO_MANY_ATTEMPTS_REASON ||
+        reason === PASSWORD_PROMPT_TIMED_OUT_REASON
+      ) {
+        // KeyNotFound / NoSecretKey (wallet-level issue, not a transition),
+        // or a genuine password-gate failure (too many attempts / timeout).
         toast.error(error.reason);
       }
       // NotLoggedIn / NoSigningKey during wallet transitions are silently ignored
