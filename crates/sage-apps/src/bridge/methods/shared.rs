@@ -46,6 +46,11 @@ pub(crate) enum BridgeMethodCapability {
 #[derive(Debug)]
 pub(crate) struct BridgeContext<'a> {
     pub app: &'a SharedSageApp,
+    /// Whether the currently active wallet is password-protected. Resolved
+    /// once at request time (from `sage.wallet_config`, not an Argon2 probe)
+    /// because `approval_request` is synchronous and cannot reach the async
+    /// app state itself.
+    pub password_protected: bool,
 }
 
 pub(crate) struct BridgeTools<'a> {

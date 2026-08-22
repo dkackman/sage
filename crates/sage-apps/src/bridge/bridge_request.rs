@@ -225,9 +225,14 @@ async fn process_shared(
         return Ok(response.into());
     }
 
+    let password_protected = active_wallet_password_protected(app_state).await;
+
     match method
         .prepare_approval(
-            BridgeContext { app },
+            BridgeContext {
+                app,
+                password_protected,
+            },
             BridgeTools {
                 app_handle,
                 app_state,
@@ -278,9 +283,14 @@ async fn execute_bridge_request(
         Err(response) => return response,
     };
 
+    let password_protected = active_wallet_password_protected(app_state).await;
+
     let result = method
         .handle(
-            BridgeContext { app: &origin.app },
+            BridgeContext {
+                app: &origin.app,
+                password_protected,
+            },
             BridgeTools {
                 app_handle,
                 app_state,
@@ -367,6 +377,18 @@ async fn active_wallet_fingerprint(app_state: &State<'_, AppState>) -> Option<u3
         .wallet()
         .map(|wallet| wallet.fingerprint)
         .ok()
+}
+
+/// Whether the active wallet is password-protected, per its entry in
+/// `sage.wallet_config.wallets`. Deliberately not `Keychain::is_password_protected`:
+/// that runs an Argon2 decrypt probe on every call, which is far too
+/// expensive for a check made on every bridge request.
+async fn active_wallet_password_protected(app_state: &State<'_, AppState>) -> bool {
+    app_state
+        .lock()
+        .await
+        .wallet_config()
+        .is_some_and(|wallet| wallet.password_protected)
 }
 
 /// Whether resuming this approval needs the master-key password.
