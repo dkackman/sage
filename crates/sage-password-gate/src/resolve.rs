@@ -41,10 +41,17 @@ pub async fn resolve_with(
 ) -> Result<Option<String>> {
     let mut error: Option<PasswordAttemptError> = None;
 
+    // One id for the whole resolve, not one per attempt: the frontend queues
+    // requests by id and replaces a queued entry on a re-prompt, so a fresh id
+    // per attempt would append the retry behind any concurrent request instead
+    // of resuming the dialog in place. Each attempt registers its own oneshot
+    // under this id, and the previous attempt's entry is always gone by then --
+    // consumed by `deliver`, or removed by the timeout path.
+    let request_id = uuid::Uuid::new_v4().to_string();
+
     for attempt in 1..=MAX_ATTEMPTS {
         let request = PasswordRequest {
-            request_id: uuid::Uuid::new_v4().to_string(),
-            fingerprint,
+            request_id: request_id.clone(),
             requires_password,
             attempt,
             error: error.take(),
@@ -180,6 +187,23 @@ mod tests {
         assert_eq!(seen.len(), 2);
         assert_eq!(seen[1].attempt, 2);
         assert_eq!(seen[1].error.as_ref().unwrap().attempts_remaining, 2);
+    }
+
+    #[tokio::test]
+    async fn every_attempt_of_one_resolve_shares_a_request_id() {
+        let (verifier, fingerprint) = protected_keychain("hunter2");
+        let prompter = MockPrompter::new(vec![pw("wrong"), pw("also wrong"), pw("hunter2")]);
+
+        let result = resolve_with(&prompter, &verifier, fingerprint, true)
+            .await
+            .unwrap();
+
+        assert_eq!(result, Some("hunter2".to_string()));
+        let seen = prompter.seen();
+        assert_eq!(seen.len(), 3);
+        assert_eq!(seen[0].request_id, seen[1].request_id);
+        assert_eq!(seen[1].request_id, seen[2].request_id);
+        assert!(!seen[0].request_id.is_empty());
     }
 
     #[tokio::test]
