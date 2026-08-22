@@ -3,16 +3,15 @@ use tauri::{AppHandle, Manager, State, Webview};
 use crate::{
     AppState, AppsHostState, BridgeApprovalsChangedEvent, BridgeCapability, BridgeContext,
     BridgeMethod, BridgeMethodCapability, BridgeOrigin, BridgeRegistry, BridgeRegistryKind,
-    BridgeTools, PendingBridgeApproval, ResolveBridgeApprovalArgs, RustBridgeApprovalBody,
-    RustBridgeApprovalRequest, RustBridgeInvokeResult, RustBridgeRequest, RustBridgeResponse,
-    RuntimeChangeSet, SYSTEM_APP_BRIDGE_APPROVAL_ID, SharedSageApp, SystemBridgeCapability,
+    BridgeTools, PendingBridgeApproval, ResolveBridgeApprovalArgs, RuntimeChangeSet,
+    RustBridgeApprovalBody, RustBridgeApprovalRequest, RustBridgeInvokeResult, RustBridgeRequest,
+    RustBridgeResponse, SYSTEM_APP_BRIDGE_APPROVAL_ID, SharedSageApp, SystemBridgeCapability,
     UserBridgeCapability, assert_bridge_origin, emit_bridge_response_to_app,
     emit_system_runtime_event_to_listeners, ensure_app_is_enabled_for_scope,
-    ensure_approval_expiry_loop, find_runtime_by_app_id_optional,
-    get_system_capability_definition, get_user_capability_definition, hide_runtime_inner,
-    list_pending_approvals, resolve_app, start_bridge_approval_runtime,
-    sync_bridge_approval_runtime, take_pending_approval, unix_timestamp_ms,
-    write_pending_approval,
+    ensure_approval_expiry_loop, find_runtime_by_app_id_optional, get_system_capability_definition,
+    get_user_capability_definition, hide_runtime_inner, list_pending_approvals, resolve_app,
+    start_bridge_approval_runtime, sync_bridge_approval_runtime, take_pending_approval,
+    unix_timestamp_ms, write_pending_approval,
 };
 
 pub(crate) async fn process(
@@ -145,7 +144,15 @@ pub(crate) async fn process_after_approval(
         // password dialog.
         hide_bridge_approval_runtime(app_handle, apps_state).await;
 
-        match password_gate_resolve(app_handle, app_state).await {
+        let resolved = password_gate_resolve(app_handle, app_state).await;
+
+        // The prompt hid the approval runtime, so recompute visibility on every
+        // exit path from the password phase -- success, cancel, error, and the
+        // post-gate expiry check below alike. Without this a still-queued
+        // approval stays invisible with no way for the user to reach it.
+        restore_bridge_approval_runtime(app_handle, apps_state).await;
+
+        match resolved {
             // The expiry check above ran before the prompt, and the prompt can
             // outlive the deadline, so the approval window is re-checked here.
             Ok(_) if unix_timestamp_ms() as u64 > pending.expires_at_ms => {
@@ -321,6 +328,22 @@ async fn hide_bridge_approval_runtime(
     }
 
     changes.emit(app_handle, apps_state).await;
+}
+
+/// Recomputes bridge-approval runtime visibility after the password prompt,
+/// re-showing the dialog when further approvals are still queued and letting
+/// it stay killed when the queue is empty. Best effort, like the hide: a
+/// failure here is logged and never aborts the request.
+async fn restore_bridge_approval_runtime(
+    app_handle: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+) {
+    if let Err(err) = sync_bridge_approval_runtime(app_handle, apps_state).await {
+        tracing::warn!(
+            error = %err,
+            "failed to restore the bridge approval runtime after the password prompt"
+        );
+    }
 }
 
 /// Resolves the master-key password in the trusted `main` webview. The value

@@ -48,7 +48,6 @@ pub(crate) struct BridgeContext<'a> {
     pub app: &'a SharedSageApp,
 }
 
-#[derive(Debug)]
 pub(crate) struct BridgeTools<'a> {
     pub app_handle: &'a tauri::AppHandle,
     pub app_state: &'a tauri::State<'a, AppState>,
@@ -56,6 +55,22 @@ pub(crate) struct BridgeTools<'a> {
     /// Password resolved by the main-window gate, for methods that sign.
     /// `None` when the wallet is unprotected or the method does not sign.
     pub password: Option<String>,
+}
+
+/// Hand-written so the master-key password can never be printed. The whole
+/// point of the gate is keeping that secret out of reach, and a derived
+/// `Debug` would leak it into the logs the moment somebody adds a trace line.
+/// The `Some`/`None` distinction is kept because it is useful for debugging;
+/// the value never is.
+impl std::fmt::Debug for BridgeTools<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BridgeTools")
+            .field("app_handle", &self.app_handle)
+            .field("app_state", &self.app_state)
+            .field("host_state", &self.host_state)
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
