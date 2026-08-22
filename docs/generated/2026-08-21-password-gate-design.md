@@ -77,10 +77,10 @@ endpoints use the fingerprint-targeted form. The `password_protected` lookup sea
 `crates/sage-api/password-gating.json` maps each password-bearing endpoint to one of three modes,
 and the macro's `maybe_unlock` expands accordingly:
 
-| Mode | Expansion | Applies to |
-| --- | --- | --- |
-| `always` | `resolve(...)` on every call | endpoints that reach a secret unconditionally |
-| `fingerprint` | `resolve_for_fingerprint(..., req.fingerprint)` on every call | `delete_key`, `get_secret_key` |
+| Mode          | Expansion                                                                          | Applies to                                                                   |
+| ------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `always`      | `resolve(...)` on every call                                                       | endpoints that reach a secret unconditionally                                |
+| `fingerprint` | `resolve_for_fingerprint(..., req.fingerprint)` on every call                      | `delete_key`, `get_secret_key`                                               |
 | `auto_submit` | `resolve(...)` only when `req.auto_submit` is set, `req.password = None` otherwise | endpoints that only forward the password to `Sage::transact`/`transact_with` |
 
 The `auto_submit` mode exists because those endpoints build a transaction for the confirmation
@@ -88,7 +88,7 @@ dialog first and touch no key until the caller asks for it to be signed and subm
 unconditionally there asks the user for a password that is then discarded, and then asks again after
 they confirm — two dialogs for one send.
 
-Note that carrying an `auto_submit` field is *not* the criterion: `sign_coin_spends` and `take_offer`
+Note that carrying an `auto_submit` field is _not_ the criterion: `sign_coin_spends` and `take_offer`
 both have one but reach the keychain on every call, so both are `always`. The criterion is how the
 implementation consumes the password, and a drift test in `crates/sage-api/src/lib.rs` enforces
 exactly that by scanning `crates/sage/src/endpoints/` — an endpoint whose body calls
@@ -105,7 +105,7 @@ must not ride an event broadcast.
 - **Event** `PasswordRequest { request_id, requires_password: bool, attempt: u8, error: Option<PasswordAttemptError> }`,
   emitted with `emit_to(SAGE_WEBVIEW_LABEL, ...)` rather than a plain `emit`.
 
-  Targeting `main` is where the request is *meant* to land, not a guarantee of where it *can* land.
+  Targeting `main` is where the request is _meant_ to land, not a guarantee of where it _can_ land.
   Tauri resolves an `AnyLabel` target through `Listeners::emit_js_filter` → `match_any_or_filter`,
   which short-circuits to true for any listener registered with `EventTarget::Any`, never consulting
   the target. `src-tauri/capabilities/apps.json` grants app webviews `core:event:allow-listen`, and
@@ -115,9 +115,10 @@ must not ride an event broadcast.
   `error.attemptsRemaining` are retained because the dialog needs them and a bare retry counter
   identifies nothing an observer could not already infer from the re-prompt timing itself.
 
-  What keeps the *password* safe is direction, not targeting: the secret only ever travels back on
+  What keeps the _password_ safe is direction, not targeting: the secret only ever travels back on
   `submit_password_response`, a command absent from both `apps.json` and `system-apps.json`, and apps
   hold no `core:event:allow-emit` with which to forge a request.
+
 - **Command** `submit_password_response(request_id, outcome)` where
   `outcome = Password(String) | NoAuthNeeded | Cancelled`.
 - **State** `PasswordGateState { pending: Mutex<HashMap<String, oneshot::Sender<Outcome>>> }`.
