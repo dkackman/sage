@@ -84,19 +84,38 @@ fn generate(input: &TokenStream, tauri: bool) -> TokenStream {
         serde_json::from_str(include_str!("../../password-gated.json"))
             .expect("Invalid password-gated endpoint file");
 
+    // The subset of the gated endpoints whose request type carries a
+    // `fingerprint` field. These act on a *named* wallet rather than the
+    // active one, so the gate must verify against that wallet.
+    let fingerprint_gated: std::collections::BTreeSet<String> =
+        serde_json::from_str(include_str!("../../password-gated-fingerprint.json"))
+            .expect("Invalid fingerprint-gated endpoint file");
+
+    let gating = Gating {
+        password_gated: &password_gated,
+        fingerprint_gated: &fingerprint_gated,
+    };
+
     let mut output = proc_macro2::TokenStream::new();
 
     for token in input.clone() {
-        convert(token, &endpoints, &password_gated, None, &mut output);
+        convert(token, &endpoints, gating, None, &mut output);
     }
 
     output.into()
 }
 
+/// Which endpoints the password gate applies to, and how.
+#[derive(Clone, Copy)]
+struct Gating<'a> {
+    password_gated: &'a std::collections::BTreeSet<String>,
+    fingerprint_gated: &'a std::collections::BTreeSet<String>,
+}
+
 fn convert(
     tree: TokenTree,
     endpoints: &IndexMap<String, bool>,
-    password_gated: &std::collections::BTreeSet<String>,
+    gating: Gating<'_>,
     endpoint: Option<&str>,
     output: &mut proc_macro2::TokenStream,
 ) {
@@ -121,7 +140,14 @@ fn convert(
                     output.extend(quote!(.await));
                 }
             } else if ident == "maybe_unlock" {
-                if password_gated.contains(endpoint) {
+                if gating.fingerprint_gated.contains(endpoint) {
+                    // Acts on `req.fingerprint`, which may be a wallet other
+                    // than the active one -- and may run with no wallet
+                    // active at all, from the logged-out wallet list.
+                    output.extend(quote!(
+                        req.password = sage_password_gate::resolve_for_fingerprint(&app_handle, state.inner(), gate.inner(), req.fingerprint).await?;
+                    ));
+                } else if gating.password_gated.contains(endpoint) {
                     output.extend(quote!(
                         req.password = sage_password_gate::resolve(&app_handle, state.inner(), gate.inner()).await?;
                     ));
@@ -163,14 +189,14 @@ fn convert(
             if repeat {
                 for endpoint in endpoints.keys() {
                     for tree in stream.clone() {
-                        convert(tree, endpoints, password_gated, Some(endpoint), output);
+                        convert(tree, endpoints, gating, Some(endpoint), output);
                     }
                 }
             } else {
                 let mut inner = proc_macro2::TokenStream::new();
 
                 for tree in stream {
-                    convert(tree, endpoints, password_gated, endpoint, &mut inner);
+                    convert(tree, endpoints, gating, endpoint, &mut inner);
                 }
 
                 output.extend(proc_macro2::TokenStream::from(TokenStream::from(

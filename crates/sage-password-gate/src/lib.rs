@@ -104,26 +104,65 @@ use tauri::AppHandle;
 /// The host's shared Sage handle. Mirrors `sage_tauri::app_state::AppState`.
 pub type SharedSage = Arc<Mutex<Sage>>;
 
-/// Resolves a password for the active wallet, prompting the `main` webview.
+/// Resolves a password for the **active** wallet, prompting the `main` webview.
 ///
-/// Reads the wallet fingerprint and its stored `password_protected` flag, then
-/// releases the app lock *before* the frontend round-trip. Uses the cheap
-/// config flag rather than `Keychain::is_password_protected`, which runs an
-/// Argon2 decrypt probe on every call.
+/// Use this for endpoints whose request type carries no fingerprint, so the
+/// operation implicitly targets whatever wallet is logged in. Endpoints that
+/// name a fingerprint must use [`resolve_for_fingerprint`] instead, otherwise
+/// the gate verifies the wrong wallet's password (and fails outright when no
+/// wallet is active at all).
 pub async fn resolve(
     app_handle: &AppHandle,
     state: &SharedSage,
     gate: &PasswordGateState,
 ) -> Result<Option<String>> {
+    resolve_target(app_handle, state, gate, None).await
+}
+
+/// Resolves a password for an explicitly named wallet.
+///
+/// Unlike [`resolve`] this never touches `Sage::wallet()`, so it works while
+/// logged out (the logged-out wallet list is exactly where `delete_key` and
+/// `get_secret_key` are driven from) and it verifies against the wallet the
+/// caller is actually acting on rather than the active one.
+pub async fn resolve_for_fingerprint(
+    app_handle: &AppHandle,
+    state: &SharedSage,
+    gate: &PasswordGateState,
+    fingerprint: u32,
+) -> Result<Option<String>> {
+    resolve_target(app_handle, state, gate, Some(fingerprint)).await
+}
+
+/// Shared body of [`resolve`] and [`resolve_for_fingerprint`].
+///
+/// Reads the target wallet fingerprint and its stored `password_protected`
+/// flag, then releases the app lock *before* the frontend round-trip. Uses the
+/// cheap config flag rather than `Keychain::is_password_protected`, which runs
+/// an Argon2 decrypt probe on every call.
+///
+/// `target` of `None` means "the active wallet"; only that path needs a wallet
+/// to be logged in, because the `password_protected` lookup searches
+/// `wallet_config.wallets` by fingerprint and is happy without an active one.
+async fn resolve_target(
+    app_handle: &AppHandle,
+    state: &SharedSage,
+    gate: &PasswordGateState,
+    target: Option<u32>,
+) -> Result<Option<String>> {
     let (fingerprint, requires_password) = {
         let sage = state.lock().await;
-        let fingerprint = sage
-            .wallet()
-            .map_err(|err| Error {
-                kind: err.kind(),
-                reason: err.to_string(),
-            })?
-            .fingerprint;
+        let fingerprint = match target {
+            Some(fingerprint) => fingerprint,
+            None => {
+                sage.wallet()
+                    .map_err(|err| Error {
+                        kind: err.kind(),
+                        reason: err.to_string(),
+                    })?
+                    .fingerprint
+            }
+        };
         let requires_password = sage
             .wallet_config
             .wallets
@@ -206,6 +245,46 @@ mod tests {
                 .await
                 .is_err()
         );
+    }
+
+    /// The resolve loop reuses one request id across all attempts, so the same
+    /// id is registered again after the previous attempt's entry was consumed.
+    /// There must be no stale-entry collision: the new oneshot has to be the
+    /// one that receives the outcome.
+    #[tokio::test]
+    async fn a_request_id_can_be_registered_again_after_delivery() {
+        let gate = PasswordGateState::default();
+
+        let (first_tx, first_rx) = tokio::sync::oneshot::channel();
+        gate.register("req-retry".to_string(), first_tx).await;
+        gate.deliver(
+            "req-retry",
+            PasswordOutcome::Password {
+                password: "wrong".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        assert!(matches!(
+            first_rx.await.unwrap(),
+            PasswordOutcome::Password { .. }
+        ));
+
+        let (second_tx, second_rx) = tokio::sync::oneshot::channel();
+        gate.register("req-retry".to_string(), second_tx).await;
+        gate.deliver(
+            "req-retry",
+            PasswordOutcome::Password {
+                password: "right".to_string(),
+            },
+        )
+        .await
+        .expect("the retry must be deliverable under the same id");
+
+        match second_rx.await.unwrap() {
+            PasswordOutcome::Password { password } => assert_eq!(password, "right"),
+            other => panic!("unexpected outcome: {other:?}"),
+        }
     }
 
     #[tokio::test]
