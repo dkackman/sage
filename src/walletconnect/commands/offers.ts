@@ -1,14 +1,7 @@
 import { commands } from '@/bindings';
 import { Params } from '../commands';
-import { HandlerContext } from '../handler';
 
-export async function handleCreateOffer(
-  params: Params<'chia_createOffer'>,
-  context: HandlerContext,
-) {
-  const password = await context.requestPassword(context.hasPassword);
-  if (password === undefined) throw new Error('Authentication failed');
-
+export async function handleCreateOffer(params: Params<'chia_createOffer'>) {
   const data = await commands.makeOffer({
     fee: params.fee ?? 0,
     offered_assets: params.offerAssets.map((asset) => ({
@@ -22,7 +15,6 @@ export async function handleCreateOffer(
       amount: asset.amount,
     })),
     expires_at_second: null,
-    password,
   });
 
   return {
@@ -31,35 +23,21 @@ export async function handleCreateOffer(
   };
 }
 
-export async function handleTakeOffer(
-  params: Params<'chia_takeOffer'>,
-  context: HandlerContext,
-) {
-  const password = await context.requestPassword(context.hasPassword);
-  if (password === undefined) throw new Error('Authentication failed');
-
+export async function handleTakeOffer(params: Params<'chia_takeOffer'>) {
   const data = await commands.takeOffer({
     offer: params.offer,
     fee: params.fee ?? 0,
     auto_submit: true,
-    password,
   });
 
   return { id: data.transaction_id };
 }
 
-export async function handleCancelOffer(
-  params: Params<'chia_cancelOffer'>,
-  context: HandlerContext,
-) {
-  const password = await context.requestPassword(context.hasPassword);
-  if (password === undefined) throw new Error('Authentication failed');
-
+export async function handleCancelOffer(params: Params<'chia_cancelOffer'>) {
   await commands.cancelOffer({
     offer_id: params.id,
     fee: params.fee ?? 0,
     auto_submit: true,
-    password,
   });
 
   return {};
