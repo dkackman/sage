@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { reconcileActiveKeyProtection } from '@/state';
+import { reconcileDriftedKeyProtection } from '@/state';
 import { t } from '@lingui/core/macro';
 import { createContext, ReactNode, useCallback, useState } from 'react';
 import { toast } from 'react-toastify';
@@ -58,9 +58,11 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
     if (error.kind === 'incorrect_password') {
       // Wrong password — AES decryption failed
       toast.error(t`Incorrect password`);
-      // Self-heal if the active wallet's has_password flag drifted false:
-      // this corrects it so the next attempt prompts for the password.
-      void reconcileActiveKeyProtection();
+      // Self-heal if a wallet's has_password flag drifted false: this
+      // corrects it so the next attempt prompts for the password. The sweep
+      // covers every wallet, not just the active one, because delete_key and
+      // get_secret_key gate on their own fingerprint from the wallet list.
+      void reconcileDriftedKeyProtection();
       return;
     }
     if (error.kind === 'unauthorized') {

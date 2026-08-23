@@ -69,14 +69,21 @@ export function PasswordProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unlisten = events.passwordRequest.listen(async ({ payload }) => {
       // Case 1: password takes precedence — enqueue for the dialog. If a
-      // request with the same requestId is already queued (a retry after a
-      // wrong password), replace it in place rather than duplicating it.
+      // request with the same requestId is already queued, replace it in
+      // place rather than duplicating it. A wrong-password re-prompt arrives
+      // *after* handleSubmit dequeued the entry, so it carries an `error`
+      // payload but is no longer queued: put it back at the FRONT, resuming
+      // the dialog the user was just typing into, rather than appending it
+      // behind an unrelated request (where the user would mistake the next
+      // request's prompt for this retry and type this password into it).
       if (payload.requiresPassword) {
         setQueue((prev) => {
           const index = prev.findIndex(
             (r) => r.requestId === payload.requestId,
           );
-          if (index === -1) return [...prev, payload];
+          if (index === -1) {
+            return payload.error ? [payload, ...prev] : [...prev, payload];
+          }
           const next = [...prev];
           next[index] = payload;
           return next;

@@ -141,22 +141,24 @@ export function initializeWalletState(
   setWalletState = setter;
 }
 
-// Recovery path for the rare case where the active wallet's stored
-// `has_password` flag drifts from the actual encrypted key (e.g. a crash
-// mid-`change_password`). We only reconcile when the flag says "no password"
-// yet a decrypt just failed — that mismatch is the drift signal. A genuine
-// wrong password (flag already true) needs no reconcile, so we skip the
-// backend probe entirely to avoid its cost.
-export async function reconcileActiveKeyProtection(): Promise<void> {
+// Recovery path for the rare case where a wallet's stored `has_password`
+// flag drifts from the actual encrypted key (e.g. a crash
+// mid-`change_password`). A decrypt just failed, so some wallet whose flag
+// says "no password" is actually protected — that mismatch is the drift
+// signal. The failing wallet is not necessarily the active one: `delete_key`
+// and `get_secret_key` are gated by their own fingerprint and run from the
+// logged-out wallet list, so reconcile every wallet the flag could have
+// silently un-gated rather than just the active one. Wallets whose flag is
+// already true (a genuine wrong password) and public-only wallets (nothing
+// to decrypt) need no probe, which keeps the sweep to the drift suspects.
+export async function reconcileDriftedKeyProtection(): Promise<void> {
   try {
-    const current = await commands.getKey({});
-    if (!current.key || current.key.has_password) {
-      return;
-    }
+    const { keys } = await commands.getKeys({});
+    const suspects = keys.filter((key) => !key.has_password && key.has_secrets);
 
-    await commands.reconcileKeyProtection({
-      fingerprint: current.key.fingerprint,
-    });
+    for (const key of suspects) {
+      await commands.reconcileKeyProtection({ fingerprint: key.fingerprint });
+    }
 
     const updated = await commands.getKey({});
     setWalletState?.(updated.key);

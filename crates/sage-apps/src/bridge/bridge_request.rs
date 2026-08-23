@@ -184,7 +184,20 @@ pub(crate) async fn process_after_approval(
     };
 
     // Committed: the approval is consumed whatever the wallet method returns.
-    take_pending_approval(apps_state, &args.approval_id).await;
+    // The take is the commit point, and it must actually win: the expiry loop
+    // (or a concurrent resolve of the same id) can remove the approval during
+    // the password verify above, and executing on the peeked copy after that
+    // would broadcast a transaction the app was already told timed out — or
+    // execute it twice.
+    if take_pending_approval(apps_state, &args.approval_id)
+        .await
+        .is_none()
+    {
+        return Err(format!(
+            "Approval {} was already resolved or expired",
+            args.approval_id
+        ));
+    }
     finish_approval(app_handle, apps_state).await?;
 
     let origin = bridge_origin_for(app_handle, &pending).await?;
@@ -216,7 +229,17 @@ async fn consume_and_respond(
     pending: &PendingBridgeApproval,
     invoke_result: RustBridgeInvokeResult,
 ) -> Result<ResolveBridgeApprovalResult, String> {
-    take_pending_approval(apps_state, approval_id).await;
+    // If the expiry loop (or a concurrent resolve) consumed the approval
+    // first, the app already received a response for this request id; sending
+    // another would contradict it.
+    if take_pending_approval(apps_state, approval_id)
+        .await
+        .is_none()
+    {
+        return Err(format!(
+            "Approval {approval_id} was already resolved or expired"
+        ));
+    }
     finish_approval(app_handle, apps_state).await?;
 
     let origin = bridge_origin_for(app_handle, pending).await?;
