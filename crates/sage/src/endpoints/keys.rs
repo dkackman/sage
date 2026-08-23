@@ -423,9 +423,10 @@ impl Sage {
         let mut corrected = 0;
 
         for fingerprint in fingerprints {
-            let has_password = self.keychain.is_password_protected(fingerprint);
+            let was_protected = self.is_password_protected_flag(fingerprint);
+            let response = self.reconcile_key_protection(ReconcileKeyProtection { fingerprint })?;
 
-            if self.set_password_protected(fingerprint, has_password)? {
+            if response.has_password != was_protected {
                 corrected += 1;
             }
         }
