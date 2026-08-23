@@ -20,8 +20,8 @@ use rand_chacha::ChaCha8Rng;
 use rustls::crypto::aws_lc_rs::default_provider;
 use sage::Sage;
 use sage_api::{
-    Amount, ChangePassword, DeleteKey, GetKey, GetPeers, GetSecretKey, GetSyncStatus, GetVersion,
-    ImportKey, Login, ReconcileKeyProtection, SendXch,
+    Amount, ChangePassword, DeleteKey, GetKey, GetKeys, GetPeers, GetSecretKey, GetSyncStatus,
+    GetVersion, ImportKey, Login, ReconcileKeyProtection, SendXch,
 };
 use sage_api_macro::impl_endpoints;
 use sage_wallet::{SyncCommand, SyncEvent};
@@ -514,6 +514,85 @@ async fn test_password_protected_delete() -> Result<()> {
         .key
         .is_none()
     );
+
+    Ok(())
+}
+
+/// The `password_protected` config flag is a cache, not the truth: a build that
+/// does not know the field strips it on the next config write, leaving a
+/// protected wallet flagged unprotected. Every gate reads that flag, so the
+/// drift fails *open* — no prompt, then a decrypt failure. Logging in must
+/// re-derive it from the keychain so the gate can never be wrong about the
+/// wallet the user is actually using.
+#[tokio::test]
+async fn test_login_reconciles_a_drifted_protection_flag() -> Result<()> {
+    let mut app = TestApp::new().await?;
+
+    let fingerprint = app.setup_bls_with_password(0, "secret").await?;
+
+    app.sage
+        .lock()
+        .await
+        .set_password_protected(fingerprint, false)?;
+
+    assert!(
+        !app.get_key(GetKey {
+            fingerprint: Some(fingerprint),
+        })
+        .await?
+        .key
+        .unwrap()
+        .has_password,
+        "precondition: the flag is drifted false"
+    );
+
+    app.login(Login { fingerprint }).await?;
+
+    assert!(
+        app.get_key(GetKey {
+            fingerprint: Some(fingerprint),
+        })
+        .await?
+        .key
+        .unwrap()
+        .has_password,
+        "login must re-derive the flag from the keychain"
+    );
+
+    Ok(())
+}
+
+/// Login only covers the active wallet. The wallet list, and the logged-out
+/// `delete_key` / `get_secret_key` gates, read the flag for wallets that were
+/// never logged into this session, so a startup sweep has to correct those too.
+#[tokio::test]
+async fn test_reconcile_all_key_protection_corrects_every_wallet() -> Result<()> {
+    let mut app = TestApp::new().await?;
+
+    let protected = app.setup_bls_with_password(0, "secret").await?;
+    let plain = app.setup_bls(0).await?;
+
+    {
+        let mut sage = app.sage.lock().await;
+        sage.set_password_protected(protected, false)?;
+        sage.set_password_protected(plain, true)?;
+    }
+
+    let corrected = app.sage.lock().await.reconcile_all_key_protection()?;
+    assert_eq!(corrected, 2);
+
+    let keys = app.get_keys(GetKeys {}).await?.keys;
+    let find = |fingerprint: u32| {
+        keys.iter()
+            .find(|key| key.fingerprint == fingerprint)
+            .unwrap_or_else(|| panic!("missing key {fingerprint}"))
+    };
+
+    assert!(find(protected).has_password);
+    assert!(!find(plain).has_password);
+
+    // A second sweep finds nothing left to correct.
+    assert_eq!(app.sage.lock().await.reconcile_all_key_protection()?, 0);
 
     Ok(())
 }

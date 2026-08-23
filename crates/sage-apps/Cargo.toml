@@ -9,6 +9,7 @@ workspace = true
 [dependencies]
 sage = { workspace = true }
 sage-api = { workspace = true, features = ["tauri"] }
+sage-keychain = { workspace = true }
 sage-password-gate = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

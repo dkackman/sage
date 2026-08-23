@@ -402,7 +402,10 @@ export function initSageSystemRuntimeBridge(): boolean {
           },
 
           async resolve(input: Generated.ResolveBridgeApprovalArgs) {
-            return await callHost<void>('bridgeApprovals.resolve', input);
+            return await callHost<Generated.ResolveBridgeApprovalResult>(
+              'bridgeApprovals.resolve',
+              input,
+            );
           },
 
           onChanged(

@@ -56,13 +56,22 @@ The empty byte string `b""` is the "no password" sentinel. This is what existing
 `KeyData::Secret`, which would have changed the `keys.bin` serialization format and required a
 versioned deserialization fallback. That draft was not built.
 
-Because a config file and a `keys.bin` can drift apart, two things reconcile the flag against
-reality, both by trial-decrypting with `b""` via `Keychain::is_password_protected`:
+The flag is a cache of the keychain, and the two can drift apart — a build that predates the field
+strips it on its next config write, and a restored `keys.bin` never matched the config to begin with.
+That drift fails **open**: every gate reads the flag, so a wallet wrongly flagged unprotected is not
+prompted at all and then fails to decrypt. Three things reconcile it against reality, all by
+trial-decrypting with `b""` via `Keychain::is_password_protected`:
 
-- `Sage::switch_wallet` self-heals on login.
+- `Sage::login` re-derives the flag for the wallet being logged into, before anything can read it.
+  One Argon2 probe per login, never on a request hot path.
+- `Sage::reconcile_all_key_protection` sweeps every configured wallet. The host runs it in a spawned
+  task at startup rather than inside `initialize`, because it costs a probe per wallet. Login only
+  covers the active wallet; this covers the wallet list and the logged-out `delete_key` /
+  `get_secret_key` gates.
 - The `reconcile_key_protection` endpoint self-heals on demand. The frontend calls it from
   `ErrorContext` when a decrypt fails on a wallet whose flag says "no password" — that mismatch is
-  the drift signal — so the next attempt prompts correctly.
+  the drift signal — so the next attempt prompts correctly. Note this last one cannot fire for
+  app-bridge requests: those failures are delivered to the app's webview, not the main window.
 
 ### Biometric Gate (Mobile)
 
@@ -170,7 +179,7 @@ Decrypts with old password, re-encrypts with new password, replaces the `KeyData
 
 **`wallet.rs`** — Add `password_protected: bool` to `Wallet` (defaults to `false`, so existing `config.toml` files deserialize unchanged).
 
-Because the config file and `keys.bin` can drift apart (e.g. a restored `keys.bin`), `Sage::switch_wallet` self-heals the flag via `Keychain::is_password_protected`, which trial-decrypts the entry with an empty password.
+Because the config file and `keys.bin` can drift apart (e.g. a restored `keys.bin`, or an older build that does not know the field rewriting the config without it), `Sage::login` and the startup sweep `Sage::reconcile_all_key_protection` both self-heal the flag via `Keychain::is_password_protected`, which trial-decrypts the entry with an empty password. See **Storage** above for why this drift has to be corrected proactively rather than on demand.
 
 ### `sage-api` crate (request structs)
 

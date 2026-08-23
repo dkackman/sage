@@ -136,10 +136,10 @@ command. `HandlerContext` no longer carries `requestPassword` or `hasPassword`.
 
 ## Matrix — app bridge operations
 
-Bridge requests are gated in `process_after_approval`, not by the endpoint macro. The gate runs after
-the user approves the request summary in the `bridge-approval` system app and before the handler
-executes; on a protected wallet the approval runtime is hidden first, because app runtimes are
-sibling webviews that would otherwise cover the main webview's dialog.
+Bridge requests are gated in `process_after_approval`, not by the endpoint macro. On a protected
+wallet the `bridge-approval` card collects the password inline, alongside the request summary, and
+the host verifies it before the handler executes. A wrong password leaves the approval queued for
+another try; `MAX_ATTEMPTS` wrong ones consume it and fail the request `unauthorized`.
 
 | Approval body           | Bridge method                | Gated | Target wallet        |
 | ----------------------- | ---------------------------- | :---: | -------------------- |

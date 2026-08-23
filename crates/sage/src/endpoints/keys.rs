@@ -30,6 +30,19 @@ use crate::{Error, Result, Sage};
 
 impl Sage {
     pub async fn login(&mut self, req: Login) -> Result<LoginResponse> {
+        // Every password gate reads the `password_protected` config flag, so a
+        // flag that drifted false silently disables the gate — no prompt, then
+        // a decrypt failure. The flag is only a cache of the keychain, and a
+        // build that predates the field strips it on its next config write, so
+        // re-derive it here. One Argon2 probe per login, never on a hot path.
+        // Tolerant of a fingerprint with no config entry: that is `switch_wallet`'s
+        // error to report, not this cache refresh's.
+        if self.has_wallet_config(req.fingerprint) {
+            self.reconcile_key_protection(ReconcileKeyProtection {
+                fingerprint: req.fingerprint,
+            })?;
+        }
+
         self.config.global.fingerprint = Some(req.fingerprint);
         self.save_config()?;
         self.switch_wallet().await?;
@@ -400,6 +413,35 @@ impl Sage {
         let has_password = self.keychain.is_password_protected(req.fingerprint);
         self.set_password_protected(req.fingerprint, has_password)?;
         Ok(ReconcileKeyProtectionResponse { has_password })
+    }
+
+    /// Re-derives `password_protected` for every configured wallet and returns
+    /// how many were corrected.
+    ///
+    /// [`Self::login`] only covers the wallet being logged into. The wallet
+    /// list, and the logged-out `delete_key` / `get_secret_key` gates, read the
+    /// flag for wallets this session never logs into, so those need a sweep of
+    /// their own. It costs one Argon2 probe per wallet, which is why the host
+    /// runs it off the startup path rather than inside `initialize`.
+    pub fn reconcile_all_key_protection(&mut self) -> Result<usize> {
+        let fingerprints: Vec<u32> = self
+            .wallet_config
+            .wallets
+            .iter()
+            .map(|wallet| wallet.fingerprint)
+            .collect();
+
+        let mut corrected = 0;
+
+        for fingerprint in fingerprints {
+            let has_password = self.keychain.is_password_protected(fingerprint);
+
+            if self.set_password_protected(fingerprint, has_password)? {
+                corrected += 1;
+            }
+        }
+
+        Ok(corrected)
     }
 
     pub fn get_keys(&self, _req: GetKeys) -> Result<GetKeysResponse> {

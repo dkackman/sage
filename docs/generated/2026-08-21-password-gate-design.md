@@ -173,26 +173,39 @@ expansions, where `app_handle`, `gate`, and `mut` all go unused.
 
 ### Bridge path (apps)
 
-The two dialogs are sequential. The user approves the request summary in the `bridge-approval` system
-app exactly as today; the password is then collected in the main webview.
+There is one dialog, not two. The `bridge-approval` system app collects the password inline: summary
+and password field in the same card, approved in one gesture. The main-window prompt is not used on
+this path, so nothing has to hide the approval runtime to uncover a dialog underneath it, and the
+hide/restore flicker that arrangement required is gone.
 
-In `process_after_approval` (`crates/sage-apps/src/bridge/bridge_request.rs:86`), after `approved ==
-true` and the wallet-binding check passes, and before `process_shared`:
+`PendingBridgeApprovalView` carries `requiresPassword`, computed when the approval is queued, and the
+card renders its field from that. The flag is a hint, not the authority.
 
-1. If the target wallet is password-protected, hide the `bridge-approval` runtime via
-   `hide_runtime_inner` so it does not cover the main webview. App runtimes are sibling webviews
-   inside the same `main` window (`runtime/manager.rs:395-414`), so a React dialog would otherwise
-   render underneath. On an unprotected wallet no dialog can appear, and hiding then re-syncing the
-   runtime would be a visible flicker for nothing, so the hide/restore pair is skipped — the gate
-   call itself still runs, because the frontend may still put a biometric gate in front of it.
-2. Call the gate — `resolve_for_fingerprint` for `GetSecretKey`, which names its own wallet, and
-   `resolve` for the bodies that act on the active wallet.
-3. Restore runtime visibility if step 1 hid it, on every exit path from the password phase.
-4. Execute.
+`process_after_approval` (`crates/sage-apps/src/bridge/bridge_request.rs:86`) **peeks** the pending
+approval rather than consuming it, so a wrong password can leave it queued:
 
-Because approval and password are now two phases, the original `expires_at_ms` keeps running through
-the prompt. A lapse mid-prompt fails with `approval_timeout`. One clock, no new concept, and an app
-cannot hold a signing path open indefinitely.
+1. Every rejection that does not depend on the password — denied, expired, wallet re-bound — resolves
+   first, so the user is never asked to type a password into a doomed approval.
+2. `approval_needs_password` re-derives, at resolve time, whether this body reaches a secret and
+   whether the wallet it targets is protected. A card whose hint was stale gets `passwordRequired`
+   back and shows the field.
+3. The candidate is verified against the keychain — the fingerprint in the body for `GetSecretKey`,
+   the active wallet otherwise.
+4. Wrong password: `password_attempts` on the host record increments and the card gets
+   `wrongPassword { attemptsRemaining }`. The approval stays queued and the app keeps waiting. The
+   counter lives on the host, so reloading the approval webview cannot reset it.
+5. `MAX_ATTEMPTS` spent: the approval is consumed, the app's request fails `unauthorized` with
+   `TOO_MANY_ATTEMPTS_REASON`, and the card gets `tooManyAttempts`. Both paths share the constant
+   with the native prompt, so the two give the same number of tries.
+6. Verified: the approval is consumed and the password goes straight into `process_shared`.
+
+An approval that needs a password is queued with `BRIDGE_APPROVAL_PASSWORD_TIMEOUT_MS` (3 minutes)
+instead of the usual 30 seconds: reading a summary, typing a master password, and recovering from a
+typo does not fit in 30 seconds. The deadline is still a single clock an app cannot extend.
+
+`ResolveBridgeApprovalArgs` carries the password and a hand-written `Debug` that prints it as
+`Some("<redacted>")`, matching `BridgeTools`. The value is never written to the approval record and
+never crosses back into an app runtime.
 
 Only the four approval bodies that reach a wallet secret are gated — `GetSecretKey`, `SendXch`,
 `SignCoinSpends`, `SignMessage`. `approval_requires_password` matches on the body exhaustively, with
@@ -203,6 +216,11 @@ The verified password is threaded into the handler through `BridgeTools`, so the
 `send_xch.rs`, `sign_message.rs`, `sign_coin_spends.rs`, and `get_secret_key.rs` set `Some(...)`
 instead of the hardcoded `None`. `BridgeTools` carries a hand-written `Debug` that prints the field
 as `Some("<redacted>")`.
+
+Collecting the password in the `bridge-approval` webview rather than the main one is a deliberate
+trust-boundary choice: that webview is host-owned system UI, never a third-party app runtime, and the
+value travels the system bridge straight to the host. Apps are desktop-only, so nothing is lost by
+this path no longer consulting the frontend's biometric gate, which only ever applied on mobile.
 
 The bridge does not go through the endpoint macro, so the gating manifest does not apply to it. Both
 `send_xch` and `sign_coin_spends` reach a secret on every bridge call — the former hardcodes
@@ -251,6 +269,11 @@ All call sites then drop their password plumbing:
   request types with a `password` field, `fingerprint` mode == those with a `fingerprint` field,
   `auto_submit` mode == endpoints that only forward the password to `transact`/`transact_with`.
 - A bridge test that a protected wallet forces an approval despite the `WalletSendXchAutoSubmit` grant.
+- Bridge attempt-accounting tests: a wrong password reports the attempts left, the last one exhausts
+  the approval, over-counting still fails closed, and only secret-bearing bodies require a password
+  (with `GetSecretKey` targeting its own fingerprint).
+- Drift-reconciliation tests in `sage-rpc`: `login` re-derives a flag that was forced false, and
+  `reconcile_all_key_protection` corrects every wallet in both directions and is idempotent.
 - Existing `sage-rpc` password tests must pass **unchanged** — the regression canary proving the core
   was not disturbed.
 

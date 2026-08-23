@@ -6554,6 +6554,7 @@ dependencies = [
  "reqwest 0.12.24",
  "sage",
  "sage-api",
+ "sage-keychain",
  "sage-password-gate",
  "serde",
  "serde_json",

@@ -1,17 +1,17 @@
+use sage_password_gate::{MAX_ATTEMPTS, TOO_MANY_ATTEMPTS_REASON};
 use tauri::{AppHandle, Manager, State, Webview};
 
 use crate::{
     AppState, AppsHostState, BridgeApprovalsChangedEvent, BridgeCapability, BridgeContext,
     BridgeMethod, BridgeMethodCapability, BridgeOrigin, BridgeRegistry, BridgeRegistryKind,
-    BridgeTools, PendingBridgeApproval, ResolveBridgeApprovalArgs, RuntimeChangeSet,
+    BridgeTools, PendingBridgeApproval, ResolveBridgeApprovalArgs, ResolveBridgeApprovalResult,
     RustBridgeApprovalBody, RustBridgeApprovalRequest, RustBridgeInvokeResult, RustBridgeRequest,
-    RustBridgeResponse, SYSTEM_APP_BRIDGE_APPROVAL_ID, SharedSageApp, SystemBridgeCapability,
-    UserBridgeCapability, assert_bridge_origin, emit_bridge_response_to_app,
-    emit_system_runtime_event_to_listeners, ensure_app_is_enabled_for_scope,
-    ensure_approval_expiry_loop, find_runtime_by_app_id_optional, get_system_capability_definition,
-    get_user_capability_definition, hide_runtime_inner, list_pending_approvals, resolve_app,
-    start_bridge_approval_runtime, sync_bridge_approval_runtime, take_pending_approval,
-    unix_timestamp_ms, write_pending_approval,
+    RustBridgeResponse, SharedSageApp, SystemBridgeCapability, UserBridgeCapability,
+    assert_bridge_origin, emit_bridge_response_to_app, emit_system_runtime_event_to_listeners,
+    ensure_app_is_enabled_for_scope, ensure_approval_expiry_loop, get_system_capability_definition,
+    get_user_capability_definition, list_pending_approvals, peek_pending_approval,
+    record_password_attempt, resolve_app, start_bridge_approval_runtime,
+    sync_bridge_approval_runtime, take_pending_approval, unix_timestamp_ms, write_pending_approval,
 };
 
 pub(crate) async fn process(
@@ -88,11 +88,149 @@ pub(crate) async fn process_after_approval(
     app_state: &State<'_, AppState>,
     apps_state: &State<'_, AppsHostState>,
     args: ResolveBridgeApprovalArgs,
-) -> Result<(), String> {
-    let pending = take_pending_approval(apps_state, &args.approval_id)
+) -> Result<ResolveBridgeApprovalResult, String> {
+    // Peeked, not taken: an approval whose password is wrong has to stay queued
+    // so the user can try again in the card they are already looking at.
+    let pending = peek_pending_approval(apps_state, &args.approval_id)
         .await
         .ok_or_else(|| format!("No pending approval with id {}", args.approval_id))?;
 
+    // Every rejection that does not depend on the password comes first, so the
+    // user is never asked to type one into an approval that was already doomed.
+    let rejection = if !args.approved {
+        Some((
+            "user_denied",
+            args.reason
+                .clone()
+                .unwrap_or_else(|| "User denied the request".to_string()),
+        ))
+    } else if unix_timestamp_ms() as u64 > pending.expires_at_ms {
+        Some((
+            "approval_timeout",
+            "Approval expired before it was resolved".to_string(),
+        ))
+    } else if wallet_binding_violated(app_state, &pending).await {
+        Some((
+            "wallet_changed",
+            "Active wallet changed since the approval was requested".to_string(),
+        ))
+    } else {
+        None
+    };
+
+    if let Some((code, message)) = rejection {
+        return consume_and_respond(
+            app_handle,
+            apps_state,
+            &args.approval_id,
+            &pending,
+            RustBridgeInvokeResult::error(&pending.request.id, code, message),
+        )
+        .await;
+    }
+
+    // Only an approval that reaches a wallet secret *and* targets a protected
+    // wallet needs a password; everything else resolves with `None`.
+    let password = if approval_needs_password(app_state, &pending.approval.body).await {
+        // `GetSecretKey` names its own fingerprint, which need not be the active
+        // wallet; verifying the active wallet's password there would check the
+        // wrong key.
+        let fingerprint = match approval_password_fingerprint(&pending.approval.body) {
+            Some(fingerprint) => fingerprint,
+            None => active_wallet_fingerprint(app_state)
+                .await
+                .ok_or_else(|| "No wallet is logged in".to_string())?,
+        };
+
+        // The card renders its password field from a hint captured when the
+        // approval was queued. If that hint was stale, this is where the card
+        // finds out it has to ask.
+        let Some(candidate) = args.password.as_deref().filter(|it| !it.is_empty()) else {
+            return Ok(ResolveBridgeApprovalResult::PasswordRequired);
+        };
+
+        if verify_wallet_password(app_state, fingerprint, candidate).await? {
+            Some(candidate.to_string())
+        } else {
+            let attempts_used = record_password_attempt(apps_state, &args.approval_id)
+                .await
+                .ok_or_else(|| format!("No pending approval with id {}", args.approval_id))?;
+
+            return match password_attempt_outcome(attempts_used) {
+                // Retryable: the approval stays queued and the app keeps waiting.
+                PasswordAttempt::Retry { attempts_remaining } => {
+                    Ok(ResolveBridgeApprovalResult::WrongPassword { attempts_remaining })
+                }
+                PasswordAttempt::Exhausted => {
+                    consume_and_respond(
+                        app_handle,
+                        apps_state,
+                        &args.approval_id,
+                        &pending,
+                        RustBridgeInvokeResult::error(
+                            &pending.request.id,
+                            "unauthorized",
+                            TOO_MANY_ATTEMPTS_REASON.to_string(),
+                        ),
+                    )
+                    .await?;
+
+                    Ok(ResolveBridgeApprovalResult::TooManyAttempts)
+                }
+            };
+        }
+    } else {
+        None
+    };
+
+    // Committed: the approval is consumed whatever the wallet method returns.
+    take_pending_approval(apps_state, &args.approval_id).await;
+    finish_approval(app_handle, apps_state).await?;
+
+    let origin = bridge_origin_for(app_handle, &pending).await?;
+
+    // The password, when one was needed, was verified above and is handed
+    // straight to the wallet method. It never enters the approval record and
+    // never crosses back into an app runtime.
+    let invoke_result = process_shared(
+        app_handle,
+        app_state,
+        &origin,
+        pending.registry_kind,
+        &pending.request,
+        true,
+        password,
+    )
+    .await?;
+
+    emit_bridge_response_to_app(app_handle, &origin.app, &invoke_result.try_into()?).await?;
+
+    Ok(ResolveBridgeApprovalResult::Resolved)
+}
+
+/// Drops the approval from the queue and hands `invoke_result` back to the app.
+async fn consume_and_respond(
+    app_handle: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+    approval_id: &str,
+    pending: &PendingBridgeApproval,
+    invoke_result: RustBridgeInvokeResult,
+) -> Result<ResolveBridgeApprovalResult, String> {
+    take_pending_approval(apps_state, approval_id).await;
+    finish_approval(app_handle, apps_state).await?;
+
+    let origin = bridge_origin_for(app_handle, pending).await?;
+    emit_bridge_response_to_app(app_handle, &origin.app, &invoke_result.try_into()?).await?;
+
+    Ok(ResolveBridgeApprovalResult::Resolved)
+}
+
+/// Re-syncs the approval runtime and tells listeners the queue changed. Runs
+/// once an approval has actually left the queue.
+async fn finish_approval(
+    app_handle: &AppHandle,
+    apps_state: &State<'_, AppsHostState>,
+) -> Result<(), String> {
     sync_bridge_approval_runtime(app_handle, apps_state).await?;
 
     let approvals_changed_event =
@@ -100,105 +238,53 @@ pub(crate) async fn process_after_approval(
 
     emit_system_runtime_event_to_listeners(app_handle, apps_state, approvals_changed_event).await;
 
+    Ok(())
+}
+
+async fn bridge_origin_for(
+    app_handle: &AppHandle,
+    pending: &PendingBridgeApproval,
+) -> Result<BridgeOrigin, String> {
     let app = resolve_app(app_handle, &pending.app_id)
         .await
         .map_err(|err| format!("Failed to resolve app: {err}"))?;
 
-    let origin =
-        assert_bridge_origin(app_handle, &app.with_app(SharedSageApp::webview_label)).await?;
+    assert_bridge_origin(app_handle, &app.with_app(SharedSageApp::webview_label)).await
+}
 
-    let invoke_result = if !args.approved {
-        RustBridgeInvokeResult::error(
-            &pending.request.id,
-            "user_denied",
-            args.reason
-                .unwrap_or_else(|| "User denied the request".to_string()),
-        )
-    } else if unix_timestamp_ms() as u64 > pending.expires_at_ms {
-        RustBridgeInvokeResult::error(
-            &pending.request.id,
-            "approval_timeout",
-            "Approval expired before it was resolved".to_string(),
-        )
-    } else if wallet_binding_violated(app_state, &pending).await {
-        RustBridgeInvokeResult::error(
-            &pending.request.id,
-            "wallet_changed",
-            "Active wallet changed since the approval was requested".to_string(),
-        )
-    } else if !approval_requires_password(&pending) {
-        // Nothing here reaches a wallet secret, so there is nothing to unlock.
-        process_shared(
-            app_handle,
-            app_state,
-            &origin,
-            pending.registry_kind,
-            &pending.request,
-            true,
-            None,
-        )
-        .await?
-    } else {
-        // The gate targets the wallet the approval actually acts on, which for
-        // `GetSecretKey` is the fingerprint in the approval body rather than
-        // the active wallet.
-        let target_fingerprint = approval_password_fingerprint(&pending);
+/// Whether `password` unlocks `fingerprint`. Takes the Sage lock only for the
+/// probe and never holds it across an await.
+async fn verify_wallet_password(
+    app_state: &State<'_, AppState>,
+    fingerprint: u32,
+    password: &str,
+) -> Result<bool, String> {
+    let sage = app_state.lock().await;
 
-        // Only a password-protected wallet can produce a password dialog. On
-        // the unprotected path the gate still runs (the frontend may still put
-        // a biometric gate in front of it) but nothing covers the main webview,
-        // so hiding and re-syncing the approval runtime would be a pure
-        // flicker.
-        let protected = match target_fingerprint {
-            Some(fingerprint) => wallet_password_protected(app_state, fingerprint).await,
-            None => active_wallet_password_protected(app_state).await,
-        };
+    match sage
+        .keychain
+        .extract_secrets(fingerprint, password.as_bytes())
+    {
+        Ok(_) => Ok(true),
+        Err(sage_keychain::KeychainError::Decrypt) => Ok(false),
+        Err(err) => Err(err.to_string()),
+    }
+}
 
-        // Hide the approval app before prompting: app runtimes are sibling
-        // webviews inside the same window and would cover the main webview's
-        // password dialog.
-        if protected {
-            hide_bridge_approval_runtime(app_handle, apps_state).await;
-        }
+/// What a wrong password means, given how many attempts have now been spent.
+/// Shares `MAX_ATTEMPTS` with the native prompt so both paths give the user the
+/// same number of tries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PasswordAttempt {
+    Retry { attempts_remaining: u8 },
+    Exhausted,
+}
 
-        let resolved = password_gate_resolve(app_handle, app_state, target_fingerprint).await;
-
-        // The prompt hid the approval runtime, so recompute visibility on every
-        // exit path from the password phase -- success, cancel, error, and the
-        // post-gate expiry check below alike. Without this a still-queued
-        // approval stays invisible with no way for the user to reach it.
-        if protected {
-            restore_bridge_approval_runtime(app_handle, apps_state).await;
-        }
-
-        match resolved {
-            // The expiry check above ran before the prompt, and the prompt can
-            // outlive the deadline, so the approval window is re-checked here.
-            Ok(_) if unix_timestamp_ms() as u64 > pending.expires_at_ms => {
-                RustBridgeInvokeResult::error(
-                    &pending.request.id,
-                    "approval_timeout",
-                    "Approval expired during password entry".to_string(),
-                )
-            }
-            Ok(password) => {
-                process_shared(
-                    app_handle,
-                    app_state,
-                    &origin,
-                    pending.registry_kind,
-                    &pending.request,
-                    true,
-                    password,
-                )
-                .await?
-            }
-            Err(err) => RustBridgeInvokeResult::error(&pending.request.id, "unauthorized", err),
-        }
-    };
-
-    emit_bridge_response_to_app(app_handle, &origin.app, &invoke_result.try_into()?).await?;
-    Ok(())
+fn password_attempt_outcome(attempts_used: u8) -> PasswordAttempt {
+    match MAX_ATTEMPTS.saturating_sub(attempts_used) {
+        0 => PasswordAttempt::Exhausted,
+        attempts_remaining => PasswordAttempt::Retry { attempts_remaining },
+    }
 }
 
 async fn process_shared(
@@ -333,74 +419,6 @@ async fn execute_bridge_request(
     }
 }
 
-/// Hides the `bridge-approval` runtime so it cannot cover the `main` webview's
-/// password dialog. Best effort: a covered dialog is a UX problem, not a
-/// security one, so every failure is logged and the request continues.
-async fn hide_bridge_approval_runtime(
-    app_handle: &AppHandle,
-    apps_state: &State<'_, AppsHostState>,
-) {
-    let Some(runtime) =
-        find_runtime_by_app_id_optional(apps_state, SYSTEM_APP_BRIDGE_APPROVAL_ID).await
-    else {
-        return;
-    };
-
-    let mut changes = RuntimeChangeSet::default();
-
-    if let Err(err) = hide_runtime_inner(app_handle, &runtime, &mut changes) {
-        tracing::warn!(
-            error = %err,
-            "failed to hide the bridge approval runtime before the password prompt"
-        );
-        return;
-    }
-
-    changes.emit(app_handle, apps_state).await;
-}
-
-/// Recomputes bridge-approval runtime visibility after the password prompt,
-/// re-showing the dialog when further approvals are still queued and letting
-/// it stay killed when the queue is empty. Best effort, like the hide: a
-/// failure here is logged and never aborts the request.
-async fn restore_bridge_approval_runtime(
-    app_handle: &AppHandle,
-    apps_state: &State<'_, AppsHostState>,
-) {
-    if let Err(err) = sync_bridge_approval_runtime(app_handle, apps_state).await {
-        tracing::warn!(
-            error = %err,
-            "failed to restore the bridge approval runtime after the password prompt"
-        );
-    }
-}
-
-/// Resolves the master-key password in the trusted `main` webview. The value
-/// never crosses into an app runtime: it is handed straight to the wallet
-/// method through `BridgeTools`.
-async fn password_gate_resolve(
-    app_handle: &AppHandle,
-    app_state: &State<'_, AppState>,
-    fingerprint: Option<u32>,
-) -> Result<Option<String>, String> {
-    let gate = app_handle.state::<sage_password_gate::PasswordGateState>();
-
-    let resolved = match fingerprint {
-        Some(fingerprint) => {
-            sage_password_gate::resolve_for_fingerprint(
-                app_handle,
-                app_state.inner(),
-                &gate,
-                fingerprint,
-            )
-            .await
-        }
-        None => sage_password_gate::resolve(app_handle, app_state.inner(), &gate).await,
-    };
-
-    resolved.map_err(|err| err.reason)
-}
-
 async fn active_wallet_fingerprint(app_state: &State<'_, AppState>) -> Option<u32> {
     app_state
         .lock()
@@ -436,13 +454,29 @@ async fn wallet_password_protected(app_state: &State<'_, AppState>, fingerprint:
         .is_some_and(|wallet| wallet.password_protected)
 }
 
+/// Whether this approval must collect a master password: it reaches a wallet
+/// secret *and* the wallet it targets is protected.
+async fn approval_needs_password(
+    app_state: &State<'_, AppState>,
+    body: &RustBridgeApprovalBody,
+) -> bool {
+    if !approval_requires_password(body) {
+        return false;
+    }
+
+    match approval_password_fingerprint(body) {
+        Some(fingerprint) => wallet_password_protected(app_state, fingerprint).await,
+        None => active_wallet_password_protected(app_state).await,
+    }
+}
+
 /// The wallet the password gate must target for this approval.
 ///
 /// `None` means "the active wallet". `GetSecretKey` names its own fingerprint,
 /// which need not be the active wallet, so prompting for and verifying the
 /// active wallet's password there would hand the keychain the wrong secret.
-fn approval_password_fingerprint(pending: &PendingBridgeApproval) -> Option<u32> {
-    match pending.approval.body {
+fn approval_password_fingerprint(body: &RustBridgeApprovalBody) -> Option<u32> {
+    match *body {
         RustBridgeApprovalBody::GetSecretKey { fingerprint } => Some(fingerprint),
 
         RustBridgeApprovalBody::SendXch { .. }
@@ -460,8 +494,8 @@ fn approval_password_fingerprint(pending: &PendingBridgeApproval) -> Option<u32>
 /// the user for nothing and would fail outright when no wallet is active.
 /// Listed exhaustively on purpose: a new approval body must opt into the
 /// prompt deliberately rather than inherit one from a catch-all arm.
-fn approval_requires_password(pending: &PendingBridgeApproval) -> bool {
-    match pending.approval.body {
+fn approval_requires_password(body: &RustBridgeApprovalBody) -> bool {
+    match *body {
         RustBridgeApprovalBody::GetSecretKey { .. }
         | RustBridgeApprovalBody::SendXch { .. }
         | RustBridgeApprovalBody::SignCoinSpends { .. }
@@ -504,6 +538,7 @@ async fn request_approval(
 ) -> Result<(), String> {
     let apps_state = app_handle.state::<AppsHostState>();
     let approved_fingerprint = active_wallet_fingerprint(app_state).await;
+    let requires_password = approval_needs_password(app_state, &approval.body).await;
 
     write_pending_approval(
         &apps_state,
@@ -512,6 +547,7 @@ async fn request_approval(
         &approval,
         request,
         approved_fingerprint,
+        requires_password,
     )
     .await;
 
@@ -658,4 +694,89 @@ fn assert_bridge_version(request: &RustBridgeRequest) -> Result<(), RustBridgeIn
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SageNetworkWhitelistEntry;
+
+    /// The user gets `MAX_ATTEMPTS` tries in the approval card, the same budget
+    /// the native prompt gives them, and the count shown must be what is left
+    /// *after* the attempt they just spent.
+    #[test]
+    fn a_wrong_password_reports_the_remaining_attempts() {
+        assert_eq!(
+            password_attempt_outcome(1),
+            PasswordAttempt::Retry {
+                attempts_remaining: MAX_ATTEMPTS - 1
+            }
+        );
+        assert_eq!(
+            password_attempt_outcome(MAX_ATTEMPTS - 1),
+            PasswordAttempt::Retry {
+                attempts_remaining: 1
+            }
+        );
+    }
+
+    #[test]
+    fn spending_the_last_attempt_exhausts_the_approval() {
+        assert_eq!(
+            password_attempt_outcome(MAX_ATTEMPTS),
+            PasswordAttempt::Exhausted
+        );
+    }
+
+    /// A host that somehow over-counts must still fail closed rather than wrap
+    /// around into a fresh budget of retries.
+    #[test]
+    fn over_counting_attempts_stays_exhausted() {
+        assert_eq!(
+            password_attempt_outcome(MAX_ATTEMPTS + 10),
+            PasswordAttempt::Exhausted
+        );
+    }
+
+    /// Only the bodies that reach a wallet secret are gated. Capability and
+    /// network-whitelist grants must never ask for a password: there is nothing
+    /// to unlock, and the prompt would be unanswerable while logged out.
+    #[test]
+    fn only_secret_bearing_bodies_require_a_password() {
+        assert!(approval_requires_password(
+            &RustBridgeApprovalBody::GetSecretKey { fingerprint: 1 }
+        ));
+        assert!(approval_requires_password(
+            &RustBridgeApprovalBody::SignMessage {
+                message: String::new(),
+                public_key: String::new(),
+            }
+        ));
+        assert!(!approval_requires_password(
+            &RustBridgeApprovalBody::NetworkWhitelistGrant {
+                entry: SageNetworkWhitelistEntry::new_unchecked("https", "example.com"),
+                network_id: None,
+            }
+        ));
+    }
+
+    /// `GetSecretKey` acts on the wallet named in its body, which need not be
+    /// the active one. Verifying the active wallet's password there would check
+    /// the wrong key entirely.
+    #[test]
+    fn get_secret_key_targets_its_own_fingerprint() {
+        assert_eq!(
+            approval_password_fingerprint(&RustBridgeApprovalBody::GetSecretKey {
+                fingerprint: 1234
+            }),
+            Some(1234)
+        );
+        assert_eq!(
+            approval_password_fingerprint(&RustBridgeApprovalBody::SignMessage {
+                message: String::new(),
+                public_key: String::new(),
+            }),
+            None
+        );
+    }
 }

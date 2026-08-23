@@ -19,6 +19,11 @@ pub(crate) struct PendingBridgeApprovalView {
     pub approval: RustBridgeApprovalRequest,
     pub created_at_ms: u64,
     pub expires_at_ms: u64,
+    /// Whether the card must collect the master password before approving.
+    pub requires_password: bool,
+    /// Incorrect attempts already spent, so a card that reloads mid-retry can
+    /// still show how many tries are left.
+    pub password_attempts: u8,
 }
 
 #[async_trait]
@@ -62,6 +67,8 @@ impl From<PendingBridgeApproval> for PendingBridgeApprovalView {
             approval: approval.approval,
             created_at_ms: approval.created_at_ms,
             expires_at_ms: approval.expires_at_ms,
+            requires_password: approval.requires_password,
+            password_attempts: approval.password_attempts,
         }
     }
 }

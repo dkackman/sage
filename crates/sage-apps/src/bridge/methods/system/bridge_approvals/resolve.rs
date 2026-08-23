@@ -35,10 +35,11 @@ impl BridgeMethod for BridgeApprovalsResolve {
     ) -> BridgeHandleResult {
         let params: ResolveBridgeApprovalArgs = parse_required_params(self, request)?;
 
-        process_after_approval(tools.app_handle, tools.app_state, tools.host_state, params)
-            .await
-            .map_err(BridgeMethodHandleError::internal_error)?;
+        let result =
+            process_after_approval(tools.app_handle, tools.app_state, tools.host_state, params)
+                .await
+                .map_err(BridgeMethodHandleError::internal_error)?;
 
-        Ok(Box::new(()))
+        Ok(Box::new(result))
     }
 }

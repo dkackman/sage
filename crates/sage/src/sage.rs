@@ -532,13 +532,22 @@ impl Sage {
         Ok(())
     }
 
+    /// Whether `fingerprint` has an entry in the wallet config.
+    pub fn has_wallet_config(&self, fingerprint: u32) -> bool {
+        self.wallet_config
+            .wallets
+            .iter()
+            .any(|w| w.fingerprint == fingerprint)
+    }
+
     /// Updates the wallet config's `password_protected` flag if it doesn't
-    /// match the actual state, and persists the change.
+    /// match the actual state, and persists the change. Returns whether the
+    /// flag was actually corrected.
     pub fn set_password_protected(
         &mut self,
         fingerprint: u32,
         password_protected: bool,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let wallet = self
             .wallet_config
             .wallets
@@ -546,11 +555,13 @@ impl Sage {
             .find(|w| w.fingerprint == fingerprint)
             .ok_or(Error::UnknownFingerprint)?;
 
-        if wallet.password_protected != password_protected {
-            wallet.password_protected = password_protected;
-            self.save_config()?;
+        if wallet.password_protected == password_protected {
+            return Ok(false);
         }
-        Ok(())
+
+        wallet.password_protected = password_protected;
+        self.save_config()?;
+        Ok(true)
     }
 
     pub fn save_keychain(&self) -> Result<()> {

@@ -14,6 +14,11 @@ use crate::{
 
 const BRIDGE_APPROVAL_TIMEOUT_MS: u64 = 30_000;
 
+/// Approvals that also need a password get a longer window: 30 seconds is not
+/// enough to read the summary, type a master password, and recover from a typo
+/// or two.
+const BRIDGE_APPROVAL_PASSWORD_TIMEOUT_MS: u64 = 180_000;
+
 #[derive(Debug, Default)]
 pub struct BridgeState {
     pending_approvals: Mutex<BTreeMap<String, PendingBridgeApproval>>,
@@ -27,9 +32,17 @@ pub(crate) async fn write_pending_approval(
     approval: &RustBridgeApprovalRequest,
     request: &RustBridgeRequest,
     approved_fingerprint: Option<u32>,
+    requires_password: bool,
 ) -> String {
     let approval_id = Uuid::new_v4().to_string();
     let now = unix_timestamp_ms() as u64;
+
+    let timeout_ms = if requires_password {
+        BRIDGE_APPROVAL_PASSWORD_TIMEOUT_MS
+    } else {
+        BRIDGE_APPROVAL_TIMEOUT_MS
+    };
+
     let mut pending = apps_state.bridge.pending_approvals.lock().await;
     pending.insert(
         approval_id.clone(),
@@ -40,8 +53,10 @@ pub(crate) async fn write_pending_approval(
             approval: approval.clone(),
             request: request.clone(),
             created_at_ms: now,
-            expires_at_ms: now + BRIDGE_APPROVAL_TIMEOUT_MS,
+            expires_at_ms: now + timeout_ms,
             approved_fingerprint,
+            requires_password,
+            password_attempts: 0,
         },
     );
 
@@ -62,6 +77,29 @@ pub(crate) async fn remove_pending_approval(
 ) {
     let mut pending = apps_state.bridge.pending_approvals.lock().await;
     pending.remove(approval_id);
+}
+
+/// Reads a pending approval without consuming it. The password path has to
+/// inspect an approval before it is committed to resolving it, so that a wrong
+/// password can leave the approval queued for another try.
+pub(crate) async fn peek_pending_approval(
+    apps_state: &State<'_, AppsHostState>,
+    approval_id: &str,
+) -> Option<PendingBridgeApproval> {
+    let pending = apps_state.bridge.pending_approvals.lock().await;
+    pending.get(approval_id).cloned()
+}
+
+/// Records one spent password attempt and returns the new total. Returns `None`
+/// if the approval is gone (expired between the prompt and the submission).
+pub(crate) async fn record_password_attempt(
+    apps_state: &State<'_, AppsHostState>,
+    approval_id: &str,
+) -> Option<u8> {
+    let mut pending = apps_state.bridge.pending_approvals.lock().await;
+    let approval = pending.get_mut(approval_id)?;
+    approval.password_attempts = approval.password_attempts.saturating_add(1);
+    Some(approval.password_attempts)
 }
 
 pub(crate) async fn take_pending_approval(

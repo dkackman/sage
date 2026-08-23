@@ -12,6 +12,10 @@ pub const MAX_ATTEMPTS: u8 = 3;
 /// distinguish a deliberate cancel from a genuine auth failure and stay silent.
 pub const CANCELLED_REASON: &str = "Password entry cancelled";
 
+/// Reason string used when the user exhausts `MAX_ATTEMPTS`. Shared with the
+/// app-bridge gate so both paths report the failure identically.
+pub const TOO_MANY_ATTEMPTS_REASON: &str = "Too many incorrect password attempts";
+
 /// How long the resolve loop waits for a frontend reply before giving up.
 /// Generous enough that a human typing a password is never cut off, while
 /// still bounding the hang if the `main` webview is absent or unresponsive.
@@ -71,7 +75,7 @@ pub async fn resolve_with(
         }
     }
 
-    Err(unauthorized("Too many incorrect password attempts"))
+    Err(unauthorized(TOO_MANY_ATTEMPTS_REASON))
 }
 
 #[cfg(test)]

@@ -5,7 +5,9 @@ mod types;
 use sage_api::ErrorKind;
 
 pub use prompter::{PasswordVerifier, Prompter, SAGE_WEBVIEW_LABEL};
-pub use resolve::{CANCELLED_REASON, MAX_ATTEMPTS, PROMPT_TIMEOUT, resolve_with};
+pub use resolve::{
+    CANCELLED_REASON, MAX_ATTEMPTS, PROMPT_TIMEOUT, TOO_MANY_ATTEMPTS_REASON, resolve_with,
+};
 pub use types::{PasswordAttemptError, PasswordOutcome, PasswordRequest};
 
 /// This crate's error. Structurally identical to `sage-tauri`'s `Error`, so the

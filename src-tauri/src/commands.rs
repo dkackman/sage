@@ -40,6 +40,24 @@ pub async fn initialize(
     app_state::initialize(app_handle.clone(), &mut sage).await?;
     drop(sage);
 
+    // Correct any wallet whose `password_protected` flag has drifted from the
+    // keychain. Off the startup path because it costs an Argon2 probe per
+    // wallet; `login` reconciles the active wallet on its own, so this sweep
+    // exists for the wallets the session never logs into.
+    let app_state = (*state).clone();
+
+    tokio::spawn(async move {
+        match app_state.lock().await.reconcile_all_key_protection() {
+            Ok(0) => {}
+            Ok(corrected) => {
+                tracing::info!("Corrected the password-protection flag on {corrected} wallet(s)");
+            }
+            Err(error) => {
+                error!("Error while reconciling password protection: {error:?}");
+            }
+        }
+    });
+
     let app_state = (*state).clone();
 
     tokio::spawn(async move {
