@@ -103,14 +103,9 @@ fn generate(input: &TokenStream, tauri: bool) -> TokenStream {
 enum GateMode {
     /// Prompt on every call, verifying against the active wallet.
     Always,
-    /// Prompt only when `req.auto_submit` is set. These endpoints build a
-    /// transaction for confirmation first and reach no secret until the caller
-    /// asks for it to be signed and submitted, so prompting unconditionally
-    /// would collect a password that is then discarded.
+    /// Prompt only when `req.auto_submit` is set.
     AutoSubmit,
-    /// Prompt on every call, verifying against `req.fingerprint`. These act on
-    /// a *named* wallet rather than the active one -- and may run with no
-    /// wallet active at all, from the logged-out wallet list.
+    /// Prompt on every call, verifying against `req.fingerprint`.
     Fingerprint,
 }
 

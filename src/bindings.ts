@@ -962,7 +962,20 @@ export type DidRecord = { launcher_id: string; name: string | null; visible: boo
 export type EmptyResponse = Record<string, never>
 export type EnvironmentThemeView = { name: string; displayName: string; mostLike?: string | null; inherits?: string | null; cssVars: Partial<{ [key in string]: string }> }
 export type Error = { kind: ErrorKind; reason: string }
-export type ErrorKind = "wallet" | "api" | "not_found" | "unauthorized" | "incorrect_password" | "internal" | "database_migration" | "nfc"
+export type ErrorKind = "wallet" | "api" | "not_found" | "unauthorized" | "incorrect_password" | 
+/**
+ * The user dismissed the password prompt. A deliberate choice, not a
+ * failure — frontends should stay silent rather than toast an error.
+ */
+"password_cancelled" | 
+/**
+ * The user exhausted the password attempt budget.
+ */
+"too_many_password_attempts" | 
+/**
+ * The password prompt was never answered within the timeout.
+ */
+"password_prompt_timed_out" | "internal" | "database_migration" | "nfc"
 /**
  * Exercise options
  */

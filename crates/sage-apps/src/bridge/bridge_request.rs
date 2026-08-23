@@ -8,9 +8,9 @@ use crate::{
     RustBridgeApprovalBody, RustBridgeApprovalRequest, RustBridgeInvokeResult, RustBridgeRequest,
     RustBridgeResponse, SharedSageApp, SystemBridgeCapability, UserBridgeCapability,
     assert_bridge_origin, emit_bridge_response_to_app, emit_system_runtime_event_to_listeners,
-    ensure_app_is_enabled_for_scope, ensure_approval_expiry_loop, get_system_capability_definition,
-    get_user_capability_definition, list_pending_approvals, peek_pending_approval,
-    record_password_attempt, resolve_app, start_bridge_approval_runtime,
+    ensure_app_is_enabled_for_scope, ensure_approval_expiry_loop, extend_approval_for_password,
+    get_system_capability_definition, get_user_capability_definition, list_pending_approvals,
+    peek_pending_approval, record_password_attempt, resolve_app, start_bridge_approval_runtime,
     sync_bridge_approval_runtime, take_pending_approval, unix_timestamp_ms, write_pending_approval,
 };
 
@@ -144,8 +144,19 @@ pub(crate) async fn process_after_approval(
 
         // The card renders its password field from a hint captured when the
         // approval was queued. If that hint was stale, this is where the card
-        // finds out it has to ask.
+        // finds out it has to ask
         let Some(candidate) = args.password.as_deref().filter(|it| !it.is_empty()) else {
+            if extend_approval_for_password(apps_state, &args.approval_id).await {
+                let approvals_changed_event = BridgeApprovalsChangedEvent::new_from_list(
+                    list_pending_approvals(apps_state).await,
+                );
+                emit_system_runtime_event_to_listeners(
+                    app_handle,
+                    apps_state,
+                    approvals_changed_event,
+                )
+                .await;
+            }
             return Ok(ResolveBridgeApprovalResult::PasswordRequired);
         };
 
@@ -284,14 +295,8 @@ async fn verify_wallet_password(
 ) -> Result<bool, String> {
     let sage = app_state.lock().await;
 
-    match sage
-        .keychain
-        .extract_secrets(fingerprint, password.as_bytes())
-    {
-        Ok(_) => Ok(true),
-        Err(sage_keychain::KeychainError::Decrypt) => Ok(false),
-        Err(err) => Err(err.to_string()),
-    }
+    sage.verify_password(fingerprint, password)
+        .map_err(|err| err.to_string())
 }
 
 /// What a wrong password means, given how many attempts have now been spent.
@@ -470,11 +475,7 @@ async fn wallet_password_protected(app_state: &State<'_, AppState>, fingerprint:
     app_state
         .lock()
         .await
-        .wallet_config
-        .wallets
-        .iter()
-        .find(|wallet| wallet.fingerprint == fingerprint)
-        .is_some_and(|wallet| wallet.password_protected)
+        .is_password_protected_flag(fingerprint)
 }
 
 /// Whether this approval must collect a master password: it reaches a wallet
@@ -781,6 +782,93 @@ mod tests {
                 network_id: None,
             }
         ));
+    }
+
+    /// Every bridge method that builds one of the password-gated sage-api
+    /// request types must inject the resolved password from `BridgeTools`.
+    /// The handlers each hand-copy `req.password = tools.password...`; a new
+    /// signing method that forgets the line would collect and verify the
+    /// user's password in the approval card and then invoke the endpoint with
+    /// `password: None` — correct password, "Incorrect password" anyway,
+    /// discoverable only at runtime against a protected wallet.
+    #[test]
+    fn gated_bridge_methods_inject_the_resolved_password() {
+        use std::collections::BTreeMap;
+        use std::path::Path;
+
+        let manifest: BTreeMap<String, String> =
+            serde_json::from_str(include_str!("../../../sage-api/password-gating.json")).unwrap();
+
+        let type_names: Vec<String> = manifest.keys().map(|name| to_pascal_case(name)).collect();
+
+        fn to_pascal_case(snake: &str) -> String {
+            snake
+                .split('_')
+                .map(|word| {
+                    let mut characters = word.chars();
+                    match characters.next() {
+                        Some(first) => {
+                            first.to_uppercase().collect::<String>() + characters.as_str()
+                        }
+                        None => String::new(),
+                    }
+                })
+                .collect()
+        }
+
+        /// Whether `token` appears in `source` as a standalone identifier
+        /// (so `SendXch` does not match inside `WalletSendXchParams`).
+        fn contains_token(source: &str, token: &str) -> bool {
+            let is_ident = |c: char| c.is_ascii_alphanumeric() || c == '_';
+            source.match_indices(token).any(|(index, _)| {
+                let before_ok =
+                    index == 0 || !source[..index].chars().next_back().is_some_and(is_ident);
+                let after = index + token.len();
+                let after_ok = !source[after..].chars().next().is_some_and(is_ident);
+                before_ok && after_ok
+            })
+        }
+
+        fn visit(dir: &Path, files: &mut Vec<(std::path::PathBuf, String)>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    visit(&path, files);
+                } else if path.extension().and_then(|it| it.to_str()) == Some("rs") {
+                    files.push((path.clone(), std::fs::read_to_string(&path).unwrap()));
+                }
+            }
+        }
+
+        let methods_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/bridge/methods");
+        let mut files = Vec::new();
+        visit(&methods_dir, &mut files);
+        assert!(files.len() >= 4, "expected bridge method sources");
+
+        let mut missing = Vec::new();
+        let mut gated_files = 0;
+        for (path, source) in &files {
+            if !type_names.iter().any(|name| contains_token(source, name)) {
+                continue;
+            }
+            gated_files += 1;
+            if !source.contains("tools.password") {
+                missing.push(path.display().to_string());
+            }
+        }
+
+        // The four wallet signing methods must all be caught, or the scan
+        // itself has drifted.
+        assert!(
+            gated_files >= 4,
+            "expected at least 4 bridge method files referencing gated request types, \
+             found {gated_files}",
+        );
+        assert!(
+            missing.is_empty(),
+            "these bridge methods build a password-gated request type but never inject \
+             `tools.password` into it, so the verified password would be dropped: {missing:?}",
+        );
     }
 
     /// `GetSecretKey` acts on the wallet named in its body, which need not be

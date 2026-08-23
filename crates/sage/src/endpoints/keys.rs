@@ -400,12 +400,7 @@ impl Sage {
         Ok(ChangePasswordResponse {})
     }
 
-    /// Re-derives the `password_protected` flag from the actual keychain state and
-    /// persists any correction. This is the recovery path for the rare case where
-    /// the config flag drifts from reality (e.g. a crash between writing `keys.bin`
-    /// and the config in `change_password`). It runs a single decrypt probe, so it
-    /// is only invoked on demand after an unexpected decrypt failure — never on the
-    /// login hot path.
+    /// Re-derives the `password_protected` flag from the actual keychain state
     pub fn reconcile_key_protection(
         &mut self,
         req: ReconcileKeyProtection,
@@ -417,12 +412,6 @@ impl Sage {
 
     /// Re-derives `password_protected` for every configured wallet and returns
     /// how many were corrected.
-    ///
-    /// [`Self::login`] only covers the wallet being logged into. The wallet
-    /// list, and the logged-out `delete_key` / `get_secret_key` gates, read the
-    /// flag for wallets this session never logs into, so those need a sweep of
-    /// their own. It costs one Argon2 probe per wallet, which is why the host
-    /// runs it off the startup path rather than inside `initialize`.
     pub fn reconcile_all_key_protection(&mut self) -> Result<usize> {
         let fingerprints: Vec<u32> = self
             .wallet_config

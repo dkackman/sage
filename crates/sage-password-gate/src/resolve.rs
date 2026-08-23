@@ -21,9 +21,9 @@ pub const TOO_MANY_ATTEMPTS_REASON: &str = "Too many incorrect password attempts
 /// still bounding the hang if the `main` webview is absent or unresponsive.
 pub const PROMPT_TIMEOUT: Duration = Duration::from_mins(5);
 
-fn unauthorized(reason: &str) -> Error {
+fn gate_error(kind: ErrorKind, reason: &str) -> Error {
     Error {
-        kind: ErrorKind::Unauthorized,
+        kind,
         reason: reason.to_string(),
     }
 }
@@ -63,7 +63,9 @@ pub async fn resolve_with(
 
         match prompter.prompt(request).await? {
             PasswordOutcome::NoAuthNeeded => return Ok(None),
-            PasswordOutcome::Cancelled => return Err(unauthorized(CANCELLED_REASON)),
+            PasswordOutcome::Cancelled => {
+                return Err(gate_error(ErrorKind::PasswordCancelled, CANCELLED_REASON));
+            }
             PasswordOutcome::Password { password } => {
                 if verifier.verify(fingerprint, &password).await? {
                     return Ok(Some(password));
@@ -75,7 +77,10 @@ pub async fn resolve_with(
         }
     }
 
-    Err(unauthorized(TOO_MANY_ATTEMPTS_REASON))
+    Err(gate_error(
+        ErrorKind::TooManyPasswordAttempts,
+        TOO_MANY_ATTEMPTS_REASON,
+    ))
 }
 
 #[cfg(test)]
@@ -131,11 +136,17 @@ mod tests {
     #[async_trait]
     impl PasswordVerifier for KeychainVerifier {
         async fn verify(&self, fingerprint: u32, password: &str) -> Result<bool> {
+            // Mirrors `Sage::verify_password`: only an actual decrypted
+            // secret counts as a match, and a missing secret fails closed.
             match self
                 .keychain
                 .extract_secrets(fingerprint, password.as_bytes())
             {
-                Ok(_) => Ok(true),
+                Ok((_, Some(_))) => Ok(true),
+                Ok((_, None)) => Err(Error {
+                    kind: ErrorKind::Internal,
+                    reason: KeychainError::NoSecretKey.to_string(),
+                }),
                 Err(KeychainError::Decrypt) => Ok(false),
                 Err(err) => Err(Error {
                     kind: ErrorKind::Internal,
@@ -219,7 +230,7 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert!(matches!(error.kind, ErrorKind::Unauthorized));
+        assert!(matches!(error.kind, ErrorKind::TooManyPasswordAttempts));
         assert_eq!(prompter.seen().len(), MAX_ATTEMPTS as usize);
     }
 
@@ -232,7 +243,7 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert!(matches!(error.kind, ErrorKind::Unauthorized));
+        assert!(matches!(error.kind, ErrorKind::PasswordCancelled));
         assert_eq!(error.reason, CANCELLED_REASON);
         assert_eq!(prompter.seen().len(), 1);
     }

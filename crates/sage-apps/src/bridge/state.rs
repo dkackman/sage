@@ -90,6 +90,32 @@ pub(crate) async fn peek_pending_approval(
     pending.get(approval_id).cloned()
 }
 
+/// Moves an approval onto the password clock: sets `requires_password` and
+/// extends `expires_at_ms` to the full password window (never shortens it).
+pub(crate) async fn extend_approval_for_password(
+    apps_state: &State<'_, AppsHostState>,
+    approval_id: &str,
+) -> bool {
+    let mut pending = apps_state.bridge.pending_approvals.lock().await;
+    let Some(approval) = pending.get_mut(approval_id) else {
+        return false;
+    };
+
+    let expires_at_ms = unix_timestamp_ms() as u64 + BRIDGE_APPROVAL_PASSWORD_TIMEOUT_MS;
+
+    let mut changed = false;
+    if !approval.requires_password {
+        approval.requires_password = true;
+        changed = true;
+    }
+    if expires_at_ms > approval.expires_at_ms {
+        approval.expires_at_ms = expires_at_ms;
+        changed = true;
+    }
+
+    changed
+}
+
 /// Records one spent password attempt and returns the new total. Returns `None`
 /// if the approval is gone (expired between the prompt and the submission).
 pub(crate) async fn record_password_attempt(

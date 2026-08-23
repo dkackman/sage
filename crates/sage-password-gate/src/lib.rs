@@ -90,7 +90,7 @@ impl PasswordGateState {
             Err(_) => {
                 self.cancel(request_id).await;
                 Err(Error {
-                    kind: ErrorKind::Unauthorized,
+                    kind: ErrorKind::PasswordPromptTimedOut,
                     reason: "Password prompt timed out".to_string(),
                 })
             }
@@ -165,12 +165,7 @@ async fn resolve_target(
                     .fingerprint
             }
         };
-        let requires_password = sage
-            .wallet_config
-            .wallets
-            .iter()
-            .find(|wallet| wallet.fingerprint == fingerprint)
-            .is_some_and(|wallet| wallet.password_protected);
+        let requires_password = sage.is_password_protected_flag(fingerprint);
         (fingerprint, requires_password)
     };
 
@@ -189,17 +184,11 @@ struct SageVerifier<'a> {
 impl PasswordVerifier for SageVerifier<'_> {
     async fn verify(&self, fingerprint: u32, password: &str) -> Result<bool> {
         let sage = self.state.lock().await;
-        match sage
-            .keychain
-            .extract_secrets(fingerprint, password.as_bytes())
-        {
-            Ok(_) => Ok(true),
-            Err(sage_keychain::KeychainError::Decrypt) => Ok(false),
-            Err(err) => Err(Error {
-                kind: sage_api::ErrorKind::Internal,
+        sage.verify_password(fingerprint, password)
+            .map_err(|err| Error {
+                kind: err.kind(),
                 reason: err.to_string(),
-            }),
-        }
+            })
     }
 }
 
@@ -306,7 +295,7 @@ mod tests {
         tokio::time::advance(PROMPT_TIMEOUT + std::time::Duration::from_secs(1)).await;
 
         let error = waiter.await.unwrap().expect_err("must time out");
-        assert!(matches!(error.kind, ErrorKind::Unauthorized));
+        assert!(matches!(error.kind, ErrorKind::PasswordPromptTimedOut));
         assert_eq!(error.reason, "Password prompt timed out");
 
         // The pending entry must not leak: a late delivery now errors as

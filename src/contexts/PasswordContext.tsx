@@ -13,9 +13,6 @@ import {
 
 const isMobile = platform() === 'ios' || platform() === 'android';
 
-// Biometric caching interval (5 minutes)
-const BIOMETRIC_CACHE_MS = 5 * 60 * 1000;
-
 export interface PasswordContextType {
   /**
    * UI-only authentication gate for actions that touch no wallet secret
@@ -38,33 +35,22 @@ export function PasswordProvider({ children }: { children: ReactNode }) {
   // their turn instead of clobbering the one in progress.
   const [queue, setQueue] = useState<PasswordRequest[]>([]);
   const pending = queue[0] ?? null;
-  const { enabled: biometricEnabled } = useBiometric();
-  const lastBiometricPromptRef = useRef<number | null>(null);
-
-  const runBiometric = useCallback(async (): Promise<boolean> => {
-    const now = performance.now();
-    if (
-      lastBiometricPromptRef.current !== null &&
-      now - lastBiometricPromptRef.current < BIOMETRIC_CACHE_MS
-    ) {
-      return true;
-    }
-    try {
-      const { authenticate } = await import('@tauri-apps/plugin-biometric');
-      await authenticate('Authenticate to continue', {
-        allowDeviceCredential: false,
-      });
-      lastBiometricPromptRef.current = now;
-      return true;
-    } catch {
-      return false;
-    }
-  }, []);
+  // BiometricContext owns the single biometric gate (and its 5-minute
+  // cache); this context only decides *when* to invoke it.
+  const { enabled: biometricEnabled, promptIfEnabled } = useBiometric();
 
   const requireLocalAuth = useCallback(async (): Promise<boolean> => {
-    if (!biometricEnabled || !isMobile) return true;
-    return runBiometric();
-  }, [biometricEnabled, runBiometric]);
+    if (!isMobile) return true;
+    return promptIfEnabled();
+  }, [promptIfEnabled]);
+
+  // The listener reads biometric state through a ref so it can be registered
+  // exactly once. Re-registering on every `biometricEnabled` change would
+  // open a gap between unlisten and the new (async) listen resolving, and a
+  // PasswordRequest emitted in that gap would never be answered — the gated
+  // operation would hang for the full prompt timeout.
+  const biometricRef = useRef({ enabled: biometricEnabled, promptIfEnabled });
+  biometricRef.current = { enabled: biometricEnabled, promptIfEnabled };
 
   useEffect(() => {
     const unlisten = events.passwordRequest.listen(async ({ payload }) => {
@@ -92,34 +78,42 @@ export function PasswordProvider({ children }: { children: ReactNode }) {
       }
 
       // Case 2: no password, biometric enabled — standalone gate with cache.
-      if (biometricEnabled && isMobile) {
-        const ok = await runBiometric();
-        await commands.submitPasswordResponse(
-          payload.requestId,
-          ok ? { kind: 'no_auth_needed' } : { kind: 'cancelled' },
-        );
+      if (isMobile && biometricRef.current.enabled) {
+        const ok = await biometricRef.current.promptIfEnabled();
+        await commands
+          .submitPasswordResponse(
+            payload.requestId,
+            ok ? { kind: 'no_auth_needed' } : { kind: 'cancelled' },
+          )
+          .catch((error) => console.error('password response failed', error));
         return;
       }
 
       // Case 3: no password, no biometric — nothing to do.
-      await commands.submitPasswordResponse(payload.requestId, {
-        kind: 'no_auth_needed',
-      });
+      await commands
+        .submitPasswordResponse(payload.requestId, { kind: 'no_auth_needed' })
+        .catch((error) => console.error('password response failed', error));
     });
 
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [biometricEnabled, runBiometric]);
+  }, []);
 
+  // A response can fail benignly: the Rust side times a request out after
+  // PROMPT_TIMEOUT and clears it, so a submit into a stale dialog gets
+  // NotFound. The operation's own timeout error already reaches the user via
+  // ErrorContext; here it only must not become an unhandled rejection.
   const handleSubmit = useCallback(
     (password: string) => {
       if (!pending) return;
       setQueue((prev) => prev.slice(1));
-      commands.submitPasswordResponse(pending.requestId, {
-        kind: 'password',
-        password,
-      });
+      commands
+        .submitPasswordResponse(pending.requestId, {
+          kind: 'password',
+          password,
+        })
+        .catch((error) => console.error('password response failed', error));
     },
     [pending],
   );
@@ -127,7 +121,9 @@ export function PasswordProvider({ children }: { children: ReactNode }) {
   const handleCancel = useCallback(() => {
     if (!pending) return;
     setQueue((prev) => prev.slice(1));
-    commands.submitPasswordResponse(pending.requestId, { kind: 'cancelled' });
+    commands
+      .submitPasswordResponse(pending.requestId, { kind: 'cancelled' })
+      .catch((error) => console.error('password response failed', error));
   }, [pending]);
 
   return (

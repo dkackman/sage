@@ -56,6 +56,7 @@ export function OfferCreationProgressDialog({
   const {
     createdOffers,
     isProcessing,
+    processingFailed,
     processOffer,
     clearProcessedOffers,
     cancelProcessing,
@@ -76,7 +77,11 @@ export function OfferCreationProgressDialog({
       createdOffers.length > 0 &&
       !isUnknown &&
       !isProcessing &&
-      !isCanceling
+      !isCanceling &&
+      // A partial batch is shown to the user but never auto-uploaded: the
+      // run failed (e.g. a password prompt was cancelled mid-batch), so
+      // publishing what did get created is not something they asked for.
+      !processingFailed
     ) {
       let isMounted = true;
 
@@ -143,6 +148,7 @@ export function OfferCreationProgressDialog({
     enabledMarketplaces,
     isProcessing,
     isCanceling,
+    processingFailed,
   ]);
 
   // Start processing when dialog opens
@@ -167,7 +173,9 @@ export function OfferCreationProgressDialog({
               reason: error instanceof Error ? error.message : t`Unknown error`,
             });
           }
-          onOpenChange(false);
+          // Closing happens in the effect below, which can see whether the
+          // failed run left partial offers worth showing; this catch's
+          // `createdOffers` closure is stale.
         }
       };
       startProcessing();
@@ -180,6 +188,16 @@ export function OfferCreationProgressDialog({
     addError,
     onOpenChange,
   ]);
+
+  // After a failed run: close outright when nothing was created, but stay
+  // open on a partial batch so the "Offers Created" view shows the offers
+  // that DO exist (they are live in the wallet; hiding them would leave the
+  // user unaware of offers others could still take).
+  useEffect(() => {
+    if (processingFailed && !isProcessing && createdOffers.length === 0) {
+      onOpenChange(false);
+    }
+  }, [processingFailed, isProcessing, createdOffers, onOpenChange]);
 
   // Reset processing state when dialog closes
   useEffect(() => {

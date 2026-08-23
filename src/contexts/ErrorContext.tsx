@@ -27,31 +27,14 @@ export const ErrorContext = createContext<ErrorContextType | undefined>(
   undefined,
 );
 
-// Must match `CANCELLED_REASON` in crates/sage-password-gate/src/resolve.rs.
-// That constant is returned with ErrorKind::Unauthorized when the user
-// dismisses the password prompt; if the two strings drift, the cancel toast
-// silently comes back.
-const PASSWORD_CANCELLED_REASON = 'Password entry cancelled';
-
-// Must match the reason returned by `resolve_with` in
-// crates/sage-password-gate/src/resolve.rs when the user exhausts
-// MAX_ATTEMPTS incorrect password attempts.
-const PASSWORD_TOO_MANY_ATTEMPTS_REASON =
-  'Too many incorrect password attempts';
-
-// Must match the reason returned by `PasswordGateState::await_outcome` in
-// crates/sage-password-gate/src/lib.rs when the password prompt is not
-// answered within PROMPT_TIMEOUT.
-const PASSWORD_PROMPT_TIMED_OUT_REASON = 'Password prompt timed out';
-
 export function ErrorProvider({ children }: { children: ReactNode }) {
   const [errors, setErrors] = useState<CustomError[]>([]);
 
   const addError = useCallback((error: CustomError) => {
-    if (
-      error.kind === 'unauthorized' &&
-      error.reason === PASSWORD_CANCELLED_REASON
-    ) {
+    // The password-gate outcomes arrive as structured kinds (see
+    // sage-api's ErrorKind), so they are matched on kind and rendered as
+    // translated text; the English `reason` is purely human-facing.
+    if (error.kind === 'password_cancelled') {
       // Deliberate user cancellation of the password prompt, not a failure.
       return;
     }
@@ -65,19 +48,16 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
       void reconcileDriftedKeyProtection();
       return;
     }
+    if (error.kind === 'too_many_password_attempts') {
+      toast.error(t`Too many incorrect password attempts`);
+      return;
+    }
+    if (error.kind === 'password_prompt_timed_out') {
+      toast.error(t`Password prompt timed out`);
+      return;
+    }
     if (error.kind === 'unauthorized') {
       const reason = error.reason ?? '';
-      // The two password-gate failures are matched on the Rust reason string
-      // and then rendered as translated text, rather than echoing the raw
-      // English reason the way the wallet-level cases below do.
-      if (reason === PASSWORD_TOO_MANY_ATTEMPTS_REASON) {
-        toast.error(t`Too many incorrect password attempts`);
-        return;
-      }
-      if (reason === PASSWORD_PROMPT_TIMED_OUT_REASON) {
-        toast.error(t`Password prompt timed out`);
-        return;
-      }
       if (reason.includes('not found') || reason.includes('No secret')) {
         // KeyNotFound / NoSecretKey: a wallet-level issue, not a transition.
         toast.error(error.reason);

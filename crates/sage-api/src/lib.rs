@@ -259,6 +259,86 @@ mod password_gate_drift {
         None
     }
 
+    /// Deny-by-default over secret consumption. The other tests keep the
+    /// manifest consistent with itself and with the request types; this one
+    /// catches the endpoint that never opted in at all. An endpoint written
+    /// without a `password` field and without a manifest entry matches none
+    /// of them, gets no `maybe_unlock` injection, works against unprotected
+    /// wallets (which is what development tests against), and fails with an
+    /// un-prompted "Incorrect password" on protected ones. So: every endpoint
+    /// implementation that reaches a wallet secret — a keychain extraction, a
+    /// direct signing call, or the transact helpers that sign on submit —
+    /// must appear in the manifest.
+    #[test]
+    fn every_secret_reaching_endpoint_is_gated() {
+        let gated: BTreeSet<String> = gate_modes().into_keys().collect();
+
+        // The transact helpers are the signing primitives themselves, not
+        // endpoints; the gate lives in their callers, which is exactly what
+        // this test verifies.
+        let non_endpoint_helpers = ["transact", "transact_with"];
+
+        let mut ungated = Vec::new();
+        for source in &endpoint_implementation_sources() {
+            for (name, body) in endpoint_bodies(source) {
+                if non_endpoint_helpers.contains(&name.as_str()) {
+                    continue;
+                }
+                let reaches_secret = body.contains("extract_secrets")
+                    || body.contains("self.sign(")
+                    || body.contains("self.transact(")
+                    || body.contains("self.transact_with(");
+
+                if reaches_secret && !gated.contains(&name) {
+                    ungated.push(name);
+                }
+            }
+        }
+
+        assert!(
+            ungated.is_empty(),
+            "these endpoint implementations reach a wallet secret but are not listed in \
+             password-gating.json, so the host-layer gate never prompts for them: {ungated:?}. \
+             Add each to the manifest (and a `password` field to its request type).",
+        );
+    }
+
+    /// Every `pub fn` / `pub async fn` in the endpoint sources, as
+    /// `(snake_case name, body)` pairs. Bodies end at the closing brace at
+    /// method indentation, mirroring [`endpoint_body`].
+    fn endpoint_bodies(source: &str) -> Vec<(String, String)> {
+        let lines: Vec<&str> = source.lines().collect();
+        let mut found = Vec::new();
+
+        for (start, line) in lines.iter().enumerate() {
+            let trimmed = line.trim_start();
+            let Some(rest) = trimmed
+                .strip_prefix("pub fn ")
+                .or_else(|| trimmed.strip_prefix("pub async fn "))
+                .or_else(|| trimmed.strip_prefix("pub(crate) fn "))
+                .or_else(|| trimmed.strip_prefix("pub(crate) async fn "))
+            else {
+                continue;
+            };
+            let Some(name) = rest.split('(').next() else {
+                continue;
+            };
+
+            let mut body = String::new();
+            for line in &lines[start..] {
+                body.push_str(line);
+                body.push('\n');
+                if *line == "    }" {
+                    break;
+                }
+            }
+
+            found.push((name.trim().to_string(), body));
+        }
+
+        found
+    }
+
     /// Whether the `pub struct` for a `snake_case` endpoint name carries a
     /// `pub auto_submit: bool` field.
     fn struct_has_auto_submit(source: &str, endpoint: &str) -> bool {

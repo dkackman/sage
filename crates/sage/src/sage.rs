@@ -540,9 +540,30 @@ impl Sage {
             .any(|w| w.fingerprint == fingerprint)
     }
 
-    /// Updates the wallet config's `password_protected` flag if it doesn't
-    /// match the actual state, and persists the change. Returns whether the
-    /// flag was actually corrected.
+    /// The wallet config's `password_protected` flag for `fingerprint`, or
+    /// `false` when the fingerprint has no config entry.
+    pub fn is_password_protected_flag(&self, fingerprint: u32) -> bool {
+        self.wallet_config
+            .wallets
+            .iter()
+            .find(|wallet| wallet.fingerprint == fingerprint)
+            .is_some_and(|wallet| wallet.password_protected)
+    }
+
+    /// Whether `password` unlocks `fingerprint`'s secret key.
+    pub fn verify_password(&self, fingerprint: u32, password: &str) -> Result<bool> {
+        match self
+            .keychain
+            .extract_secrets(fingerprint, password.as_bytes())
+        {
+            Ok((_, Some(_))) => Ok(true),
+            Ok((_, None)) => Err(Error::Keychain(sage_keychain::KeychainError::NoSecretKey)),
+            Err(sage_keychain::KeychainError::Decrypt) => Ok(false),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    /// Updates the wallet config's `password_protected` flag
     pub fn set_password_protected(
         &mut self,
         fingerprint: u32,

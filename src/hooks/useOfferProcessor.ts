@@ -14,6 +14,10 @@ interface UseOfferProcessorProps {
 interface UseOfferProcessorReturn {
   createdOffers: string[];
   isProcessing: boolean;
+  /** True when the last run threw mid-batch. `createdOffers` then holds the
+   * offers that were created before the failure, which are live in the
+   * wallet and must be shown — but not auto-uploaded anywhere. */
+  processingFailed: boolean;
   processOffer: () => Promise<void>;
   clearProcessedOffers: () => void;
   cancelProcessing: () => void;
@@ -28,6 +32,7 @@ export function useOfferProcessor({
   const walletState = useWalletState();
   const [createdOffers, setCreatedOffers] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingFailed, setProcessingFailed] = useState(false);
   const isCancelled = useRef(false);
 
   const clearProcessedOffers = useCallback(() => {
@@ -44,6 +49,7 @@ export function useOfferProcessor({
     setIsProcessing(true);
     isCancelled.current = false;
     setCreatedOffers([]);
+    setProcessingFailed(false);
 
     let expiresAtSecond: number | null = null;
     if (offerState.expiration !== null) {
@@ -68,12 +74,13 @@ export function useOfferProcessor({
       amount: toMojos(token.amount.toString(), token.asset_id ? 3 : 12),
     }));
 
+    const newOffers: string[] = [];
+
     try {
       if (
         splitNftOffers &&
         offerState.offered.nfts.filter((n) => n).length > 1
       ) {
-        const newOffers: string[] = [];
         const nfts = offerState.offered.nfts.filter((n) => n);
 
         for (const [index, nft] of nfts.entries()) {
@@ -162,6 +169,10 @@ export function useOfferProcessor({
       }
     } catch (err) {
       if (!isCancelled.current) {
+        setProcessingFailed(true);
+        if (newOffers.length > 0) {
+          setCreatedOffers(newOffers);
+        }
         throw err;
       }
     } finally {
@@ -181,6 +192,7 @@ export function useOfferProcessor({
   return {
     createdOffers,
     isProcessing,
+    processingFailed,
     processOffer,
     clearProcessedOffers,
     cancelProcessing,
