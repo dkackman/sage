@@ -152,6 +152,7 @@ macro_rules! sage_commands {
             commands::is_asset_owned,
             commands::change_password,
             commands::reconcile_key_protection,
+            commands::reconcile_drifted_key_protection,
             commands::get_xch_usd_price,
             $($extra_command)*
         ]

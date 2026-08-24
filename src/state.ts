@@ -147,17 +147,16 @@ export function initializeWalletState(
 // says "no password" is actually protected — that mismatch is the drift
 // signal. The failing wallet is not necessarily the active one: `delete_key`
 // and `get_secret_key` are gated by their own fingerprint and run from the
-// logged-out wallet list, so reconcile every wallet the flag could have
-// silently un-gated rather than just the active one. Wallets whose flag is
-// already true (a genuine wrong password) and public-only wallets (nothing
-// to decrypt) need no probe, which keeps the sweep to the drift suspects.
+// logged-out wallet list, so the backend reconciles every wallet the flag
+// could have silently un-gated rather than just the active one. It filters to
+// those suspects itself, which keeps the common case — a plainly mistyped
+// password — at zero Argon2 probes.
 export async function reconcileDriftedKeyProtection(): Promise<void> {
   try {
-    const { keys } = await commands.getKeys({});
-    const suspects = keys.filter((key) => !key.has_password && key.has_secrets);
+    const { corrected } = await commands.reconcileDriftedKeyProtection({});
 
-    for (const key of suspects) {
-      await commands.reconcileKeyProtection({ fingerprint: key.fingerprint });
+    if (corrected === 0) {
+      return;
     }
 
     const updated = await commands.getKey({});

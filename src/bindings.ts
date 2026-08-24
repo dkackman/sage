@@ -371,6 +371,9 @@ async changePassword(req: ChangePassword) : Promise<ChangePasswordResponse> {
 async reconcileKeyProtection(req: ReconcileKeyProtection) : Promise<ReconcileKeyProtectionResponse> {
     return await TAURI_INVOKE("reconcile_key_protection", { req });
 },
+async reconcileDriftedKeyProtection(req: ReconcileDriftedKeyProtection) : Promise<ReconcileDriftedKeyProtectionResponse> {
+    return await TAURI_INVOKE("reconcile_drifted_key_protection", { req });
+},
 async getXchUsdPrice(req: GetXchUsdPrice) : Promise<GetXchUsdPriceResponse> {
     return await TAURI_INVOKE("get_xch_usd_price", { req });
 },
@@ -962,20 +965,7 @@ export type DidRecord = { launcher_id: string; name: string | null; visible: boo
 export type EmptyResponse = Record<string, never>
 export type EnvironmentThemeView = { name: string; displayName: string; mostLike?: string | null; inherits?: string | null; cssVars: Partial<{ [key in string]: string }> }
 export type Error = { kind: ErrorKind; reason: string }
-export type ErrorKind = "wallet" | "api" | "not_found" | "unauthorized" | "incorrect_password" | 
-/**
- * The user dismissed the password prompt. A deliberate choice, not a
- * failure — frontends should stay silent rather than toast an error.
- */
-"password_cancelled" | 
-/**
- * The user exhausted the password attempt budget.
- */
-"too_many_password_attempts" | 
-/**
- * The password prompt was never answered within the timeout.
- */
-"password_prompt_timed_out" | "internal" | "database_migration" | "nfc"
+export type ErrorKind = "wallet" | "api" | "not_found" | "unauthorized" | "incorrect_password" | "password_cancelled" | "too_many_password_attempts" | "password_prompt_timed_out" | "internal" | "database_migration" | "nfc"
 /**
  * Exercise options
  */
@@ -2345,6 +2335,19 @@ pages_vacuumed: number;
  * Number of WAL pages checkpointed
  */
 wal_pages_checkpointed: number }
+/**
+ * Re-derive the password-protection flag for every wallet that could be
+ * drifted *false* — i.e. flagged unprotected but holding a secret key
+ */
+export type ReconcileDriftedKeyProtection = Record<string, never>
+/**
+ * Response with the number of wallets whose flag was corrected
+ */
+export type ReconcileDriftedKeyProtectionResponse = { 
+/**
+ * How many wallets had a drifted flag corrected
+ */
+corrected: number }
 /**
  * Response with the wallet's receive address
  * Re-derive a wallet's password-protection flag from its actual key state

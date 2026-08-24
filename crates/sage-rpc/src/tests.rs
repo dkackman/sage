@@ -21,7 +21,7 @@ use rustls::crypto::aws_lc_rs::default_provider;
 use sage::Sage;
 use sage_api::{
     Amount, ChangePassword, DeleteKey, GetKey, GetKeys, GetPeers, GetSecretKey, GetSyncStatus,
-    GetVersion, ImportKey, Login, ReconcileKeyProtection, SendXch,
+    GetVersion, ImportKey, Login, ReconcileDriftedKeyProtection, ReconcileKeyProtection, SendXch,
 };
 use sage_api_macro::impl_endpoints;
 use sage_wallet::{SyncCommand, SyncEvent};
@@ -593,6 +593,86 @@ async fn test_reconcile_all_key_protection_corrects_every_wallet() -> Result<()>
 
     // A second sweep finds nothing left to correct.
     assert_eq!(app.sage.lock().await.reconcile_all_key_protection()?, 0);
+
+    Ok(())
+}
+
+/// The on-demand recovery path runs after a decrypt failure, so it must probe
+/// only the drift direction that fails open: flagged unprotected while actually
+/// holding an encrypted secret. A wallet already flagged protected is just a
+/// mistyped password, and must not cost an Argon2 probe.
+#[tokio::test]
+async fn test_reconcile_drifted_key_protection_corrects_only_drifted_false() -> Result<()> {
+    let mut app = TestApp::new().await?;
+
+    let drifted = app.setup_bls_with_password(0, "secret").await?;
+    let honest = app.setup_bls_with_password(0, "secret").await?;
+    let plain = app.setup_bls(0).await?;
+
+    {
+        let mut sage = app.sage.lock().await;
+        sage.set_password_protected(drifted, false)?;
+        // Drifted the other way: flagged protected with no password. Only
+        // costs a spurious prompt, so this path leaves it for the sweep.
+        sage.set_password_protected(plain, true)?;
+    }
+
+    let corrected = app
+        .reconcile_drifted_key_protection(ReconcileDriftedKeyProtection {})
+        .await?
+        .corrected;
+    assert_eq!(corrected, 1);
+
+    let keys = app.get_keys(GetKeys {}).await?.keys;
+    let find = |fingerprint: u32| {
+        keys.iter()
+            .find(|key| key.fingerprint == fingerprint)
+            .unwrap_or_else(|| panic!("missing key {fingerprint}"))
+    };
+
+    assert!(
+        find(drifted).has_password,
+        "drifted-false must be corrected"
+    );
+    assert!(find(honest).has_password, "correct flag must be left alone");
+    assert!(
+        find(plain).has_password,
+        "drifted-true is out of scope for this path"
+    );
+
+    // Nothing left that could be drifted false.
+    assert_eq!(
+        app.reconcile_drifted_key_protection(ReconcileDriftedKeyProtection {})
+            .await?
+            .corrected,
+        0
+    );
+
+    Ok(())
+}
+
+/// The active wallet is the only one whose drift fails open, and a relaunch
+/// makes it active without going through `login`. The sweep has to reach it
+/// before any wallet that would merely fail closed.
+#[tokio::test]
+async fn test_sweep_probes_the_active_wallet_first() -> Result<()> {
+    let mut app = TestApp::new().await?;
+
+    let first = app.setup_bls(0).await?;
+    let second = app.setup_bls(0).await?;
+    let third = app.setup_bls(0).await?;
+
+    app.login(Login { fingerprint: third }).await?;
+
+    let order = app.sage.lock().await.sweep_fingerprints();
+
+    assert_eq!(
+        order.first(),
+        Some(&third),
+        "active wallet must be swept first"
+    );
+    assert_eq!(order.len(), 3);
+    assert!(order.contains(&first) && order.contains(&second));
 
     Ok(())
 }

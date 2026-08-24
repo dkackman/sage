@@ -42,19 +42,37 @@ pub async fn initialize(
 
     // Correct any wallet whose `password_protected` flag has drifted from the
     // keychain. Off the startup path because it costs an Argon2 probe per
-    // wallet; `login` reconciles the active wallet on its own, so this sweep
-    // exists for the wallets the session never logs into.
+    // wallet.
+    //
+    // The wallet restored from `config.global.fingerprint` is swept first: it
+    // is active without ever passing through `login`, and the bridge approval
+    // gate reads the flag against a key that is already unlocked, so drift
+    // there signs without a prompt instead of failing closed. The rest fail
+    // closed at the keychain and are healed on demand.
+    //
+    // One fingerprint per lock acquisition, each probe on a blocking thread:
+    // a single sweep must not pin the shared state or an async worker for the
+    // length of N password hashes.
     let app_state = (*state).clone();
 
     tokio::spawn(async move {
-        match app_state.lock().await.reconcile_all_key_protection() {
-            Ok(0) => {}
-            Ok(corrected) => {
-                tracing::info!("Corrected the password-protection flag on {corrected} wallet(s)");
+        let fingerprints = app_state.lock().await.sweep_fingerprints();
+        let mut corrected = 0;
+
+        for fingerprint in fingerprints {
+            let mut sage = app_state.lock().await;
+
+            match tokio::task::block_in_place(|| sage.reconcile_one_key_protection(fingerprint)) {
+                Ok(true) => corrected += 1,
+                Ok(false) => {}
+                Err(error) => {
+                    error!("Error while reconciling password protection: {error:?}");
+                }
             }
-            Err(error) => {
-                error!("Error while reconciling password protection: {error:?}");
-            }
+        }
+
+        if corrected > 0 {
+            tracing::info!("Corrected the password-protection flag on {corrected} wallet(s)");
         }
     });
 

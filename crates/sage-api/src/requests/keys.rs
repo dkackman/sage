@@ -580,3 +580,30 @@ pub struct DeleteUserTheme {
 #[cfg_attr(feature = "tauri", derive(specta::Type))]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DeleteUserThemeResponse {}
+
+/// Re-derive the password-protection flag for every wallet that could be
+/// drifted *false* — i.e. flagged unprotected but holding a secret key
+#[cfg_attr(
+    feature = "openapi",
+    crate::openapi_attr(
+        tag = "Authentication & Keys",
+        description = "Re-derive the stored password-protection flag for every wallet whose flag says unprotected but which holds a secret key. This is the drift direction that fails open, so it is the one worth probing on demand."
+    )
+)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "tauri", derive(specta::Type))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ReconcileDriftedKeyProtection {}
+
+/// Response with the number of wallets whose flag was corrected
+#[cfg_attr(
+    feature = "openapi",
+    crate::openapi_attr(tag = "Authentication & Keys")
+)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "tauri", derive(specta::Type))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ReconcileDriftedKeyProtectionResponse {
+    /// How many wallets had a drifted flag corrected
+    pub corrected: u32,
+}
