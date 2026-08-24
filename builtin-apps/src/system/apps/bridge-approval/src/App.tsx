@@ -74,6 +74,11 @@ export function App() {
   const [loaded, setLoaded] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  // Set when the host tells us an approval needs a password that its queued
+  // hint did not predict, so the field appears even on a stale view.
+  const [passwordForced, setPasswordForced] = useState(false);
 
   async function refreshActiveRuntime() {
     const active = await sage.runtimeManager.getActiveTaskbarRuntime();
@@ -148,23 +153,62 @@ export function App() {
     ? formatCountdown(activeApproval.expiresAtMs, now)
     : null;
 
+  // Never carry a typed password across approvals.
   useEffect(() => {
     setExpanded(false);
     setError(null);
+    setPassword('');
+    setPasswordError(null);
+    setPasswordForced(false);
   }, [activeApproval?.approvalId]);
+
+  const needsPassword =
+    (activeApproval?.requiresPassword ?? false) || passwordForced;
 
   async function resolve(approved: boolean) {
     if (!activeApproval || working) return;
+    if (approved && needsPassword && password.length === 0) return;
 
     setWorking(true);
     setError(null);
 
     try {
-      await sage.bridgeApprovals.resolve({
+      const result = await sage.bridgeApprovals.resolve({
         approvalId: activeApproval.approvalId,
         approved,
         reason: approved ? null : 'User denied the request',
+        password: approved && needsPassword ? password : null,
       });
+
+      switch (result.kind) {
+        case 'wrongPassword':
+          // The approval is still queued; keep the card up for another try.
+          setPassword('');
+          setPasswordError(
+            result.attemptsRemaining === 1
+              ? 'Incorrect password. 1 attempt remaining.'
+              : `Incorrect password. ${result.attemptsRemaining} attempts remaining.`,
+          );
+          break;
+
+        case 'passwordRequired':
+          // The queued hint was stale — this wallet is protected after all.
+          setPasswordForced(true);
+          setPassword('');
+          setPasswordError('This wallet requires its password.');
+          break;
+
+        case 'tooManyAttempts':
+          setPassword('');
+          setPasswordError(null);
+          setError('Too many incorrect password attempts. Request rejected.');
+          break;
+
+        case 'resolved':
+          setPassword('');
+          setPasswordError(null);
+          break;
+      }
 
       setApprovals(await sage.bridgeApprovals.listPending());
     } catch (err) {
@@ -240,7 +284,7 @@ export function App() {
 
             <button
               type='button'
-              disabled={working}
+              disabled={working || (needsPassword && password.length === 0)}
               onClick={() => void resolve(true)}
               className='rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50'
             >
@@ -269,6 +313,42 @@ export function App() {
           appName={activeAppName}
           expanded={expanded}
         />
+
+        {needsPassword ? (
+          <div className='space-y-1.5'>
+            <label
+              htmlFor='approval-password'
+              className='text-xs font-medium uppercase tracking-wide text-muted-foreground'
+            >
+              Wallet password
+            </label>
+
+            <input
+              id='approval-password'
+              type='password'
+              autoFocus
+              autoComplete='off'
+              spellCheck={false}
+              value={password}
+              disabled={working}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setPasswordError(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && password.length > 0) {
+                  void resolve(true);
+                }
+              }}
+              className='w-full rounded-md border border-border bg-background px-3 py-2 text-sm disabled:opacity-50'
+              placeholder='Required to sign with this wallet'
+            />
+
+            {passwordError ? (
+              <div className='text-xs text-destructive'>{passwordError}</div>
+            ) : null}
+          </div>
+        ) : null}
 
         {error ? (
           <div className='rounded-lg border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive'>

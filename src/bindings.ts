@@ -359,6 +359,9 @@ async downloadCniOffercode(code: string) : Promise<string> {
 async getLogs() : Promise<LogFile[]> {
     return await TAURI_INVOKE("get_logs");
 },
+async submitPasswordResponse(requestId: string, outcome: PasswordOutcome) : Promise<null> {
+    return await TAURI_INVOKE("submit_password_response", { requestId, outcome });
+},
 async isAssetOwned(req: IsAssetOwned) : Promise<IsAssetOwnedResponse> {
     return await TAURI_INVOKE("is_asset_owned", { req });
 },
@@ -367,6 +370,9 @@ async changePassword(req: ChangePassword) : Promise<ChangePasswordResponse> {
 },
 async reconcileKeyProtection(req: ReconcileKeyProtection) : Promise<ReconcileKeyProtectionResponse> {
     return await TAURI_INVOKE("reconcile_key_protection", { req });
+},
+async reconcileDriftedKeyProtection(req: ReconcileDriftedKeyProtection) : Promise<ReconcileDriftedKeyProtectionResponse> {
+    return await TAURI_INVOKE("reconcile_drifted_key_protection", { req });
 },
 async getXchUsdPrice(req: GetXchUsdPrice) : Promise<GetXchUsdPriceResponse> {
     return await TAURI_INVOKE("get_xch_usd_price", { req });
@@ -443,8 +449,10 @@ async appsSetAutoUpdateEnabled(enabled: boolean) : Promise<boolean> {
 
 
 export const events = __makeEvents__<{
+passwordRequest: PasswordRequest,
 syncEvent: SyncEvent
 }>({
+passwordRequest: "password-request",
 syncEvent: "sync-event"
 })
 
@@ -957,7 +965,7 @@ export type DidRecord = { launcher_id: string; name: string | null; visible: boo
 export type EmptyResponse = Record<string, never>
 export type EnvironmentThemeView = { name: string; displayName: string; mostLike?: string | null; inherits?: string | null; cssVars: Partial<{ [key in string]: string }> }
 export type Error = { kind: ErrorKind; reason: string }
-export type ErrorKind = "wallet" | "api" | "not_found" | "unauthorized" | "incorrect_password" | "internal" | "database_migration" | "nfc"
+export type ErrorKind = "wallet" | "api" | "not_found" | "unauthorized" | "incorrect_password" | "password_cancelled" | "too_many_password_attempts" | "password_prompt_timed_out" | "internal" | "database_migration" | "nfc"
 /**
  * Exercise options
  */
@@ -2238,6 +2246,57 @@ amount: Amount }
 export type OptionAssets = { underlying_asset: Asset; underlying_amount: Amount; strike_asset: Asset; strike_amount: Amount; expiration_seconds: number }
 export type OptionRecord = { launcher_id: string; name: string | null; visible: boolean; coin_id: string; address: string; amount: Amount; underlying_asset: Asset; underlying_amount: Amount; underlying_coin_id: string; strike_asset: Asset; strike_amount: Amount; expiration_seconds: number; created_height: number | null; created_timestamp: number | null }
 export type OptionSortMode = "name" | "created_height" | "expiration_seconds"
+/**
+ * Attached to a re-prompt after an incorrect password.
+ */
+export type PasswordAttemptError = { attemptsRemaining: number }
+/**
+ * How the frontend answered a password request.
+ */
+export type PasswordOutcome = 
+/**
+ * The user supplied a password.
+ */
+{ kind: "password"; password: string } | 
+/**
+ * No authentication was required, or a biometric gate already passed.
+ */
+{ kind: "no_auth_needed" } | 
+/**
+ * The user dismissed the prompt.
+ */
+{ kind: "cancelled" }
+/**
+ * The password prompt as it crosses to JavaScript.
+ * 
+ * Emission targets the `main` webview (see `prompter::SAGE_WEBVIEW_LABEL`),
+ * but that is **not** an isolation guarantee: Tauri's event filter
+ * short-circuits for listeners registered with `EventTarget::Any`, and
+ * `src-tauri/capabilities/apps.json` grants app webviews
+ * `core:event:allow-listen`. Any app runtime can therefore observe this
+ * payload. It deliberately carries nothing sensitive -- no fingerprint, no
+ * wallet identity, and of course no password. The password itself only ever
+ * travels the other way, through the `submit_password_response` command,
+ * which is not granted to app webviews.
+ */
+export type PasswordRequest = { requestId: string; 
+/**
+ * Advisory: the wallet's stored `password_protected` flag. The frontend
+ * still decides between password dialog, biometric gate, and no auth,
+ * because Rust does not know whether biometrics are enabled.
+ */
+requiresPassword: boolean; 
+/**
+ * 1-based. Increments on each incorrect-password re-prompt.
+ */
+attempt: number; 
+/**
+ * Retained despite being observable by app webviews: the dialog needs it
+ * to show "N attempts remaining", and a bare retry counter identifies no
+ * wallet and reveals nothing an observer could not already infer from the
+ * re-prompts themselves.
+ */
+error: PasswordAttemptError | null }
 export type PeerRecord = { ip_addr: string; port: number; peak_height: number; user_managed: boolean }
 export type PendingTransactionRecord = { transaction_id: string; fee: Amount; submitted_at: number | null; spent: TransactionCoinRecord[]; created: TransactionCoinRecord[] }
 /**
@@ -2276,6 +2335,19 @@ pages_vacuumed: number;
  * Number of WAL pages checkpointed
  */
 wal_pages_checkpointed: number }
+/**
+ * Re-derive the password-protection flag for every wallet that could be
+ * drifted *false* — i.e. flagged unprotected but holding a secret key
+ */
+export type ReconcileDriftedKeyProtection = Record<string, never>
+/**
+ * Response with the number of wallets whose flag was corrected
+ */
+export type ReconcileDriftedKeyProtectionResponse = { 
+/**
+ * How many wallets had a drifted flag corrected
+ */
+corrected: number }
 /**
  * Response with the wallet's receive address
  * Re-derive a wallet's password-protection flag from its actual key state

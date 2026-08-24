@@ -1,5 +1,5 @@
 import { t } from '@lingui/core/macro';
-import { Trans } from '@lingui/react/macro';
+import { Plural, Trans } from '@lingui/react/macro';
 import { KeyRoundIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '../ui/button';
@@ -15,12 +15,14 @@ import { Input } from '../ui/input';
 
 export interface PasswordDialogProps {
   open: boolean;
+  attemptsRemaining?: number;
   onSubmit: (password: string) => void;
   onCancel: () => void;
 }
 
 export function PasswordDialog({
   open,
+  attemptsRemaining,
   onSubmit,
   onCancel,
 }: PasswordDialogProps) {
@@ -59,6 +61,16 @@ export function PasswordDialog({
             </Trans>
           </DialogDescription>
         </DialogHeader>
+        {attemptsRemaining !== undefined && (
+          <p className='text-sm text-destructive'>
+            <Trans>Incorrect password.</Trans>{' '}
+            <Plural
+              value={attemptsRemaining}
+              one='# attempt remaining.'
+              other='# attempts remaining.'
+            />
+          </p>
+        )}
         <Input
           ref={inputRef}
           type='password'

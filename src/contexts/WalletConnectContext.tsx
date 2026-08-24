@@ -23,7 +23,6 @@ import { Switch } from '@/components/ui/switch';
 import { useWallet } from '@/contexts/WalletContext';
 import { useDefaultFee } from '@/hooks/useDefaultFee';
 import { useErrors } from '@/hooks/useErrors';
-import { usePassword } from '@/hooks/usePassword';
 import { decodeHexMessage, fromMojos, toMojos, isHex } from '@/lib/utils';
 import { useWalletState } from '@/state';
 import {
@@ -66,7 +65,6 @@ type SessionRequest = SignClientTypes.EventArguments['session_request'];
 export function WalletConnectProvider({ children }: { children: ReactNode }) {
   const { wallet, isReadOnly } = useWallet();
   const { addError } = useErrors();
-  const { requestPassword } = usePassword();
 
   const [signClient, setSignClient] = useState<Awaited<
     ReturnType<typeof SignClient.init>
@@ -106,8 +104,6 @@ export function WalletConnectProvider({ children }: { children: ReactNode }) {
           method,
           request.params.request.params,
           {
-            requestPassword,
-            hasPassword: wallet?.has_password ?? false,
             isReadOnly,
           },
         );
@@ -143,7 +139,7 @@ export function WalletConnectProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [signClient, addError, requestPassword, wallet?.has_password, isReadOnly],
+    [signClient, addError, isReadOnly],
   );
 
   useEffect(() => {

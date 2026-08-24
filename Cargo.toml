@@ -57,6 +57,7 @@ sage-wallet = { path = "./crates/sage-wallet" }
 sage-assets = { path = "./crates/sage-assets" }
 sage-apps = { path = "./crates/sage-apps" }
 sage-rpc = { path = "./crates/sage-rpc" }
+sage-password-gate = { path = "./crates/sage-password-gate" }
 
 # Serialization
 serde = "1.0.204"

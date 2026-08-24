@@ -22,16 +22,17 @@ use crate::{
     ListedAppsChangedEvent, PendingBridgeApprovalView, PendingUpdateChangedEvent,
     ReadyToStopParams, RequestCapabilityGrantParams, RequestCapabilityGrantResult,
     RequestNetworkWhitelistGrantParams, RequestNetworkWhitelistGrantResult,
-    ResolveBridgeApprovalArgs, RuntimeAckResult, RuntimeManagerActiveTaskbarRuntimeChangedEvent,
-    RuntimeManagerRuntimesChangedEvent, RuntimeTargetParams, RustBridgeInvokeResult,
-    SageAppCapabilityDefinitionView, SageAppWalletScope, SageNetworkPermissionInfo,
-    SandboxStateChangedEvent, SandboxStateView, SetBeforeStopListenerParams,
-    SystemKillRuntimeResult, SystemWalletView, WalletFilterUnlockedCoinsParams,
-    WalletFilterUnlockedCoinsResult, WalletGetAssetBalanceParams, WalletGetAssetBalanceResult,
-    WalletGetAssetCoinsParams, WalletGetAssetCoinsResult, WalletGetPublicKeysParams,
-    WalletGetPublicKeysResult, WalletListWalletsResult, WalletSendTransactionParams,
-    WalletSendTransactionResult, WalletSendXchParams, WalletSignCoinSpendsParams,
-    WalletSignCoinSpendsResult, WalletSignMessageParams, WalletSignMessageResult,
+    ResolveBridgeApprovalArgs, ResolveBridgeApprovalResult, RuntimeAckResult,
+    RuntimeManagerActiveTaskbarRuntimeChangedEvent, RuntimeManagerRuntimesChangedEvent,
+    RuntimeTargetParams, RustBridgeInvokeResult, SageAppCapabilityDefinitionView,
+    SageAppWalletScope, SageNetworkPermissionInfo, SandboxStateChangedEvent, SandboxStateView,
+    SetBeforeStopListenerParams, SystemKillRuntimeResult, SystemWalletView,
+    WalletFilterUnlockedCoinsParams, WalletFilterUnlockedCoinsResult, WalletGetAssetBalanceParams,
+    WalletGetAssetBalanceResult, WalletGetAssetCoinsParams, WalletGetAssetCoinsResult,
+    WalletGetPublicKeysParams, WalletGetPublicKeysResult, WalletListWalletsResult,
+    WalletSendTransactionParams, WalletSendTransactionResult, WalletSendXchParams,
+    WalletSignCoinSpendsParams, WalletSignCoinSpendsResult, WalletSignMessageParams,
+    WalletSignMessageResult,
 };
 
 pub fn export_user_bridge_typescript() -> Result<String, String> {
@@ -136,6 +137,7 @@ pub fn export_system_bridge_typescript() -> Result<String, String> {
     types.register::<FileSystemSelectFileResult>();
 
     types.register::<ResolveBridgeApprovalArgs>();
+    types.register::<ResolveBridgeApprovalResult>();
     types.register::<PendingBridgeApprovalView>();
     types.register::<BridgeApprovalsChangedEvent>();
 

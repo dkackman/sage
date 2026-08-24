@@ -25,8 +25,6 @@ import {
 import { t } from '@lingui/core/macro';
 
 export interface HandlerContext {
-  requestPassword: (hasPassword: boolean) => Promise<string | null | undefined>;
-  hasPassword: boolean;
   /** True when the active wallet has no signing keys (cold/watch-only). */
   isReadOnly: boolean;
 }
@@ -67,30 +65,27 @@ export const handleCommand = async (
     case 'chip0002_getAssetBalance':
       return await handleGetAssetBalance(parseCommand(command, params));
     case 'chip0002_signCoinSpends':
-      return await handleSignCoinSpends(parseCommand(command, params), context);
+      return await handleSignCoinSpends(parseCommand(command, params));
     case 'chip0002_signMessage':
-      return await handleSignMessage(parseCommand(command, params), context);
+      return await handleSignMessage(parseCommand(command, params));
     case 'chip0002_sendTransaction':
       return await handleSendTransaction(parseCommand(command, params));
     case 'chia_createOffer':
-      return await handleCreateOffer(parseCommand(command, params), context);
+      return await handleCreateOffer(parseCommand(command, params));
     case 'chia_takeOffer':
-      return await handleTakeOffer(parseCommand(command, params), context);
+      return await handleTakeOffer(parseCommand(command, params));
     case 'chia_cancelOffer':
-      return await handleCancelOffer(parseCommand(command, params), context);
+      return await handleCancelOffer(parseCommand(command, params));
     case 'chia_getNfts':
       return await handleGetNfts(parseCommand(command, params));
     case 'chia_send':
-      return await handleSend(parseCommand(command, params), context);
+      return await handleSend(parseCommand(command, params));
     case 'chia_getAddress':
       return await handleGetAddress();
     case 'chia_signMessageByAddress':
-      return await handleSignMessageByAddress(
-        parseCommand(command, params),
-        context,
-      );
+      return await handleSignMessageByAddress(parseCommand(command, params));
     case 'chia_bulkMintNfts':
-      return await handleBulkMintNfts(parseCommand(command, params), context);
+      return await handleBulkMintNfts(parseCommand(command, params));
     default:
       throw new Error(`Unknown command: ${command}`);
   }

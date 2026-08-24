@@ -21,7 +21,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useErrors } from '@/hooks/useErrors';
-import { usePassword } from '@/hooks/usePassword';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { t } from '@lingui/core/macro';
@@ -66,7 +65,6 @@ export function WalletCard({
   const navigate = useNavigate();
   const { addError } = useErrors();
   const { setWallet } = useWallet();
-  const { requestPassword } = usePassword();
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -79,14 +77,8 @@ export function WalletCard({
   const { currentTheme } = useTheme();
 
   const deleteSelf = async () => {
-    const password = await requestPassword(info.has_password);
-    if (password === undefined) {
-      setIsDeleteOpen(false);
-      return;
-    }
-
     await commands
-      .deleteKey({ fingerprint: info.fingerprint, password })
+      .deleteKey({ fingerprint: info.fingerprint })
       .then(() => {
         setKeys(keys.filter((key) => key.fingerprint !== info.fingerprint));
       })
@@ -177,24 +169,12 @@ export function WalletCard({
         return;
       }
 
-      const password = await requestPassword(info.has_password);
-      if (password === undefined) {
-        setIsDetailsOpen(false);
-        return;
-      }
-
       commands
-        .getSecretKey({ fingerprint: info.fingerprint, password })
+        .getSecretKey({ fingerprint: info.fingerprint })
         .then((data) => data.secrets !== null && setSecrets(data.secrets))
         .catch(addError);
     })();
-  }, [
-    isDetailsOpen,
-    info.fingerprint,
-    info.has_password,
-    addError,
-    requestPassword,
-  ]);
+  }, [isDetailsOpen, info.fingerprint, info.has_password, addError]);
 
   const values = useSortable({
     id: draggable ? info.fingerprint : 'not-draggable',

@@ -76,7 +76,9 @@ export type SageSystemFileSystemClient = {
 
 export type SageSystemBridgeApprovalsClient = {
   listPending(): Promise<Generated.PendingBridgeApprovalView[]>;
-  resolve(input: Generated.ResolveBridgeApprovalArgs): Promise<void>;
+  resolve(
+    input: Generated.ResolveBridgeApprovalArgs,
+  ): Promise<Generated.ResolveBridgeApprovalResult>;
   onChanged(
     handler: (event: Generated.BridgeApprovalsChangedEvent) => void,
   ): () => void;

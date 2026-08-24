@@ -18,9 +18,9 @@ use sage_api::{
     DeleteKeyResponse, GenerateMnemonic, GenerateMnemonicResponse, GetKey, GetKeyResponse, GetKeys,
     GetKeysResponse, GetSecretKey, GetSecretKeyResponse, GetWalletAddress,
     GetWalletAddressResponse, ImportKey, ImportKeyResponse, KeyInfo, KeyKind, Login, LoginResponse,
-    Logout, LogoutResponse, ReconcileKeyProtection, ReconcileKeyProtectionResponse, RenameKey,
-    RenameKeyResponse, Resync, ResyncResponse, SecretKeyInfo, SetWalletEmoji,
-    SetWalletEmojiResponse,
+    Logout, LogoutResponse, ReconcileDriftedKeyProtection, ReconcileDriftedKeyProtectionResponse,
+    ReconcileKeyProtection, ReconcileKeyProtectionResponse, RenameKey, RenameKeyResponse, Resync,
+    ResyncResponse, SecretKeyInfo, SetWalletEmoji, SetWalletEmojiResponse,
 };
 use sage_config::Wallet;
 use sage_database::{Database, Derivation};
@@ -30,6 +30,19 @@ use crate::{Error, Result, Sage};
 
 impl Sage {
     pub async fn login(&mut self, req: Login) -> Result<LoginResponse> {
+        // Every password gate reads the `password_protected` config flag, so a
+        // flag that drifted false silently disables the gate — no prompt, then
+        // a decrypt failure. The flag is only a cache of the keychain, and a
+        // build that predates the field strips it on its next config write, so
+        // re-derive it here. One Argon2 probe per login, never on a hot path.
+        // Tolerant of a fingerprint with no config entry: that is `switch_wallet`'s
+        // error to report, not this cache refresh's.
+        if self.has_wallet_config(req.fingerprint) {
+            self.reconcile_key_protection(ReconcileKeyProtection {
+                fingerprint: req.fingerprint,
+            })?;
+        }
+
         self.config.global.fingerprint = Some(req.fingerprint);
         self.save_config()?;
         self.switch_wallet().await?;
@@ -387,12 +400,7 @@ impl Sage {
         Ok(ChangePasswordResponse {})
     }
 
-    /// Re-derives the `password_protected` flag from the actual keychain state and
-    /// persists any correction. This is the recovery path for the rare case where
-    /// the config flag drifts from reality (e.g. a crash between writing `keys.bin`
-    /// and the config in `change_password`). It runs a single decrypt probe, so it
-    /// is only invoked on demand after an unexpected decrypt failure — never on the
-    /// login hot path.
+    /// Re-derives the `password_protected` flag from the actual keychain state
     pub fn reconcile_key_protection(
         &mut self,
         req: ReconcileKeyProtection,
@@ -400,6 +408,89 @@ impl Sage {
         let has_password = self.keychain.is_password_protected(req.fingerprint);
         self.set_password_protected(req.fingerprint, has_password)?;
         Ok(ReconcileKeyProtectionResponse { has_password })
+    }
+
+    /// The fingerprints a full sweep must probe, active wallet first.
+    ///
+    /// Order matters: the active wallet is the only one whose drift fails
+    /// *open*. The bridge approval gate reads the flag for `SendXch` /
+    /// `SignCoinSpends` / `SignMessage` against a wallet whose key is already
+    /// unlocked in memory, so a flag drifted false there skips the prompt and
+    /// signs anyway — no decrypt failure to recover from. Every other wallet
+    /// fails closed at the keychain, which the on-demand path then heals.
+    /// Login re-derives the flag itself, but a relaunch restores the previously
+    /// active wallet through `switch_wallet`, never `login`, so this sweep is
+    /// the only thing that covers it.
+    pub fn sweep_fingerprints(&self) -> Vec<u32> {
+        let active = self.config.global.fingerprint;
+
+        let mut fingerprints: Vec<u32> = self
+            .wallet_config
+            .wallets
+            .iter()
+            .map(|wallet| wallet.fingerprint)
+            .collect();
+
+        fingerprints.sort_by_key(|fingerprint| Some(*fingerprint) != active);
+        fingerprints
+    }
+
+    /// Re-derives `password_protected` for a single wallet, reporting whether
+    /// the stored flag was actually wrong.
+    ///
+    /// Each call costs one Argon2 probe, so callers that sweep many wallets
+    /// should drive this one fingerprint at a time rather than holding a lock
+    /// across the whole set.
+    pub fn reconcile_one_key_protection(&mut self, fingerprint: u32) -> Result<bool> {
+        let was_protected = self.is_password_protected_flag(fingerprint);
+        let response = self.reconcile_key_protection(ReconcileKeyProtection { fingerprint })?;
+        Ok(response.has_password != was_protected)
+    }
+
+    /// Re-derives `password_protected` for every configured wallet and returns
+    /// how many were corrected.
+    pub fn reconcile_all_key_protection(&mut self) -> Result<usize> {
+        let mut corrected = 0;
+
+        for fingerprint in self.sweep_fingerprints() {
+            if self.reconcile_one_key_protection(fingerprint)? {
+                corrected += 1;
+            }
+        }
+
+        Ok(corrected)
+    }
+
+    /// Re-derives `password_protected` for the wallets whose flag could be
+    /// drifted false: flagged unprotected, but holding a secret key.
+    ///
+    /// This is the on-demand recovery path, reached after a decrypt failure.
+    /// Filtering here rather than in the caller keeps the common case — a
+    /// plainly mistyped password on a correctly flagged wallet — at zero Argon2
+    /// probes. The opposite drift (flagged protected, no password) only costs a
+    /// spurious prompt, so it is left to the startup sweep.
+    pub fn reconcile_drifted_key_protection(
+        &mut self,
+        _req: ReconcileDriftedKeyProtection,
+    ) -> Result<ReconcileDriftedKeyProtectionResponse> {
+        let suspects: Vec<u32> = self
+            .wallet_config
+            .wallets
+            .iter()
+            .filter(|wallet| !wallet.password_protected)
+            .map(|wallet| wallet.fingerprint)
+            .filter(|fingerprint| self.keychain.has_secret_key(*fingerprint))
+            .collect();
+
+        let mut corrected = 0;
+
+        for fingerprint in suspects {
+            if self.reconcile_one_key_protection(fingerprint)? {
+                corrected += 1;
+            }
+        }
+
+        Ok(ReconcileDriftedKeyProtectionResponse { corrected })
     }
 
     pub fn get_keys(&self, _req: GetKeys) -> Result<GetKeysResponse> {

@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { reconcileActiveKeyProtection } from '@/state';
+import { reconcileDriftedKeyProtection } from '@/state';
 import { t } from '@lingui/core/macro';
 import { createContext, ReactNode, useCallback, useState } from 'react';
 import { toast } from 'react-toastify';
@@ -31,18 +31,35 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
   const [errors, setErrors] = useState<CustomError[]>([]);
 
   const addError = useCallback((error: CustomError) => {
+    // The password-gate outcomes arrive as structured kinds (see
+    // sage-api's ErrorKind), so they are matched on kind and rendered as
+    // translated text; the English `reason` is purely human-facing.
+    if (error.kind === 'password_cancelled') {
+      // Deliberate user cancellation of the password prompt, not a failure.
+      return;
+    }
     if (error.kind === 'incorrect_password') {
       // Wrong password — AES decryption failed
       toast.error(t`Incorrect password`);
-      // Self-heal if the active wallet's has_password flag drifted false:
-      // this corrects it so the next attempt prompts for the password.
-      void reconcileActiveKeyProtection();
+      // Self-heal if a wallet's has_password flag drifted false: this
+      // corrects it so the next attempt prompts for the password. The sweep
+      // covers every wallet, not just the active one, because delete_key and
+      // get_secret_key gate on their own fingerprint from the wallet list.
+      void reconcileDriftedKeyProtection();
+      return;
+    }
+    if (error.kind === 'too_many_password_attempts') {
+      toast.error(t`Too many incorrect password attempts`);
+      return;
+    }
+    if (error.kind === 'password_prompt_timed_out') {
+      toast.error(t`Password prompt timed out`);
       return;
     }
     if (error.kind === 'unauthorized') {
       const reason = error.reason ?? '';
       if (reason.includes('not found') || reason.includes('No secret')) {
-        // KeyNotFound or NoSecretKey — wallet-level issue, not a transition
+        // KeyNotFound / NoSecretKey: a wallet-level issue, not a transition.
         toast.error(error.reason);
       }
       // NotLoggedIn / NoSigningKey during wallet transitions are silently ignored

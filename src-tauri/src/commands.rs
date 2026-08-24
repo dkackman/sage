@@ -12,6 +12,7 @@ use sage_api_macro::impl_endpoints_tauri;
 #[cfg(not(mobile))]
 use sage_apps::ensure_initial_sandbox_run;
 use sage_config::{NetworkConfig, Wallet, WalletDefaults};
+use sage_password_gate::{PasswordGateState, PasswordOutcome};
 use sage_rpc::start_rpc;
 use serde::{Deserialize, Serialize};
 use specta::{Type, specta};
@@ -38,6 +39,42 @@ pub async fn initialize(
     let mut sage = state.lock().await;
     app_state::initialize(app_handle.clone(), &mut sage).await?;
     drop(sage);
+
+    // Correct any wallet whose `password_protected` flag has drifted from the
+    // keychain. Off the startup path because it costs an Argon2 probe per
+    // wallet.
+    //
+    // The wallet restored from `config.global.fingerprint` is swept first: it
+    // is active without ever passing through `login`, and the bridge approval
+    // gate reads the flag against a key that is already unlocked, so drift
+    // there signs without a prompt instead of failing closed. The rest fail
+    // closed at the keychain and are healed on demand.
+    //
+    // One fingerprint per lock acquisition, each probe on a blocking thread:
+    // a single sweep must not pin the shared state or an async worker for the
+    // length of N password hashes.
+    let app_state = (*state).clone();
+
+    tokio::spawn(async move {
+        let fingerprints = app_state.lock().await.sweep_fingerprints();
+        let mut corrected = 0;
+
+        for fingerprint in fingerprints {
+            let mut sage = app_state.lock().await;
+
+            match tokio::task::block_in_place(|| sage.reconcile_one_key_protection(fingerprint)) {
+                Ok(true) => corrected += 1,
+                Ok(false) => {}
+                Err(error) => {
+                    error!("Error while reconciling password protection: {error:?}");
+                }
+            }
+        }
+
+        if corrected > 0 {
+            tracing::info!("Corrected the password-protection flag on {corrected} wallet(s)");
+        }
+    });
 
     let app_state = (*state).clone();
 
@@ -68,7 +105,14 @@ impl_endpoints_tauri! {
     (repeat
         #[command]
         #[specta]
-        pub async fn endpoint(state: State<'_, AppState>, req: Endpoint) -> Result<EndpointResponse> {
+        #[allow(unused_variables, unused_mut)]
+        pub async fn endpoint(
+            app_handle: AppHandle,
+            state: State<'_, AppState>,
+            gate: State<'_, PasswordGateState>,
+            mut req: Endpoint,
+        ) -> Result<EndpointResponse> {
+            maybe_unlock
             Ok(state.lock().await.endpoint(req) maybe_await?)
         }
     )
@@ -257,4 +301,14 @@ pub async fn get_logs(state: State<'_, AppState>) -> Result<Vec<LogFile>> {
     }
 
     Ok(log_files)
+}
+
+#[command]
+#[specta]
+pub async fn submit_password_response(
+    gate: State<'_, PasswordGateState>,
+    request_id: String,
+    outcome: PasswordOutcome,
+) -> Result<()> {
+    Ok(gate.deliver(&request_id, outcome).await?)
 }
